@@ -1,18 +1,23 @@
 from django.apps import apps
 
+"""
+https://docs.djangoproject.com/en/2.1/ref/models/relations/
 
+fm.related_model
+fm.related_fields
 
-# Make list of models and fields
+In [15]: p.related_model
+Out[15]: books.models.Publisher
 
+In [16]: p.related_fields
+Out[16]:
+[(<django.db.models.fields.related.ForeignKey: publisher>,
+  <django.db.models.fields.AutoField: id>)]
 
-m._meta.db_table # name of db table
+p.foreign_related_fields
+(<django.db.models.fields.AutoField: id>,)
 
-fields = m._meta.fields # fields tuple
-
-f = fields[0]
-
-f.name # field name
-
+"""
 
 
 def find_model_class(name):
@@ -24,11 +29,12 @@ def find_model_class(name):
 
 def fieldclass_from_model(field_name, model):
     """Return a field class named field_name."""
-    for f in model._meta.fields:
-        if field_name == f.name:
-            return f
+    return model._meta.get_field(field_name)
+    # for f in model._meta.fields:
+    #     if field_name == f.name:
+    #         return f
         
-def qualified_field(field_ref):
+def qualified_fieldmodel(field_ref):
     """return string for field reference.
 
     like 'User.
@@ -37,7 +43,9 @@ def qualified_field(field_ref):
 
     model_name, field_name = field_ref.split('.')
     model_class = find_model_class(model_name)
-    field_class = field_from_model(field_name, model_class)
+    if not model_class:
+        raise Exception("No model class with name: {}".format(model_name))
+    return fieldclass_from_model(field_name, model_class)
     
 
     

@@ -68,7 +68,6 @@ class Visitor(ast.NodeVisitor):
 
     def visit_Tuple(self, node):
         for i, el in enumerate(node.elts):
-
             parseprint(el)
             ast.NodeVisitor.visit(self, el)
             if not i == len(node.elts)-1:

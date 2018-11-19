@@ -1,6 +1,7 @@
 .idea
 .coverage
 exp_flymake.py	
+.venv
 
 # Log from Ubuntu Xenial VM
 /ubuntu-xenial-16.04-cloudimg-console.log
