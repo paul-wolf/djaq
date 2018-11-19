@@ -30,9 +30,6 @@ def find_model_class(name):
 def fieldclass_from_model(field_name, model):
     """Return a field class named field_name."""
     return model._meta.get_field(field_name)
-    # for f in model._meta.fields:
-    #     if field_name == f.name:
-    #         return f
         
 def qualified_fieldmodel(field_ref):
     """return string for field reference.
