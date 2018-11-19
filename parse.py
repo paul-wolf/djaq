@@ -158,11 +158,13 @@ s = """[x.oc as org_code,
 """
 
 tokens = tokenize_dql(s)
-
 for token_info in tokens:
-    print(tok_name[token_info.type].ljust(12), token_info.string)
+     print(tok_name[token_info.type].ljust(12), token_info.string)
 
-# print(untokenize(tokens).decode('utf-8'))
+import ast
+
+# https://python-ast-explorer.com/
 
 
 
+# https://github.com/DimaKudosh/django-prepared-query/blob/master/django_prepared_query/compiler.py
