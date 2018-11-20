@@ -2,3 +2,4 @@ Django
 Faker
 factory_boy
 
+ipython

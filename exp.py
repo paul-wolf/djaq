@@ -1,31 +1,111 @@
 import ast
 from ast import AST, iter_fields, parse
 
-from astpp import parseprint
+import itertools
 
-from app_utils import find_model_class, qualified_field, fieldclass_from_model
+from collections import defaultdict
 
-class XQueryVisitor(ast.NodeVisitor):
+from django.db import connections, models
+from django.db.models.query import QuerySet
+from django.db.models.sql import UpdateQuery
 
-    def make_relations(self, attribute_list):
-        while attribute_list:
-            attribute_list.pop()
+def _get_db_type(field, connection):
+    if isinstance(field, (models.PositiveSmallIntegerField,
+                          models.PositiveIntegerField)):
+        # integer CHECK ("points" >= 0)'
+        return field.db_type(connection).split(' ', 1)[0]
+
+    return field.db_type(connection)
+
+from . astpp import parseprint
+
+from . app_utils import model_field
+
+
+def model_path(model):
+    return "{}.{}".format(model.__module__,
+                          model._meta.object_name)
+
+
+
+class XQuery(ast.NodeVisitor):
+
+    aggregate_functions = {
+        "unknown": ['avg', 'count', 'max', 'min', 'sum', ],        
+        "sqlite": ['avg', 'count', 'group_concat', 'max', 'min', 'sum', 'total', ],
+        "postgresql": ['avg', 'count', 'max', 'min', 'sum', 'stddev', 'variance', ],
+    }
     
-    class Relation(object):
+    class JoinRelation(object):
         
-        def __init__(self, f, related_table, related_field):
-            self.field = f
-            self.related_table = related_table
+        def __init__(self, model, fk_relation=None, fk_field=None, related_field=None,
+                     join_type='left', alias=None):
+            self.model = model
+            self.fk_relation = fk_relation
+            self.fk_field = fk_field
             self.related_field = related_field
-            self.join_type = 'left'
+            self.join_type = join_type # left, right, inner
+            self.alias = alias
             
-        def key(self):
-            return "{}.{}".format(self.related_table, self.related_field)
+        @property
+        def model_table(self):
+            return self.model._meta.db_table
         
-    relations = []
-    code = ''    
-    stack = []
+        def field_reference(self, field_model):
+            return "{}.{}".format(self.related_table, self.related_field)
 
+        def is_model(self, model):
+            return model_path(model) == model_path(self.model)
+        
+        def __str__(self):
+            return "{}".format(model_path(self.model))
+        
+    def __init__(self, source, using='default'):
+        
+        self.connection = connections[using]
+        self.vendor = self.connection.vendor
+        # self.compiler = query.get_compiler(connection=connection)
+
+        self.source = source
+        self.sql = None
+        self.cursor = None
+        self.col_names = None
+        self.relations = []
+        self.code = ''    
+        self.stack = []
+        self.names = []
+        self.relations = []
+        self.group_by = False
+        self.parsed = False
+        if self.vendor in XQuery.aggregate_functions:
+            self.vendor_aggregate_functions = XQuery.aggregate_functions[self.vendor]
+        else:
+            self.vendor_aggregate_functions = XQuery.aggregate_functions['unknown']
+
+    def push_relations(self, attribute_list):
+        
+        f = None
+        r = None # relation of field f
+        
+        # get field to represent in select expression
+        f = attribute_list.pop()
+        # get the model or FK relation it belongs to
+        if len(attribute_list):
+            r = attribute_list.pop()
+        else:
+            # it was alone; find default model
+            pass
+        model, field = model_field(r, f)
+        # don't join to model we already have
+        for relation in self.relations:
+            if relation.is_model(model):
+                break
+        else:
+            # not found, so add it
+            self.relations.append(XQuery.JoinRelation(model = model))
+            
+        return "{}.{}".format(model._meta.db_table, field.column)
+    
     def emit(self, s):
         self.code += str(s)
     
@@ -58,6 +138,8 @@ class XQueryVisitor(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
         
     def visit_Call(self, node):
+        if node.func.id.lower() in XQuery.aggregate_functions[self.vendor]:
+            self.group_by = True
         self.emit(node.func.id + "(")
         for i, arg in enumerate(node.args):
             if i:
@@ -136,6 +218,7 @@ class XQueryVisitor(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
             
     def visit_Attribute(self, node):
+
         self.stack.append(node.attr)
         for child in ast.iter_child_nodes(node):
             if isinstance(child, ast.Attribute):
@@ -143,21 +226,59 @@ class XQueryVisitor(ast.NodeVisitor):
             elif isinstance(child, ast.Name):
                 self.stack.append(child.id)
             else:
-                self.generic_visit(child)
+                self.visit(child)
+
         self.stack.reverse()
-        emit(make_relations(self.stack))
-        # if self.stack:
-        #    self.code += "-".join(self.stack)
+        column_expression = self.push_relations(self.stack)
+        self.names.append(column_expression)
+        self.emit(column_expression)
+        if self.stack:
+            self.code += "-".join(self.stack)
+
         self.stack = []
 
+    def parse(self):
+        """Parse column expressions.
 
-def parse_columns(s):
-    """Parse column expressions."""
+        If you call it twice, it fails second time.
 
-    tree = ast.parse(s)
-    v = XQueryVisitor()
-    v.visit(tree)
-
-    print(v.code)
-
-parse_columns("Book.name, Book.publisher.name, count(User.name)")
+        """
+        if self.sql:
+            return self.sql
+        self.visit(ast.parse(self.source))
+        for r in self.relations:
+            print("Relation: {}".format(str(r)))
+        self.relations.reverse()
+        print("Database vendor: {}".format(self.vendor))
+        s = "SELECT {} FROM {}".format(self.code, self.relations.pop().model_table)
+        if self.group_by:
+            s += " GROUP BY {}".format(", ".join(set(self.names)))
+        self.sql = s
+        return self.sql
+    
+    def execute(self):
+        sql = self.parse()
+        parameters = defaultdict(list)
+        self.cursor = self.connection.cursor().execute(sql, parameters)
+        self.col_names = [desc[0] for desc in self.cursor.description]
+        
+    def dicts(self):
+        if not self.cursor:
+            self.execute()
+        while True:
+            row = self.cursor.fetchone()
+            if row is None:
+                break
+            row_dict = dict(zip(self.col_names, row))
+            yield row_dict
+        return
+    
+    def tuples(self):
+        if not self.cursor:
+            self.execute()
+        while True:
+            row = self.cursor.fetchone()
+            if row is None:
+                break
+            yield row
+        return

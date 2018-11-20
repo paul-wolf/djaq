@@ -31,18 +31,27 @@ def fieldclass_from_model(field_name, model):
     """Return a field class named field_name."""
     return model._meta.get_field(field_name)
         
-def qualified_fieldmodel(field_ref):
-    """return string for field reference.
+def model_field(model_name, field_name):
+    """Return tuple of (model, field).
 
-    like 'User.
+    like:
+       model = 'User'
+       field = 'name'
 
     """
 
-    model_name, field_name = field_ref.split('.')
     model_class = find_model_class(model_name)
     if not model_class:
         raise Exception("No model class with name: {}".format(model_name))
-    return fieldclass_from_model(field_name, model_class)
+    return model_class, model_class._meta.get_field(field_name)
+    
+def field_ref(ref):
+    """Shortcut for field model.
+
+    like 'User.name'
+
+    """
+    return model_field(*ref.split('.'))
     
 
     
