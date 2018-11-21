@@ -1,8 +1,6 @@
+import re
 import ast
 from ast import AST, iter_fields, parse
-
-import itertools
-
 from collections import defaultdict
 
 from django.db import connections, models
@@ -19,7 +17,7 @@ def _get_db_type(field, connection):
 
 from . astpp import parseprint
 
-from . app_utils import model_field
+from . app_utils import model_field, find_model_class
 
 
 def model_path(model):
@@ -37,7 +35,11 @@ class XQuery(ast.NodeVisitor):
     }
     
     class JoinRelation(object):
-        
+        JOIN_TYPES = {
+            "->": "LEFT JOIN",
+            "<-": "RIGHT JOIN",
+            "<>": "INNER JOIN", 
+        }
         def __init__(self, model, fk_relation=None, fk_field=None, related_field=None,
                      join_type='left', alias=None):
             self.model = model
@@ -46,6 +48,8 @@ class XQuery(ast.NodeVisitor):
             self.related_field = related_field
             self.join_type = join_type # left, right, inner
             self.alias = alias
+            self.select = ''
+            self.where = ''
             
         @property
         def model_table(self):
@@ -56,16 +60,28 @@ class XQuery(ast.NodeVisitor):
 
         def is_model(self, model):
             return model_path(model) == model_path(self.model)
+
+        @property
+        def join_operator(self):
+            if join_type:
+                return JoinRelation.JOIN_TYPES[self.join_type]
+            return 'LEFT JOIN'
         
         def __str__(self):
             return "{}".format(model_path(self.model))
         
+    def find_relation(self, alias):
+        for relation in self.relations:
+            if alias == relation.alias:
+                return relation
+            
     def __init__(self, source, using='default'):
         
         self.connection = connections[using]
         self.vendor = self.connection.vendor
         # self.compiler = query.get_compiler(connection=connection)
 
+        self.relation_index = 0  # this is the relation being parsed currently
         self.source = source
         self.sql = None
         self.cursor = None
@@ -77,11 +93,18 @@ class XQuery(ast.NodeVisitor):
         self.relations = []
         self.group_by = False
         self.parsed = False
+        self.expression_context = 'select' # change to 'where' later
+        self.group_by = False
         if self.vendor in XQuery.aggregate_functions:
             self.vendor_aggregate_functions = XQuery.aggregate_functions[self.vendor]
         else:
             self.vendor_aggregate_functions = XQuery.aggregate_functions['unknown']
 
+
+    def aggregate(self):
+        """Indicate that the current relation requires aggregation."""
+        self.relations[self.relation_index].group_by = True
+        
     def push_relations(self, attribute_list):
         
         f = None
@@ -106,11 +129,20 @@ class XQuery(ast.NodeVisitor):
             
         return "{}.{}".format(model._meta.db_table, field.column)
     
-    def emit(self, s):
-        self.code += str(s)
+    def emit_select(self, s):
+        self.relations[self.relation_index].select += str(s)
     
-    def emit_single_quoted(self, s):
-        self.code += "'{}'".format(s)
+    def emit_where(self, s):
+        self.relations[self.relation_index].where += str(s)
+
+    def emit(self, s):
+        if self.expression_context == 'select':
+            self.emit_select(s)
+        elif self.expression_context == 'where':
+            self.emit_where(s)
+    
+    def single_quoted(self, s):
+        return "'{}'".format(s)
     
     def generic_visit(self, node):
         if not isinstance(node, ast.Load):
@@ -134,12 +166,12 @@ class XQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
         
     def visit_Str(self, node):
-        self.emit_single_quoted(node.s)
+        self.emit(self.single_quoted(node.s))
         ast.NodeVisitor.generic_visit(self, node)
         
     def visit_Call(self, node):
         if node.func.id.lower() in XQuery.aggregate_functions[self.vendor]:
-            self.group_by = True
+            self.aggregate()
         self.emit(node.func.id + "(")
         for i, arg in enumerate(node.args):
             if i:
@@ -237,22 +269,99 @@ class XQuery(ast.NodeVisitor):
 
         self.stack = []
 
+    def split_relations(self, s):
+        """Split string by join operators returning a list."""
+
+        relation_sources = []
+        search = None
+        offset = 0        
+        while True:
+            print("SEARCHING: {}, offset={}".format(s, offset))
+            search = re.search("->|<-|<>", s[offset:])
+
+            if search:
+                relation_sources.append(s[:search.start()+offset].strip())
+                print("FOUND: {}, start={}".format(s[:search.start()+offset], search.start()))
+                s = s[search.start()+offset:]
+                print("REDUCED: {}".format(s))
+            else:
+                relation_sources.append(s.strip())
+                print("LAST: {}".format(s))
+                break
+            
+            offset = 2
+            # input("Press Enter to continue...")
+
+        return relation_sources
+    
     def parse(self):
         """Parse column expressions.
 
         If you call it twice, it fails second time.
 
         """
+        
         if self.sql:
             return self.sql
-        self.visit(ast.parse(self.source))
+
+        
+        
+        pattern = "(->|<-|<>)?\s*(\(.*\))?\s*([\w]+)[\s]*(\{.*\})?\s+([\w]+)?"
+        
+        """
+        ->(Book.name as title, Book.publisher.name as pub, count()) Book{length(b.name) > 50)} b  
+
+        group 1: join operator
+        group 2: column expressions
+        group 3: model
+        group 4: filter
+        group 5: alias
+        """
+        
+        relation_sources = self.split_relations(self.source)
+        print("relation_sources: {}".format(relation_sources))
+
+        for i, relation_source in enumerate(relation_sources):
+            print(relation_source)
+            
+            m = re.match(pattern, relation_source)
+            join_type = m.group(1)
+            select_src = m.group(2)
+            model_name = m.group(3)
+            where_src = m.group(4)
+            alias = m.group(5) if m.group(5) else model_name
+
+            relation = self.find_relation(alias)
+            model = find_model_class(model_name)
+            if not relation:
+                relation = XQuery.JoinRelation(model=model, alias=alias)
+                
+            self.relation_index = i
+
+            if select_src:
+                self.expression_context = 'select'
+                self.visit(ast.parse(select_src))
+
+            if where_src:
+                self.expression_context = 'where'
+                self.visit(ast.parse(where_src))
+        
+        # print("Database vendor: {}".format(self.vendor))
+        
         for r in self.relations:
             print("Relation: {}".format(str(r)))
+
         self.relations.reverse()
-        print("Database vendor: {}".format(self.vendor))
-        s = "SELECT {} FROM {}".format(self.code, self.relations.pop().model_table)
-        if self.group_by:
-            s += " GROUP BY {}".format(", ".join(set(self.names)))
+
+        master_relation = self.relations.pop()
+        s = "SELECT {} FROM {}".format(master_relation.select, master_relation.model_table)
+        for i, relation in enumerate(self.relations):
+            if relation.select: # means it's a subquery
+                s += "{} (SELECT {} FROM {} ".format(relation.join_operator, relation.select, relation.model_table)
+                if relation.where:
+                    s += "WHERE {}".format(relation.where)
+        # if self.group_by:
+        #    s += " GROUP BY {}".format(", ".join(set(self.names)))
         self.sql = s
         return self.sql
     
