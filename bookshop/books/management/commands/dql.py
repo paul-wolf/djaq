@@ -15,8 +15,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         xq = XQuery(options.get('src'))
         sql = xq.parse()
-        return 
+
         print(sql)
+        return
         try:
             for rec in xq.dicts():
                 print(rec)

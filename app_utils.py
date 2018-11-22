@@ -3,19 +3,13 @@ from django.apps import apps
 """
 https://docs.djangoproject.com/en/2.1/ref/models/relations/
 
-fm.related_model
-fm.related_fields
+In [12]: Book._meta.get_field('publisher').related_model
+Out[12]: books.models.Publisher
 
-In [15]: p.related_model
-Out[15]: books.models.Publisher
-
-In [16]: p.related_fields
-Out[16]:
+In [13]: Book._meta.get_field('publisher').related_fields
+Out[13]:
 [(<django.db.models.fields.related.ForeignKey: publisher>,
   <django.db.models.fields.AutoField: id>)]
-
-p.foreign_related_fields
-(<django.db.models.fields.AutoField: id>,)
 
 """
 

@@ -41,7 +41,7 @@ class XQuery(ast.NodeVisitor):
             "<>": "INNER JOIN", 
         }
         def __init__(self, model, fk_relation=None, fk_field=None, related_field=None,
-                     join_type='left', alias=None):
+                     join_type='->', alias=None):
             self.model = model
             self.fk_relation = fk_relation
             self.fk_field = fk_field
@@ -54,7 +54,7 @@ class XQuery(ast.NodeVisitor):
         @property
         def model_table(self):
             return self.model._meta.db_table
-        
+
         def field_reference(self, field_model):
             return "{}.{}".format(self.related_table, self.related_field)
 
@@ -63,8 +63,8 @@ class XQuery(ast.NodeVisitor):
 
         @property
         def join_operator(self):
-            if join_type:
-                return JoinRelation.JOIN_TYPES[self.join_type]
+            if self.join_type:
+                return XQuery.JoinRelation.JOIN_TYPES[self.join_type]
             return 'LEFT JOIN'
         
         def __str__(self):
@@ -104,8 +104,60 @@ class XQuery(ast.NodeVisitor):
     def aggregate(self):
         """Indicate that the current relation requires aggregation."""
         self.relations[self.relation_index].group_by = True
-        
-    def push_relations(self, attribute_list):
+
+    def add_relation(self, model,
+                     fk_relation=None,
+                     fk_field=None,
+                     related_field=None,
+                     join_type='->',
+                     alias=None):
+        """Add relation. Don't add twice unless with different alias.
+
+        model: model class
+        fk_relation: an existing relation joining to us
+        fk_field: the field of fk_relation used to join us
+        related_field: model's field used for the join
+        join_type: kind of join, left, right, inner
+        alias: alias for the relation
+
+        """
+
+        for relation in self.relations:
+            if relation.is_model(model):
+                if alias and relation.alias:
+                    if alias == relation.alias:
+                        return relation
+                    else:
+                        # these means we have two different aliases
+                        # let a new relation be created
+                        pass
+                else:
+                    if alias:
+                        relation.alias = alias
+                    return relation
+
+        relation = XQuery.JoinRelation(model,
+                                       fk_relation,
+                                       fk_field,
+                                       related_field,
+                                       join_type,
+                                       alias)
+        self.relations.append(relation)
+
+        if len(self.relations) > 1:
+            # we need to find out how we are related to existing relations
+            for i, rel in enumerate(self.relations):
+                for f in rel.model._meta.get_fields():
+                    if f.related_model == relation.model:
+                        relation.fk_relation = rel
+                        relation.fk_field = f
+                        break
+                if relation.fk_relation:
+                    break
+        return relation
+    
+    def push_attribute_relations(self, attribute_list):
+        """Append new relation to self.relations based on attribute list."""
         
         f = None
         r = None # relation of field f
@@ -119,14 +171,8 @@ class XQuery(ast.NodeVisitor):
             # it was alone; find default model
             pass
         model, field = model_field(r, f)
-        # don't join to model we already have
-        for relation in self.relations:
-            if relation.is_model(model):
-                break
-        else:
-            # not found, so add it
-            self.relations.append(XQuery.JoinRelation(model = model))
-            
+        self.add_relation(model)
+        
         return "{}.{}".format(model._meta.db_table, field.column)
     
     def emit_select(self, s):
@@ -261,7 +307,7 @@ class XQuery(ast.NodeVisitor):
                 self.visit(child)
 
         self.stack.reverse()
-        column_expression = self.push_relations(self.stack)
+        column_expression = self.push_attribute_relations(self.stack)
         self.names.append(column_expression)
         self.emit(column_expression)
         if self.stack:
@@ -276,17 +322,17 @@ class XQuery(ast.NodeVisitor):
         search = None
         offset = 0        
         while True:
-            print("SEARCHING: {}, offset={}".format(s, offset))
+            # print("SEARCHING: {}, offset={}".format(s, offset))
             search = re.search("->|<-|<>", s[offset:])
 
             if search:
                 relation_sources.append(s[:search.start()+offset].strip())
-                print("FOUND: {}, start={}".format(s[:search.start()+offset], search.start()))
+                # print("FOUND: {}, start={}".format(s[:search.start()+offset], search.start()))
                 s = s[search.start()+offset:]
-                print("REDUCED: {}".format(s))
+                # print("REDUCED: {}".format(s))
             else:
                 relation_sources.append(s.strip())
-                print("LAST: {}".format(s))
+                # print("LAST: {}".format(s))
                 break
             
             offset = 2
@@ -306,9 +352,11 @@ class XQuery(ast.NodeVisitor):
 
         
         
-        pattern = "(->|<-|<>)?\s*(\(.*\))?\s*([\w]+)[\s]*(\{.*\})?\s+([\w]+)?"
+        pattern = "(->|<-|<>)?\s*(\(.*\))?\s*([\w]+)[\s]*(\{.*\})?\s*([\w]+)?"
         
         """
+        We get a relation string like this: 
+        
         ->(Book.name as title, Book.publisher.name as pub, count()) Book{length(b.name) > 50)} b  
 
         group 1: join operator
@@ -322,26 +370,37 @@ class XQuery(ast.NodeVisitor):
         print("relation_sources: {}".format(relation_sources))
 
         for i, relation_source in enumerate(relation_sources):
-            print(relation_source)
+            print("Parsing relation: {}".format(relation_source))
             
             m = re.match(pattern, relation_source)
+            if not m:
+                print("Error: Could not parse")
             join_type = m.group(1)
             select_src = m.group(2)
             model_name = m.group(3)
             where_src = m.group(4)
             alias = m.group(5) if m.group(5) else model_name
-
+            print("join_type={}, select_src={}, model_name={}, where_src={}, alias={}".format(
+                join_type,
+                select_src,
+                model_name,
+                where_src,
+                alias))
+                  
             relation = self.find_relation(alias)
             model = find_model_class(model_name)
             if not relation:
-                relation = XQuery.JoinRelation(model=model, alias=alias)
-                
+                relation = self.add_relation(model=model, alias=alias)
+                print("Created JoinRelation: {}".format(relation))
+            else:
+                print("Relation already existed: {}".format(relation))
+
             self.relation_index = i
 
             if select_src:
                 self.expression_context = 'select'
                 self.visit(ast.parse(select_src))
-
+                
             if where_src:
                 self.expression_context = 'where'
                 self.visit(ast.parse(where_src))
@@ -349,7 +408,14 @@ class XQuery(ast.NodeVisitor):
         # print("Database vendor: {}".format(self.vendor))
         
         for r in self.relations:
-            print("Relation: {}".format(str(r)))
+            print("Relation        : {}".format(str(r)))
+            print("   join         : {}".format(r.join_type))
+            print("   fk_relation  : {}".format(r.fk_relation))
+            print("   fk_field     : {}".format(r.fk_field))
+            print("   related_field: {}".format(r.related_field))            
+            print("   select       : {}".format(r.select))            
+            print("   where        : {}".format(r.where))
+            print("   alias        : {}".format(r.alias))
 
         self.relations.reverse()
 
