@@ -15,6 +15,7 @@ Out[13]:
 
 
 def find_model_class(name):
+    """Return model class for name, like 'Book'."""
     list_of_apps = list(apps.get_app_configs())
     for a in list_of_apps:
         for model_name, model_class in a.models.items():

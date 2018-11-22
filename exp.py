@@ -70,10 +70,11 @@ class XQuery(ast.NodeVisitor):
         def __str__(self):
             return "{}".format(model_path(self.model))
         
-    def find_relation(self, alias):
+    def find_relation_from_alias(self, alias):
         for relation in self.relations:
             if alias == relation.alias:
                 return relation
+
             
     def __init__(self, source, using='default'):
         
@@ -156,25 +157,59 @@ class XQuery(ast.NodeVisitor):
                     break
         return relation
     
-    def push_attribute_relations(self, attribute_list):
-        """Append new relation to self.relations based on attribute list."""
+    def push_attribute_relations(self, attribute_list, relation=None):
+        """Return field to represent in context expression.
+
+        Append new relation to self.relations as required.
+
+        We receive this:
+
+            ['name', 'publisher', 'Book']
+
+        """
+
+        # print("attribute list: {}".format(attribute_list))
+        # print("relation      : {}".format(relation))
+        # input("press key 11111")
         
-        f = None
-        r = None # relation of field f
+        # last element must be a field name
+        attr = attribute_list.pop()
+
+        # print("attr          : {}".format(attr))        
+        # print("attribute list: {}".format(attribute_list))
+        # print("relation      : {}".format(relation))
+        # input("press key 22222")
         
-        # get field to represent in select expression
-        f = attribute_list.pop()
-        # get the model or FK relation it belongs to
-        if len(attribute_list):
-            r = attribute_list.pop()
-        else:
-            # it was alone; find default model
-            pass
-        model, field = model_field(r, f)
-        self.add_relation(model)
+        if relation and not len(attribute_list):
+            field = relation.model._meta.get_field(attr)
+            return "{}.{}".format(relation.model._meta.db_table, field.column)
+        elif not relation and not len(attribute_list):
+            # take current relation
+            # this only happens when we are a standalone name as column_expression
+            model = self.relations[-1].model
+            field = model._meta.get_field(attr)
+            return "{}.{}".format(model._meta.db_table, field.column)
+        elif not relation and len(attribute_list):
+            # this happens when we have something like 'Book.name'
+            # therefore attr must be a model name or alias
+            relation = self.find_relation_from_alias(attr)
+            if not relation:
+                model = find_model_class(attr)                
+                relation = self.add_relation(model=model)
+            return self.push_attribute_relations(attribute_list, relation)
+
+        # print("*"*66)
+        # print(attribute_list)
+        # input("press key 33333")
         
-        return "{}.{}".format(model._meta.db_table, field.column)
-    
+        # if relation and attributes in list
+        # this means attr is a foreign key
+        model = relation.model._meta.get_field(attr).related_model
+        relation = self.add_relation(model)
+        return self.push_attribute_relations(attribute_list, relation)
+            
+
+
     def emit_select(self, s):
         self.relations[self.relation_index].select += str(s)
     
@@ -201,6 +236,13 @@ class XQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_Name(self, node):
+        self.stack.append(node.id)
+
+        column_expression = self.push_attribute_relations(self.stack)
+        self.names.append(column_expression)
+        self.emit(column_expression)
+        self.stack = []
+
         ast.NodeVisitor.generic_visit(self, node)
          
     def visit_Int(self, node):
@@ -306,13 +348,10 @@ class XQuery(ast.NodeVisitor):
             else:
                 self.visit(child)
 
-        self.stack.reverse()
-        column_expression = self.push_attribute_relations(self.stack)
-        self.names.append(column_expression)
-        self.emit(column_expression)
         if self.stack:
-            self.code += "-".join(self.stack)
-
+            column_expression = self.push_attribute_relations(self.stack)
+            self.names.append(column_expression)
+            self.emit(column_expression)
         self.stack = []
 
     def split_relations(self, s):
@@ -387,7 +426,7 @@ class XQuery(ast.NodeVisitor):
                 where_src,
                 alias))
                   
-            relation = self.find_relation(alias)
+            relation = self.find_relation_from_alias(alias)
             model = find_model_class(model_name)
             if not relation:
                 relation = self.add_relation(model=model, alias=alias)
