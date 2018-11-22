@@ -50,6 +50,7 @@ class XQuery(ast.NodeVisitor):
             self.alias = alias
             self.select = ''
             self.where = ''
+            self.group_by = False
             
         @property
         def model_table(self):
@@ -66,9 +67,27 @@ class XQuery(ast.NodeVisitor):
             if self.join_type:
                 return XQuery.JoinRelation.JOIN_TYPES[self.join_type]
             return 'LEFT JOIN'
+
+        @property
+        def join_condition_expression(self):
+            s = ''
+
+            # print(self.fk_field.related_fields)
+            for related_fields in self.fk_field.related_fields:
+                # print("related_fields")
+                # print(related_fields)
+                if s:
+                    s += " AND "
+                fk = related_fields[0]
+                f = related_fields[1]
+                s += '{}.{} = {}.{}'.format(fk.model._meta.db_table,
+                                            fk.column,
+                                            f.model._meta.db_table,
+                                            f.column)
+            return s
         
         def __str__(self):
-            return "{}".format(model_path(self.model))
+            return "Relation: {}".format(model_path(self.model))
         
     def find_relation_from_alias(self, alias):
         for relation in self.relations:
@@ -92,10 +111,9 @@ class XQuery(ast.NodeVisitor):
         self.stack = []
         self.names = []
         self.relations = []
-        self.group_by = False
         self.parsed = False
         self.expression_context = 'select' # change to 'where' later
-        self.group_by = False
+        # self.group_by = False
         if self.vendor in XQuery.aggregate_functions:
             self.vendor_aggregate_functions = XQuery.aggregate_functions[self.vendor]
         else:
@@ -104,6 +122,7 @@ class XQuery(ast.NodeVisitor):
 
     def aggregate(self):
         """Indicate that the current relation requires aggregation."""
+        # print("Setting group by: {}".format(self.relations[self.relation_index]))
         self.relations[self.relation_index].group_by = True
 
     def add_relation(self, model,
@@ -239,7 +258,8 @@ class XQuery(ast.NodeVisitor):
         self.stack.append(node.id)
 
         column_expression = self.push_attribute_relations(self.stack)
-        self.names.append(column_expression)
+        if self.expression_context == 'select':
+            self.names.append(column_expression)
         self.emit(column_expression)
         self.stack = []
 
@@ -324,7 +344,7 @@ class XQuery(ast.NodeVisitor):
 
     def visit_Tuple(self, node):
         for i, el in enumerate(node.elts):
-            parseprint(el)
+            # parseprint(el)
             ast.NodeVisitor.visit(self, el)
             if not i == len(node.elts)-1:
                 self.emit(", ")
@@ -350,7 +370,8 @@ class XQuery(ast.NodeVisitor):
 
         if self.stack:
             column_expression = self.push_attribute_relations(self.stack)
-            self.names.append(column_expression)
+            if self.expression_context == 'select':
+                self.names.append(column_expression)
             self.emit(column_expression)
         self.stack = []
 
@@ -461,12 +482,13 @@ class XQuery(ast.NodeVisitor):
         master_relation = self.relations.pop()
         s = "SELECT {} FROM {}".format(master_relation.select, master_relation.model_table)
         for i, relation in enumerate(self.relations):
-            if relation.select: # means it's a subquery
-                s += "{} (SELECT {} FROM {} ".format(relation.join_operator, relation.select, relation.model_table)
-                if relation.where:
-                    s += "WHERE {}".format(relation.where)
-        # if self.group_by:
-        #    s += " GROUP BY {}".format(", ".join(set(self.names)))
+            s += " {} {} ON {} ".format(relation.join_operator, relation.model_table, relation.join_condition_expression)
+            if relation.where:
+                s += " WHERE {}".format(relation.where)
+        if master_relation.where:
+            s += " WHERE {}".format(master_relation.where)
+        if master_relation.group_by:
+            s += " GROUP BY {}".format(", ".join(set(self.names)))
         self.sql = s
         return self.sql
     

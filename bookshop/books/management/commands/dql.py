@@ -17,7 +17,7 @@ class Command(BaseCommand):
         sql = xq.parse()
 
         print(sql)
-        return
+
         try:
             for rec in xq.dicts():
                 print(rec)
