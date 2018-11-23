@@ -60,6 +60,7 @@ class XQuery(ast.NodeVisitor):
             return "{}.{}".format(self.related_table, self.related_field)
 
         def is_model(self, model):
+            """Decide if model is equal to self's model."""
             return model_path(model) == model_path(self.model)
 
         @property
@@ -399,7 +400,25 @@ class XQuery(ast.NodeVisitor):
             # input("Press Enter to continue...")
 
         return relation_sources
-    
+
+    def parse_columns_aliases(self, select_src):
+        pattern = "\(.*?\)|(,)"
+        s = select_src
+        c = []
+        print("**********************************")
+        print(select_src)
+        aliases = []
+        while s:
+            m = re.search(pattern, s)
+            if not m:
+                break
+            if s[m.start():m.end()] == ',':
+                # column delimiter
+                c.append(s[:m.end()])
+            s = s[m.end():]
+            
+        print(c)
+            
     def parse(self):
         """Parse column expressions.
 
@@ -446,7 +465,11 @@ class XQuery(ast.NodeVisitor):
                 model_name,
                 where_src,
                 alias))
-                  
+
+            # we need to generate column headers and remove
+            # aliases
+            select_src = self.parse_columns_aliases(select_src)
+            return 
             relation = self.find_relation_from_alias(alias)
             model = find_model_class(model_name)
             if not relation:
