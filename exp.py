@@ -6,6 +6,7 @@ from collections import defaultdict
 from django.db import connections, models
 from django.db.models.query import QuerySet
 from django.db.models.sql import UpdateQuery
+from django.utils.text import slugify
 
 def _get_db_type(field, connection):
     if isinstance(field, (models.PositiveSmallIntegerField,
@@ -119,7 +120,7 @@ class XQuery(ast.NodeVisitor):
             self.vendor_aggregate_functions = XQuery.aggregate_functions[self.vendor]
         else:
             self.vendor_aggregate_functions = XQuery.aggregate_functions['unknown']
-
+        self.column_headers = []
 
     def aggregate(self):
         """Indicate that the current relation requires aggregation."""
@@ -401,23 +402,46 @@ class XQuery(ast.NodeVisitor):
 
         return relation_sources
 
-    def parse_columns_aliases(self, select_src):
-        pattern = "\(.*?\)|(,)"
-        s = select_src
-        c = []
-        print("**********************************")
-        print(select_src)
-        aliases = []
-        while s:
-            m = re.search(pattern, s)
-            if not m:
+    def get_col(self, s):
+        i = 0
+        in_parens = 0
+        col = ''
+        while True:
+            c = s[i]
+            col += c
+            if c == '(':
+                in_parens += 1
+            elif c == ')':
+                in_parens -= 1
+            if c == "," and not in_parens:
+                yield col[:-1].strip()
+                col = ''
+            i += 1
+            if i >= len(s):
                 break
-            if s[m.start():m.end()] == ',':
-                # column delimiter
-                c.append(s[:m.end()])
-            s = s[m.end():]
+        if col:
+            yield col.strip()
+        return None
+    
+    def parse_column_aliases(self, select_src):
+        pattern = "\(.*?\)|(,)"
+        # assume parens, remove them
+        s = select_src[:-1]
+        s = s[1:]
+        aliases = []
+        print(s)
+        m = True
+        for col in self.get_col(s):
+            a = col.split(" as ")
+            if len(a) == 1:
+                aliases.append((a[0], slugify(a[0].replace(".", "_").replace(" ", "_"))))
+            elif len(a) == 2:
+                aliases.append((a[0], a[1]))
+            else:
+                raise Exception("Error defining column")
             
-        print(c)
+        return aliases
+
             
     def parse(self):
         """Parse column expressions.
@@ -467,9 +491,10 @@ class XQuery(ast.NodeVisitor):
                 alias))
 
             # we need to generate column headers and remove
-            # aliases
-            select_src = self.parse_columns_aliases(select_src)
-            return 
+            # aliases. tuples are (exp, alias)
+            column_tuples = self.parse_column_aliases(select_src)
+            self.column_headers = [c[1] for c in column_tuples]
+            select_src = ", ".join([c[0] for c in column_tuples])
             relation = self.find_relation_from_alias(alias)
             model = find_model_class(model_name)
             if not relation:
@@ -528,7 +553,7 @@ class XQuery(ast.NodeVisitor):
             row = self.cursor.fetchone()
             if row is None:
                 break
-            row_dict = dict(zip(self.col_names, row))
+            row_dict = dict(zip(self.column_headers, row))
             yield row_dict
         return
     

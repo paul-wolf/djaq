@@ -15,12 +15,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         xq = XQuery(options.get('src'))
         sql = xq.parse()
-        return
         print(sql)
 
         try:
             for rec in xq.dicts():
                 print(rec)
         except Exception as e:
+            print("&&&&&&&&&&&")
             print(e)
         
