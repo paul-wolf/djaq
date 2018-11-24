@@ -1,3 +1,4 @@
+import json
 import re
 import ast
 from ast import AST, iter_fields, parse
@@ -84,7 +85,7 @@ class XQuery(ast.NodeVisitor):
                                             fk.column,
                                             f.model._meta.db_table,
                                             f.column)
-            return s
+            return "({})".format(s)
         
         def __str__(self):
             return "Relation: {}".format(model_path(self.model))
@@ -200,11 +201,11 @@ class XQuery(ast.NodeVisitor):
         # input("press key 22222")
         
         if relation and not len(attribute_list):
+            # attr is the terminal attribute
             field = relation.model._meta.get_field(attr)
             return "{}.{}".format(relation.model._meta.db_table, field.column)
         elif not relation and not len(attribute_list):
-            # take current relation
-            # this only happens when we are a standalone name as column_expression
+            # attr is a stand-alone name
             model = self.relations[-1].model
             field = model._meta.get_field(attr)
             return "{}.{}".format(model._meta.db_table, field.column)
@@ -226,8 +227,6 @@ class XQuery(ast.NodeVisitor):
         model = relation.model._meta.get_field(attr).related_model
         relation = self.add_relation(model)
         return self.push_attribute_relations(attribute_list, relation)
-            
-
 
     def emit_select(self, s):
         self.relations[self.relation_index].select += str(s)
@@ -518,3 +517,15 @@ class XQuery(ast.NodeVisitor):
                 break
             yield row
         return
+    
+    def json(self):
+        if not self.cursor:
+            self.execute()
+        while True:
+            row = self.cursor.fetchone()
+            if row is None:
+                break
+            row_dict = json.dumps(dict(zip(self.col_names, row)))
+            yield row_dict
+        return
+    
