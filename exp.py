@@ -7,6 +7,7 @@ from django.db import connections, models
 from django.db.models.query import QuerySet
 from django.db.models.sql import UpdateQuery
 from django.utils.text import slugify
+from . instance import XQueryInstance
 
 def _get_db_type(field, connection):
     if isinstance(field, (models.PositiveSmallIntegerField,
@@ -97,7 +98,7 @@ class XQuery(ast.NodeVisitor):
                 return relation
 
             
-    def __init__(self, source, using='default'):
+    def __init__(self, source, using='default', limit=None):
         
         self.connection = connections[using]
         self.vendor = self.connection.vendor
@@ -105,6 +106,7 @@ class XQuery(ast.NodeVisitor):
 
         self.relation_index = 0  # this is the relation being parsed currently
         self.source = source
+        self.limit = limit
         self.sql = None
         self.cursor = None
         self.col_names = None
@@ -537,6 +539,8 @@ class XQuery(ast.NodeVisitor):
             s += " WHERE {}".format(master_relation.where)
         if master_relation.group_by:
             s += " GROUP BY {}".format(", ".join(set(self.names)))
+        if self.limit:
+            s += " LIMIT {}".format(int(self.limit))
         self.sql = s
         return self.sql
     
@@ -544,6 +548,8 @@ class XQuery(ast.NodeVisitor):
         sql = self.parse()
         parameters = defaultdict(list)
         self.cursor = self.connection.cursor().execute(sql, parameters)
+        # we record the column names from the cursor
+        # by we have our own aliases in self.column_headers
         self.col_names = [desc[0] for desc in self.cursor.description]
         
     def dicts(self):
@@ -566,3 +572,8 @@ class XQuery(ast.NodeVisitor):
                 break
             yield row
         return
+    
+    def objs(self):
+        for d in self.dicts():
+            yield XQueryInstance(d, xquery=self)
+            

@@ -5,7 +5,6 @@ from django.core.management.base import BaseCommand, CommandError
 from xquery.exp import XQuery
 from xquery.app_utils import *
 
-
 class Command(BaseCommand):
     help = 'Interpret string'
 
@@ -13,14 +12,12 @@ class Command(BaseCommand):
         parser.add_argument('src', type=str)
 
     def handle(self, *args, **options):
-        xq = XQuery(options.get('src'))
+        xq = XQuery(options.get('src'), limit=10)
         sql = xq.parse()
         print(sql)
-
         try:
-            for rec in xq.dicts():
-                print(rec)
+            for rec in xq.objs():
+                print(dir(rec))
         except Exception as e:
-            print("&&&&&&&&&&&")
             print(e)
         
