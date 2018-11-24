@@ -7,6 +7,8 @@ from collections import defaultdict
 from django.db import connections, models
 from django.db.models.query import QuerySet
 from django.db.models.sql import UpdateQuery
+from django.utils.text import slugify
+from . instance import XQueryInstance
 
 def _get_db_type(field, connection):
     if isinstance(field, (models.PositiveSmallIntegerField,
@@ -61,6 +63,7 @@ class XQuery(ast.NodeVisitor):
             return "{}.{}".format(self.related_table, self.related_field)
 
         def is_model(self, model):
+            """Decide if model is equal to self's model."""
             return model_path(model) == model_path(self.model)
 
         @property
@@ -96,7 +99,7 @@ class XQuery(ast.NodeVisitor):
                 return relation
 
             
-    def __init__(self, source, using='default'):
+    def __init__(self, source, using='default', limit=None):
         
         self.connection = connections[using]
         self.vendor = self.connection.vendor
@@ -104,6 +107,7 @@ class XQuery(ast.NodeVisitor):
 
         self.relation_index = 0  # this is the relation being parsed currently
         self.source = source
+        self.limit = limit
         self.sql = None
         self.cursor = None
         self.col_names = None
@@ -119,7 +123,7 @@ class XQuery(ast.NodeVisitor):
             self.vendor_aggregate_functions = XQuery.aggregate_functions[self.vendor]
         else:
             self.vendor_aggregate_functions = XQuery.aggregate_functions['unknown']
-
+        self.column_headers = []
 
     def aggregate(self):
         """Indicate that the current relation requires aggregation."""
@@ -398,7 +402,48 @@ class XQuery(ast.NodeVisitor):
             # input("Press Enter to continue...")
 
         return relation_sources
+
+    def get_col(self, s):
+        i = 0
+        in_parens = 0
+        col = ''
+        while True:
+            c = s[i]
+            col += c
+            if c == '(':
+                in_parens += 1
+            elif c == ')':
+                in_parens -= 1
+            if c == "," and not in_parens:
+                yield col[:-1].strip()
+                col = ''
+            i += 1
+            if i >= len(s):
+                break
+        if col:
+            yield col.strip()
+        return None
     
+    def parse_column_aliases(self, select_src):
+        pattern = "\(.*?\)|(,)"
+        # assume parens, remove them
+        s = select_src[:-1]
+        s = s[1:]
+        aliases = []
+        print(s)
+        m = True
+        for col in self.get_col(s):
+            a = col.split(" as ")
+            if len(a) == 1:
+                aliases.append((a[0], slugify(a[0].replace(".", "_").replace(" ", "_"))))
+            elif len(a) == 2:
+                aliases.append((a[0], a[1]))
+            else:
+                raise Exception("Error defining column")
+            
+        return aliases
+
+            
     def parse(self):
         """Parse column expressions.
 
@@ -445,7 +490,12 @@ class XQuery(ast.NodeVisitor):
                 model_name,
                 where_src,
                 alias))
-                  
+
+            # we need to generate column headers and remove
+            # aliases. tuples are (exp, alias)
+            column_tuples = self.parse_column_aliases(select_src)
+            self.column_headers = [c[1] for c in column_tuples]
+            select_src = ", ".join([c[0] for c in column_tuples])
             relation = self.find_relation_from_alias(alias)
             model = find_model_class(model_name)
             if not relation:
@@ -488,6 +538,8 @@ class XQuery(ast.NodeVisitor):
             s += " WHERE {}".format(master_relation.where)
         if master_relation.group_by:
             s += " GROUP BY {}".format(", ".join(set(self.names)))
+        if self.limit:
+            s += " LIMIT {}".format(int(self.limit))
         self.sql = s
         return self.sql
     
@@ -495,6 +547,8 @@ class XQuery(ast.NodeVisitor):
         sql = self.parse()
         parameters = defaultdict(list)
         self.cursor = self.connection.cursor().execute(sql, parameters)
+        # we record the column names from the cursor
+        # by we have our own aliases in self.column_headers
         self.col_names = [desc[0] for desc in self.cursor.description]
         
     def dicts(self):
@@ -504,7 +558,7 @@ class XQuery(ast.NodeVisitor):
             row = self.cursor.fetchone()
             if row is None:
                 break
-            row_dict = dict(zip(self.col_names, row))
+            row_dict = dict(zip(self.column_headers, row))
             yield row_dict
         return
     
@@ -518,6 +572,7 @@ class XQuery(ast.NodeVisitor):
             yield row
         return
     
+
     def json(self):
         if not self.cursor:
             self.execute()
@@ -529,3 +584,9 @@ class XQuery(ast.NodeVisitor):
             yield row_dict
         return
     
+
+    def objs(self):
+        for d in self.dicts():
+            yield XQueryInstance(d, xquery=self)
+            
+

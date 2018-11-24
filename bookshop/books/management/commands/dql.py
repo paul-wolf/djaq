@@ -5,10 +5,6 @@ from django.core.management.base import BaseCommand, CommandError
 from xquery.exp import XQuery
 from xquery.app_utils import *
 
-class XQueryInstance(object):
-    # http://code.activestate.com/recipes/577887-a-simple-namespace-class/
-
-    pass
 
 class Command(BaseCommand):
     help = 'Interpret string'
@@ -17,13 +13,11 @@ class Command(BaseCommand):
         parser.add_argument('src', type=str)
 
     def handle(self, *args, **options):
-        xq = XQuery(options.get('src'))
+        xq = XQuery(options.get('src'), limit=10)
         sql = xq.parse()
-
         print(sql)
-
         try:
-            for rec in xq.json():
+            for rec in xq.objs():
                 print(rec)
         except Exception as e:
             print(e)
