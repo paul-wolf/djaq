@@ -1,4 +1,6 @@
+import sys
 import ast
+import traceback
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -14,11 +16,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         xq = XQuery(options.get('src'), limit=10)
-        sql = xq.parse()
-        print(sql)
         try:
             for rec in xq.objs():
                 print(rec)
         except Exception as e:
+            traceback.print_exc(file=sys.stdout)
             print(e)
         

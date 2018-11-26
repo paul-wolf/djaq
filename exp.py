@@ -259,7 +259,6 @@ class XQuery(ast.NodeVisitor):
 
     def visit_Name(self, node):
         self.stack.append(node.id)
-
         column_expression = self.push_attribute_relations(self.stack)
         if self.expression_context == 'select':
             self.names.append(column_expression)
@@ -277,7 +276,19 @@ class XQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
         
     def visit_Str(self, node):
-        self.emit(self.single_quoted(node.s))
+        s = node.s
+
+        
+        if "*" in node.s:
+            if self.relations[self.relation_index].where.endswith(' = '):
+                s = s.replace("*", "%")                
+                parts = self.relations[self.relation_index].where.rpartition(' = ')
+                self.relations[self.relation_index].where = parts[0] + ' LIKE '
+        
+        # if node.s preceded by equals
+        # replace equals with LIKE (or ilike)
+        # and replace start with %
+        self.emit(self.single_quoted(s))
         ast.NodeVisitor.generic_visit(self, node)
         
     def visit_Call(self, node):
@@ -299,7 +310,9 @@ class XQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
         
     def visit_Eq(self, node):
-        self.emit(" == ")
+        print("v"*44)
+        print("equals")
+        self.emit(" = ")
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_NotEq(self, node):
@@ -331,6 +344,9 @@ class XQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_BinOp(self, node):
+        print("v"*44)
+        print(node.op)
+        print("^"*44)        
         self.emit("(")
         ast.NodeVisitor.visit(self, node.left)
         ast.NodeVisitor.visit(self, node.op)
@@ -404,6 +420,8 @@ class XQuery(ast.NodeVisitor):
         return relation_sources
 
     def get_col(self, s):
+        """Generator for returning column expressions 
+        potentially with alias decl."""
         i = 0
         in_parens = 0
         col = ''
@@ -435,7 +453,7 @@ class XQuery(ast.NodeVisitor):
         for col in self.get_col(s):
             a = col.split(" as ")
             if len(a) == 1:
-                aliases.append((a[0], slugify(a[0].replace(".", "_").replace(" ", "_"))))
+                aliases.append((a[0], slugify(a[0].replace(".", "_").replace(" ", "_")).replace("-", "_")))
             elif len(a) == 2:
                 aliases.append((a[0], a[1]))
             else:
@@ -543,17 +561,18 @@ class XQuery(ast.NodeVisitor):
         self.sql = s
         return self.sql
     
-    def execute(self):
+    def execute(self, parameters=None):
         sql = self.parse()
-        parameters = defaultdict(list)
+        print(sql)
+        sql = sql.replace("'%s'", "%s")
         self.cursor = self.connection.cursor().execute(sql, parameters)
         # we record the column names from the cursor
-        # by we have our own aliases in self.column_headers
+        # but we have our own aliases in self.column_headers
         self.col_names = [desc[0] for desc in self.cursor.description]
         
-    def dicts(self):
+    def dicts(self, parameters=None):
         if not self.cursor:
-            self.execute()
+            self.execute(parameters)
         while True:
             row = self.cursor.fetchone()
             if row is None:
@@ -562,31 +581,22 @@ class XQuery(ast.NodeVisitor):
             yield row_dict
         return
     
-    def tuples(self):
+    def tuples(self, parameters=None):
         if not self.cursor:
-            self.execute()
+            self.execute(parameters)
         while True:
             row = self.cursor.fetchone()
             if row is None:
                 break
             yield row
         return
-    
 
-    def json(self):
-        if not self.cursor:
-            self.execute()
-        while True:
-            row = self.cursor.fetchone()
-            if row is None:
-                break
-            row_dict = json.dumps(dict(zip(self.col_names, row)))
-            yield row_dict
-        return
-    
+    def json(self, parameters=None):
+        for d in self.dicts(parameters):
+            yield json.dumps(d)
 
-    def objs(self):
-        for d in self.dicts():
+    def objs(self, parameters=None):
+        for d in self.dicts(parameters):
             yield XQueryInstance(d, xquery=self)
             
 
