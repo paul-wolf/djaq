@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import re
 import ast
@@ -600,3 +602,15 @@ class XQuery(ast.NodeVisitor):
             yield XQueryInstance(d, xquery=self)
             
 
+    def csv(self, parameters=None):
+        if not self.cursor:
+            self.execute(parameters)
+        while True:
+            output = io.StringIO()
+            row = self.cursor.fetchone()
+            if row is None:
+                break
+            writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC)
+            writer.writerow(row)
+            yield output.getvalue()
+        
