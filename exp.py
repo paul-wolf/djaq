@@ -45,7 +45,7 @@ class XQuery(ast.NodeVisitor):
             "<-": "RIGHT JOIN",
             "<>": "INNER JOIN", 
         }
-        def __init__(self, model, fk_relation=None, fk_field=None, related_field=None,
+        def __init__(self, model, xquery, fk_relation=None, fk_field=None, related_field=None,
                      join_type='->', alias=None):
             self.model = model
             self.fk_relation = fk_relation
@@ -54,8 +54,11 @@ class XQuery(ast.NodeVisitor):
             self.join_type = join_type # left, right, inner
             self.alias = alias
             self.select = ''
+            self.expression_str = ''
+            self.column_expressions = []
             self.where = ''
             self.group_by = False
+            self.xquery = xquery
             
         @property
         def model_table(self):
@@ -92,6 +95,17 @@ class XQuery(ast.NodeVisitor):
                                             f.column)
             return "({})".format(s)
         
+        def group_by_columns(self):
+            """Return str of GROUP BY columns."""
+            grouping = []
+            print(self.column_expressions)
+            for c in self.column_expressions:
+                if not self.xquery.is_aggregate_expression(c):
+                    grouping.append(c)
+            print("*"*77)
+            print(grouping)
+            return ", ".join(set(grouping))
+
         def __str__(self):
             return "Relation: {}".format(model_path(self.model))
         
@@ -100,9 +114,15 @@ class XQuery(ast.NodeVisitor):
             if alias == relation.alias:
                 return relation
 
-            
+    def is_aggregate_expression(self, exp):
+        """Return True if exp is an aggregate expression like 
+        `avg(Book.price+Book.price*0.2)`"""
+
+        return exp.lower().split("(")[0] in self.vendor_aggregate_functions
+
+    
     def __init__(self, source, using='default', limit=None):
-        
+
         self.connection = connections[using]
         self.vendor = self.connection.vendor
         # self.compiler = query.get_compiler(connection=connection)
@@ -117,6 +137,7 @@ class XQuery(ast.NodeVisitor):
         self.code = ''    
         self.stack = []
         self.names = []
+        self.column_expressions = []
         self.relations = []
         self.parsed = False
         self.expression_context = 'select' # change to 'where' later
@@ -163,7 +184,7 @@ class XQuery(ast.NodeVisitor):
                         relation.alias = alias
                     return relation
 
-        relation = XQuery.JoinRelation(model,
+        relation = XQuery.JoinRelation(model, self,
                                        fk_relation,
                                        fk_field,
                                        related_field,
@@ -236,6 +257,10 @@ class XQuery(ast.NodeVisitor):
 
     def emit_select(self, s):
         self.relations[self.relation_index].select += str(s)
+        self.relations[self.relation_index].expression_str += str(s)        
+    
+    def push_column_expression(self, s):
+        self.relations[self.relation_index].column_expressions.append(s)
     
     def emit_where(self, s):
         self.relations[self.relation_index].where += str(s)
@@ -256,6 +281,7 @@ class XQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
         
     def visit_Expr(self, node):
+        
         # parseprint(node)
         ast.NodeVisitor.generic_visit(self, node)
 
@@ -365,11 +391,18 @@ class XQuery(ast.NodeVisitor):
 
     def visit_Tuple(self, node):
         for i, el in enumerate(node.elts):
-            # parseprint(el)
+            print("v"*66)
+            parseprint(el)
+
             ast.NodeVisitor.visit(self, el)
+            exp = self.relations[self.relation_index].expression_str
+            
+            self.push_column_expression(exp.strip(', '))
+            self.relations[self.relation_index].expression_str = ''
+            print("^"*66)
             if not i == len(node.elts)-1:
                 self.emit(", ")
-    
+            
     def visit_Arguments(self, node):
         self.emit('|')
         ast.NodeVisitor.generic_visit(self, node)
@@ -489,7 +522,6 @@ class XQuery(ast.NodeVisitor):
         group 4: filter
         group 5: alias
         """
-        
         relation_sources = self.split_relations(self.source)
         print("relation_sources: {}".format(relation_sources))
 
@@ -497,13 +529,21 @@ class XQuery(ast.NodeVisitor):
             print("Parsing relation: {}".format(relation_source))
             
             m = re.match(pattern, relation_source)
-            if not m:
-                print("Error: Could not parse")
-            join_type = m.group(1)
-            select_src = m.group(2)
-            model_name = m.group(3)
-            where_src = m.group(4)
-            alias = m.group(5) if m.group(5) else model_name
+            if m:
+                join_type = m.group(1)
+                select_src = m.group(2)
+                model_name = m.group(3)
+                where_src = m.group(4)
+                alias = m.group(5) if m.group(5) else model_name
+            elif re.match("^(\(.*\))$", self.source):
+                join_type = None
+                select_src = self.source.strip("()")
+                model_name = None
+                where_src = None
+                alias = None
+            else:
+                raise Exception("Invalid source")
+
             print("join_type={}, select_src={}, model_name={}, where_src={}, alias={}".format(
                 join_type,
                 select_src,
@@ -533,9 +573,9 @@ class XQuery(ast.NodeVisitor):
             if where_src:
                 self.expression_context = 'where'
                 self.visit(ast.parse(where_src))
-        
+
         # print("Database vendor: {}".format(self.vendor))
-        
+
         for r in self.relations:
             print("Relation        : {}".format(str(r)))
             print("   join         : {}".format(r.join_type))
@@ -557,7 +597,9 @@ class XQuery(ast.NodeVisitor):
         if master_relation.where:
             s += " WHERE {}".format(master_relation.where)
         if master_relation.group_by:
-            s += " GROUP BY {}".format(", ".join(set(self.names)))
+            gb = master_relation.group_by_columns()
+            if gb:
+                s += " GROUP BY {}".format(gb)
         if self.limit:
             s += " LIMIT {}".format(int(self.limit))
         self.sql = s
