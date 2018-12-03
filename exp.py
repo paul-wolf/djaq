@@ -101,12 +101,12 @@ class XQuery(ast.NodeVisitor):
         def group_by_columns(self):
             """Return str of GROUP BY columns."""
             grouping = []
-            print(self.column_expressions)
+            print("group by columns: {}".format(self.column_expressions))
             for c in self.column_expressions:
                 if not self.xquery.is_aggregate_expression(c):
                     grouping.append(c)
             print("*"*77)
-            print(grouping)
+            print("grouping: ".format(grouping))
             return ", ".join(set(grouping))
 
         def __str__(self):
@@ -494,10 +494,12 @@ class XQuery(ast.NodeVisitor):
     def parse_column_aliases(self, select_src):
         pattern = "\(.*?\)|(,)"
         # assume parens, remove them
-        s = select_src[:-1]
-        s = s[1:]
+        if select_src[0] == "(":
+            s = select_src[1:-1]
+        else:
+            s = select_src
         aliases = []
-        print(s)
+        print("parse column aliases: {}".format(s))
         m = True
         for col in self.get_col(s):
             a = col.split(" as ")
@@ -549,7 +551,11 @@ class XQuery(ast.NodeVisitor):
                 alias = m.group(5) if m.group(5) else model_name
             elif re.match("^(\(.*\))$", self.source):
                 join_type = None
-                select_src = self.source.strip("()")
+                # strip whitespace
+                src = self.source.strip()
+                if src[0] == "(":
+                    src = src[1:-1]
+                select_src = src.strip()
                 model_name = None
                 where_src = None
                 alias = None
@@ -570,7 +576,7 @@ class XQuery(ast.NodeVisitor):
             select_src = ", ".join([c[0] for c in column_tuples])
             relation = self.find_relation_from_alias(alias)
             model = find_model_class(model_name)
-            if not relation:
+            if model and not relation:
                 relation = self.add_relation(model=model, alias=alias)
                 print("Created JoinRelation: {}".format(relation))
             else:
