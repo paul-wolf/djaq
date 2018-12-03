@@ -33,6 +33,9 @@ def model_path(model):
 
 class XQuery(ast.NodeVisitor):
 
+    # keep a record of named instances
+    directory = {}
+    
     aggregate_functions = {
         "unknown": ['avg', 'count', 'max', 'min', 'sum', ],        
         "sqlite": ['avg', 'count', 'group_concat', 'max', 'min', 'sum', 'total', ],
@@ -117,12 +120,15 @@ class XQuery(ast.NodeVisitor):
     def is_aggregate_expression(self, exp):
         """Return True if exp is an aggregate expression like 
         `avg(Book.price+Book.price*0.2)`"""
-
-        return exp.lower().split("(")[0] in self.vendor_aggregate_functions
+        s = exp.lower().strip("(").split("(")[0]
+        return s in self.vendor_aggregate_functions
 
     
-    def __init__(self, source, using='default', limit=None):
+    def __init__(self, source, using='default', limit=None, name=None):
 
+        if name:
+            XQuery.directory[name]  = self
+        
         self.connection = connections[using]
         self.vendor = self.connection.vendor
         # self.compiler = query.get_compiler(connection=connection)
@@ -329,6 +335,14 @@ class XQuery(ast.NodeVisitor):
             ast.NodeVisitor.visit(self, arg)
         self.emit(")")
 
+    def visit_Add(self, node):
+        self.emit(" + ")
+        ast.NodeVisitor.generic_visit(self, node)
+
+    def visit_Sub(self, node):
+        self.emit(" - ")
+        ast.NodeVisitor.generic_visit(self, node)
+
     def visit_Gt(self, node):
         self.emit(" > ")
         ast.NodeVisitor.generic_visit(self, node)
@@ -507,8 +521,6 @@ class XQuery(ast.NodeVisitor):
         if self.sql:
             return self.sql
 
-        
-        
         pattern = "(->|<-|<>)?\s*(\(.*\))?\s*([\w]+)[\s]*(\{.*\})?\s*([\w]+)?"
         
         """
