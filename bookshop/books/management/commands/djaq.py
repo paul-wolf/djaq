@@ -1,17 +1,13 @@
 import sys
-import ast
 import traceback
 
 from django.core.management.base import BaseCommand, CommandError
 
-from xquery.exp import XQuery
-from xquery.app_utils import *
+from xquery.exp import XQuery as Q
 
 
 class Command(BaseCommand):
     help = 'Interpret string'
-
-    
     
     def add_arguments(self, parser):
         parser.add_argument('src', type=str)
@@ -22,7 +18,7 @@ class Command(BaseCommand):
                             type=str)
 
     def handle(self, *args, **options):
-        xq = XQuery(options.get('src'), limit=10)
+        xq = Q(options.get('src'), limit=10)
         try:
             for rec in getattr(xq, options.get('format'))():
                 print(rec)

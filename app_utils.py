@@ -14,6 +14,18 @@ Out[13]:
 """
 
 
+def model_path(model):
+    return "{}.{}".format(model.__module__,
+                          model._meta.object_name)
+
+def get_db_type(field, connection):
+    if isinstance(field, (models.PositiveSmallIntegerField,
+                          models.PositiveIntegerField)):
+        # integer CHECK ("points" >= 0)'
+        return field.db_type(connection).split(' ', 1)[0]
+
+    return field.db_type(connection)
+
 def find_model_class(name):
     """Return model class for name, like 'Book'."""
     list_of_apps = list(apps.get_app_configs())

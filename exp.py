@@ -10,25 +10,10 @@ from django.db import connections, models
 from django.db.models.query import QuerySet
 from django.db.models.sql import UpdateQuery
 from django.utils.text import slugify
+
 from . instance import XQueryInstance
-
-def _get_db_type(field, connection):
-    if isinstance(field, (models.PositiveSmallIntegerField,
-                          models.PositiveIntegerField)):
-        # integer CHECK ("points" >= 0)'
-        return field.db_type(connection).split(' ', 1)[0]
-
-    return field.db_type(connection)
-
 from . astpp import parseprint
-
-from . app_utils import model_field, find_model_class
-
-
-def model_path(model):
-    return "{}.{}".format(model.__module__,
-                          model._meta.object_name)
-
+from . app_utils import model_field, find_model_class, model_path
 
 
 class XQuery(ast.NodeVisitor):
@@ -101,12 +86,12 @@ class XQuery(ast.NodeVisitor):
         def group_by_columns(self):
             """Return str of GROUP BY columns."""
             grouping = []
-            print("group by columns: {}".format(self.column_expressions))
+            # print("group by columns: {}".format(self.column_expressions))
             for c in self.column_expressions:
                 if not self.xquery.is_aggregate_expression(c):
                     grouping.append(c)
-            print("*"*77)
-            print("grouping: ".format(grouping))
+            # print("*"*77)
+            # print("grouping: ".format(grouping))
             return ", ".join(set(grouping))
 
         def __str__(self):
@@ -352,8 +337,6 @@ class XQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
         
     def visit_Eq(self, node):
-        print("v"*44)
-        print("equals")
         self.emit(" = ")
         ast.NodeVisitor.generic_visit(self, node)
 
@@ -386,9 +369,9 @@ class XQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_BinOp(self, node):
-        print("v"*44)
-        print(node.op)
-        print("^"*44)        
+        # print("v"*44)
+        # print(node.op)
+        # print("^"*44)        
         self.emit("(")
         ast.NodeVisitor.visit(self, node.left)
         ast.NodeVisitor.visit(self, node.op)
@@ -405,15 +388,15 @@ class XQuery(ast.NodeVisitor):
 
     def visit_Tuple(self, node):
         for i, el in enumerate(node.elts):
-            print("v"*66)
-            parseprint(el)
+            # print("v"*66)
+            # parseprint(el)
 
             ast.NodeVisitor.visit(self, el)
             exp = self.relations[self.relation_index].expression_str
             
             self.push_column_expression(exp.strip(', '))
             self.relations[self.relation_index].expression_str = ''
-            print("^"*66)
+            # print("^"*66)
             if not i == len(node.elts)-1:
                 self.emit(", ")
             
@@ -499,7 +482,7 @@ class XQuery(ast.NodeVisitor):
         else:
             s = select_src
         aliases = []
-        print("parse column aliases: {}".format(s))
+        # print("parse column aliases: {}".format(s))
         m = True
         for col in self.get_col(s):
             a = col.split(" as ")
@@ -537,10 +520,10 @@ class XQuery(ast.NodeVisitor):
         group 5: alias
         """
         relation_sources = self.split_relations(self.source)
-        print("relation_sources: {}".format(relation_sources))
+        # print("relation_sources: {}".format(relation_sources))
 
         for i, relation_source in enumerate(relation_sources):
-            print("Parsing relation: {}".format(relation_source))
+            # print("Parsing relation: {}".format(relation_source))
             
             m = re.match(pattern, relation_source)
             if m:
@@ -562,12 +545,12 @@ class XQuery(ast.NodeVisitor):
             else:
                 raise Exception("Invalid source")
 
-            print("join_type={}, select_src={}, model_name={}, where_src={}, alias={}".format(
-                join_type,
-                select_src,
-                model_name,
-                where_src,
-                alias))
+            # print("join_type={}, select_src={}, model_name={}, where_src={}, alias={}".format(
+            #     join_type,
+            #     select_src,
+            #     model_name,
+            #     where_src,
+            #     alias))
 
             # we need to generate column headers and remove
             # aliases. tuples are (exp, alias)
@@ -578,10 +561,10 @@ class XQuery(ast.NodeVisitor):
             model = find_model_class(model_name)
             if model and not relation:
                 relation = self.add_relation(model=model, alias=alias)
-                print("Created JoinRelation: {}".format(relation))
+                # print("Created JoinRelation: {}".format(relation))
             else:
-                print("Relation already existed: {}".format(relation))
-
+                # print("Relation already existed: {}".format(relation))
+                pass
             self.relation_index = i
 
             if select_src:
@@ -594,15 +577,15 @@ class XQuery(ast.NodeVisitor):
 
         # print("Database vendor: {}".format(self.vendor))
 
-        for r in self.relations:
-            print("Relation        : {}".format(str(r)))
-            print("   join         : {}".format(r.join_type))
-            print("   fk_relation  : {}".format(r.fk_relation))
-            print("   fk_field     : {}".format(r.fk_field))
-            print("   related_field: {}".format(r.related_field))            
-            print("   select       : {}".format(r.select))            
-            print("   where        : {}".format(r.where))
-            print("   alias        : {}".format(r.alias))
+        # for r in self.relations:
+        #     print("Relation        : {}".format(str(r)))
+        #     print("   join         : {}".format(r.join_type))
+        #     print("   fk_relation  : {}".format(r.fk_relation))
+        #     print("   fk_field     : {}".format(r.fk_field))
+        #     print("   related_field: {}".format(r.related_field))            
+        #     print("   select       : {}".format(r.select))            
+        #     print("   where        : {}".format(r.where))
+        #     print("   alias        : {}".format(r.alias))
 
         self.relations.reverse()
 

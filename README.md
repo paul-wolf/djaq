@@ -1,130 +1,125 @@
-# dql
-django query language
+Djaq: Django Queries
+====================
 
-Django Query Language
-=====================
+To Install:
 
-https://tomassetti.me/ebnf/
-https://tomassetti.me/parsing-in-python/
-https://ipfs.io/ipfs/QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco/wiki/Recursive_descent_parser.html
-http://books.agiliq.com/projects/django-orm-cookbook/en/latest/or_query.html
-https://stackoverflow.com/questions/34119721/simple-programming-language-in-ebnf-form
-Get sql from queryset:
+    git clone git@github.com:paul-wolf/djaq.git
+	cd djaq
 
-https://stackoverflow.com/questions/10168935/parsing-nested-function-calls-using-pyparsing
+Create the virtualenv:
 
-    sql, sql_params = queryset.query.get_compiler(using=queryset.db).as_sql()
+    virtualenv -p python3 .venv    
 
-User.username
-User -> extendeduser.moc
+The module itself does not install Django and there are not further
+requirements. The example Django application is in ./bookshop. To
+install dependencies for the sample application:
 
+    cd bookshop
+    pip install -r requirements.txt
 
+The sample database is already part of source code now (sqlite).
 
-##Aggregation
+To start issuing queries, activate the virtual environment:
 
-https://docs.djangoproject.com/en/2.1/topics/db/aggregation/
+    source ../.venv/bin/activate
 
-    pubs = Publisher.objects.annotate(num_books=Count('book'))
-    pubs = q("""(p.name, avg(b.price)): Publisher p
-       <- Book b 
-    """)
-    
+The example application comes with a management command to run queries:
 
-    pubs = q("Book b -> Publisher p [p.name, count(b.id) as num_books]")
+    ./manage.py djaq "(Publisher.name, max(Book.price) - round(avg(Book.price)) as diff) Book b"  --format json
 
+If using in code, you would do this:
 
-    above_5 = Count('book', filter=Q(book__rating__gt=5))
+    from xquery.exp import XQuery as Q
+	xq = Q("(avg(b.price) as average_book_price) Book b"
+	print(xq.json())
 
-    above_5 = q("Book{rating > 5} [count(*)]")
-    above_5 = q("(count(*)): Book{rating > 5}")
+There are several generators to choose from to iterate records:
 
+    XQuery.json()  # return json objects
+    XQuery.dicts() # dicts
+    XQuery.tuples() # tuples of values
+    XQuery.objs()  # We return for each record, an instance of XQueryInstance
 
-    Book.objects.aggregate(Avg('price'))
-    {'price__avg': 34.35}
+The XQueryInstance is basically a namespace so you can do this:
 
-    XQuery("Book [avg(price)]").as_int()
-    34.35
-    
-    qs = Book.objects.annotate(Count('authors'))
-    
-    qx = q("Book [count(authors)]")
-    
-    
-    Store.objects.annotate(min_price=Min('books__price'), max_price=Max('books__price'))
-    
-    q("Store{condition} s -> Book b [s.name, min(b.price) as min_price, max(b.price as max_price]")
-    
-    
-    Author.objects.values('name').annotate(average_rating=Avg('book__rating'))
-    
-    q("(avg(Book.rating) as average_rating): Author a")
-    
-[u.username, u.email, x.oc] User u {(username.startswith('paul') | username == 'chris') & email ~ '@bitposter.co'} -> extendeduser x
+    print(inst.name)
+    print(inst.price)
 
-xq = XQuery("
+etc.
 
-(x.oc.lower() as org_code, upper(x.organisation.name), count(*)): 
-	User {(username ~ 'paul' or username == $name) & email ~ i'@bitposter.co'} u
-		-> Extendeduser x
-		-> Organisation o
-		<- some query /* right join */
-        <-> some other query /* inner join */
+Output of the command should look like this:
 
-")
-
-xq['count']
-
-	User u {(username ~ 'paul' | username == 'chris') & email ~ i'@bitposter.co' & id in somelist} 
-		-> Extendeduser x
-		-> Organisation o
-		-> `SELECT * FROM someothertable WHERE blah = 'blah'`
-		-> otherXQ q
-		-> (SELECT * FROM someothertable WHERE id IN `[i for i in list_of_i]`)
-		-> some_queryset
-[x.oc as org_code, x.organisation.name, count(*), q.*]
-
-group_by x.oc, x.organisation.name
-order_by x.organisation.name
-
-Integer representing staff count:
-
-    staff_count = XQuery("User [count(is_staff)]").as_int()
-    staff_count = q("(count(*)): User").as_int()
-    staff_count = q("(count(*)): User")[0]['count']
-    
-All staff, all fields:
-
-    staff = XQuery("User{is_staff == TRUE} [*]").as_list() # list of dicts
-    XQuery("User{is_staff == TRUE} [*]").as_generator() # generator of dicts
-    cursor = XQuery("User{is_staff == TRUE} [*]").as_cursor() 
-
-```python
-User.objects.filter(Q(username__icontains='paul') | Q(username='chris') & Q(email__icontains='@bitposter.co')) 
+```
+▶ ./manage.py djaq "(Publisher.name, max(Book.price) - round(avg(Book.price)) as diff) Book b"  --format json
+SELECT books_publisher.name, (max(books_book.price) - round(avg(books_book.price))) FROM books_book LEFT JOIN books_publisher ON (books_book.publisher_id = books_publisher.id)  GROUP BY books_publisher.name LIMIT 10
+{"publisher_name": "Avila, Garza and Ward", "diff": 14.0}
+{"publisher_name": "Boyer-Clements", "diff": 16.0}
+{"publisher_name": "Clark, Garza and York", "diff": 15.0}
+{"publisher_name": "Clarke PLC", "diff": 14.0}
+{"publisher_name": "Griffin-Blake", "diff": 16.0}
+{"publisher_name": "Hampton-Davis", "diff": 13.0}
+{"publisher_name": "Jones LLC", "diff": 15.0}
+{"publisher_name": "Lane-Kim", "diff": 15.0}
+{"publisher_name": "Norris-Bennett", "diff": 14.0}
+{"publisher_name": "Singleton-King", "diff": 17.0}
 ```
 
-```sql
-('SELECT "auth_user"."id", "auth_user"."password", "auth_user"."last_login", "auth_user"."is_superuser", "auth_user"."username", "auth_user"."first_name", "auth_user"."last_name", "auth_user"."email", "auth_user"."is_staff", "auth_user"."is_active", "auth_user"."date_joined" FROM "auth_user" WHERE (UPPER("auth_user"."username"::text) LIKE UPPER(%s) OR ("auth_user"."username" = %s AND UPPER("auth_user"."email"::text) LIKE UPPER(%s)))',
- ('%paul%', 'chris', '%@bitposter.co%'))
-```
+Notice the SQL used to retrieve data is printed first. 
 
-qs = User.objects.filter(Q(username__icontains='paul') | Q(username='chris') & Q(email__icontains='@bitposter.co')) 
-qs.values("x__oc, x__organisation__name").annotate(cnt=Count())
+The syntax is like this:
 
-(x.oc, x.organisation.name, count(*)): 
-User{(username == '%paul%' or username == 'chris') and email == '%@bitposter'} u 
--> ExtendedUser x
+    <join_operator> (<column_exp>, ... ) ModelName{<filter_expression>} Alias
+
+Most of these are optional. You don't have to reference models in an expression with Alias; you don't need a filter in curly braces, etc. There is no point in providing the join_operator on the first relation. You can have as many of these as you wish to add more relations. You can even skip the join relation on subsequent relations: it will default to LEFT JOIN. Don't bother doing this:
 
 
-http://www.try-alf.org/blog/2014-12-03-what-would-a-functional-sql-look-like
+    (Books.name, Publisher.name) Book -> Publisher
 
-https://cse.buffalo.edu/~mpetropo/notes/O2/OQLTutorial
+because you can just do this:
 
-http://effbot.org/zone/simple-top-down-parsing.htm
+    (Books.name, Publisher.name) Book
 
-https://tomassetti.me/parsing-in-python/
+It will know to create the join to Publisher. But you might want to include it for the purpose of having an alias for Publisher:
 
-https://docs.python.org/3/library/tokenize.html
+    (b.name, p.name) Book b -> Publisher p
 
-http://lucumr.pocoo.org/2015/11/18/pythons-hidden-re-gems/
+Use "as" operator to name columns:
 
-https://gist.github.com/eliben/5797351
+    (b.name as book_name, p.name as publisher) Book b -> Publisher p
+
+Get the average price of books for each publisher:
+
+    (avg(b.price)) Book b
+
+Get the difference off the maximum price: 
+
+    (Publisher.name, max(Book.price) - avg(Book.price) as diff) Book b
+    
+Count books per publisher:
+
+    (Publisher.name, count(Book.id) as num_books) Book b
+
+Count books with ratings up to and over 3:
+
+    (sum(b.rating > 3), sum(b.rating <= 3)) Book b
+
+Get average, maximum, minimum price of books:
+
+    (avg(b.price), max(b.price), min(b.price)) Book b
+
+
+##TODO
+
+* Improve group by detection
+* Reference named xqueries as relations (for subqueries)
+* IN operator either subquery, list, m2m, QuerySet
+* startswith, endswith custom functions etc.
+* m2m field relations
+* backwards relations
+* subquery, outter reference
+* map/reduce
+* Native sql backticks
+* Parameter checking and type casting
+* Emit names in double quotes
+* CSV import https://github.com/edcrewe/django-csvimport/blob/master/csvimport/parser.py
+* format sql https://pypi.org/project/format-sql/
