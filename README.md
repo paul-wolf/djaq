@@ -12,27 +12,27 @@ Create the virtualenv:
 
     virtualenv -p python3 .venv    
 
-The module itself does not install Django and there are not further
+Activate the virtual environment:
+
+    source ../.venv/bin/activate
+
+The module itself does not install Django and there are no further
 requirements. The example Django application is in ./bookshop. To
 install dependencies for the sample application:
 
     cd bookshop
     pip install -r requirements.txt
 
-The sample database is already part of source code now (sqlite).
-
-To start issuing queries, activate the virtual environment:
-
-    source ../.venv/bin/activate
-
-The example application comes with a management command to run queries:
+Make sure the virtualenv is activiated! The sample database is already
+part of source code now (sqlite). The example application comes with a
+management command to run queries:
 
     ./manage.py djaq "(Publisher.name, max(Book.price) - round(avg(Book.price)) as diff) Book b"  --format json
 
 If using in code, you would do this:
 
-    from xquery.exp import XQuery as Q
-	xq = Q("(avg(b.price) as average_book_price) Book b"
+    from xquery.exp import XQuery as XQ
+	xq = XQ("(avg(b.price) as average_book_price) Book b"
 	print(xq.json())
 
 There are several generators to choose from to iterate records:
@@ -44,8 +44,9 @@ There are several generators to choose from to iterate records:
 
 The XQueryInstance is basically a namespace so you can do this:
 
-    print(inst.name)
-    print(inst.price)
+    for inst in XQ('(Book.name, Book.price)').objs():
+        print(inst.name)
+        print(inst.price)
 
 etc.
 
