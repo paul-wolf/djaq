@@ -11,35 +11,64 @@ from django.db.models.query import QuerySet
 from django.db.models.sql import UpdateQuery
 from django.utils.text import slugify
 
-from . instance import XQueryInstance
-from . astpp import parseprint
-from . app_utils import model_field, find_model_class, model_path
+from .instance import XQueryInstance
+from .astpp import parseprint
+from .app_utils import model_field, find_model_class, model_path
 
 
 class XQuery(ast.NodeVisitor):
 
     # keep a record of named instances
     directory = {}
-    
+
     aggregate_functions = {
-        "unknown": ['avg', 'count', 'max', 'min', 'sum', ],        
-        "sqlite": ['avg', 'count', 'group_concat', 'max', 'min', 'sum', 'total', ],
-        "postgresql": ['avg', 'count', 'max', 'min', 'sum', 'stddev', 'variance', ],
+        "unknown": [
+            'avg',
+            'count',
+            'max',
+            'min',
+            'sum',
+        ],
+        "sqlite": [
+            'avg',
+            'count',
+            'group_concat',
+            'max',
+            'min',
+            'sum',
+            'total',
+        ],
+        "postgresql": [
+            'avg',
+            'count',
+            'max',
+            'min',
+            'sum',
+            'stddev',
+            'variance',
+        ],
     }
-    
+
     class JoinRelation(object):
         JOIN_TYPES = {
             "->": "LEFT JOIN",
             "<-": "RIGHT JOIN",
-            "<>": "INNER JOIN", 
+            "<>": "INNER JOIN",
         }
-        def __init__(self, model, xquery, fk_relation=None, fk_field=None, related_field=None,
-                     join_type='->', alias=None):
+
+        def __init__(self,
+                     model,
+                     xquery,
+                     fk_relation=None,
+                     fk_field=None,
+                     related_field=None,
+                     join_type='->',
+                     alias=None):
             self.model = model
             self.fk_relation = fk_relation
             self.fk_field = fk_field
             self.related_field = related_field
-            self.join_type = join_type # left, right, inner
+            self.join_type = join_type  # left, right, inner
             self.alias = alias
             self.select = ''
             self.expression_str = ''
@@ -47,7 +76,7 @@ class XQuery(ast.NodeVisitor):
             self.where = ''
             self.group_by = False
             self.xquery = xquery
-            
+
         @property
         def model_table(self):
             return self.model._meta.db_table
@@ -77,12 +106,10 @@ class XQuery(ast.NodeVisitor):
                     s += " AND "
                 fk = related_fields[0]
                 f = related_fields[1]
-                s += '{}.{} = {}.{}'.format(fk.model._meta.db_table,
-                                            fk.column,
-                                            f.model._meta.db_table,
-                                            f.column)
+                s += '{}.{} = {}.{}'.format(fk.model._meta.db_table, fk.column,
+                                            f.model._meta.db_table, f.column)
             return "({})".format(s)
-        
+
         def group_by_columns(self):
             """Return str of GROUP BY columns."""
             grouping = []
@@ -96,7 +123,7 @@ class XQuery(ast.NodeVisitor):
 
         def __str__(self):
             return "Relation: {}".format(model_path(self.model))
-        
+
     def find_relation_from_alias(self, alias):
         for relation in self.relations:
             if alias == relation.alias:
@@ -108,12 +135,11 @@ class XQuery(ast.NodeVisitor):
         s = exp.lower().strip("(").split("(")[0]
         return s in self.vendor_aggregate_functions
 
-    
     def __init__(self, source, using='default', limit=None, name=None):
 
         if name:
-            XQuery.directory[name]  = self
-        
+            XQuery.directory[name] = self
+
         self.connection = connections[using]
         self.vendor = self.connection.vendor
         # self.compiler = query.get_compiler(connection=connection)
@@ -125,18 +151,20 @@ class XQuery(ast.NodeVisitor):
         self.cursor = None
         self.col_names = None
         self.relations = []
-        self.code = ''    
+        self.code = ''
         self.stack = []
         self.names = []
         self.column_expressions = []
         self.relations = []
         self.parsed = False
-        self.expression_context = 'select' # change to 'where' later
+        self.expression_context = 'select'  # change to 'where' later
         # self.group_by = False
         if self.vendor in XQuery.aggregate_functions:
-            self.vendor_aggregate_functions = XQuery.aggregate_functions[self.vendor]
+            self.vendor_aggregate_functions = XQuery.aggregate_functions[
+                self.vendor]
         else:
-            self.vendor_aggregate_functions = XQuery.aggregate_functions['unknown']
+            self.vendor_aggregate_functions = XQuery.aggregate_functions[
+                'unknown']
         self.column_headers = []
 
     def aggregate(self):
@@ -144,7 +172,8 @@ class XQuery(ast.NodeVisitor):
         # print("Setting group by: {}".format(self.relations[self.relation_index]))
         self.relations[self.relation_index].group_by = True
 
-    def add_relation(self, model,
+    def add_relation(self,
+                     model,
                      fk_relation=None,
                      fk_field=None,
                      related_field=None,
@@ -175,12 +204,8 @@ class XQuery(ast.NodeVisitor):
                         relation.alias = alias
                     return relation
 
-        relation = XQuery.JoinRelation(model, self,
-                                       fk_relation,
-                                       fk_field,
-                                       related_field,
-                                       join_type,
-                                       alias)
+        relation = XQuery.JoinRelation(model, self, fk_relation, fk_field,
+                                       related_field, join_type, alias)
         self.relations.append(relation)
 
         if len(self.relations) > 1:
@@ -194,7 +219,7 @@ class XQuery(ast.NodeVisitor):
                 if relation.fk_relation:
                     break
         return relation
-    
+
     def push_attribute_relations(self, attribute_list, relation=None):
         """Return field to represent in context expression.
 
@@ -209,15 +234,15 @@ class XQuery(ast.NodeVisitor):
         # print("attribute list: {}".format(attribute_list))
         # print("relation      : {}".format(relation))
         # input("press key 11111")
-        
+
         # last element must be a field name
         attr = attribute_list.pop()
 
-        # print("attr          : {}".format(attr))        
+        # print("attr          : {}".format(attr))
         # print("attribute list: {}".format(attribute_list))
         # print("relation      : {}".format(relation))
         # input("press key 22222")
-        
+
         if relation and not len(attribute_list):
             # attr is the terminal attribute
             field = relation.model._meta.get_field(attr)
@@ -232,14 +257,14 @@ class XQuery(ast.NodeVisitor):
             # therefore attr must be a model name or alias
             relation = self.find_relation_from_alias(attr)
             if not relation:
-                model = find_model_class(attr)                
+                model = find_model_class(attr)
                 relation = self.add_relation(model=model)
             return self.push_attribute_relations(attribute_list, relation)
 
         # print("*"*66)
         # print(attribute_list)
         # input("press key 33333")
-        
+
         # if relation and attributes in list
         # this means attr is a foreign key
         model = relation.model._meta.get_field(attr).related_model
@@ -248,11 +273,11 @@ class XQuery(ast.NodeVisitor):
 
     def emit_select(self, s):
         self.relations[self.relation_index].select += str(s)
-        self.relations[self.relation_index].expression_str += str(s)        
-    
+        self.relations[self.relation_index].expression_str += str(s)
+
     def push_column_expression(self, s):
         self.relations[self.relation_index].column_expressions.append(s)
-    
+
     def emit_where(self, s):
         self.relations[self.relation_index].where += str(s)
 
@@ -261,18 +286,18 @@ class XQuery(ast.NodeVisitor):
             self.emit_select(s)
         elif self.expression_context == 'where':
             self.emit_where(s)
-    
+
     def single_quoted(self, s):
         return "'{}'".format(s)
-    
+
     def generic_visit(self, node):
         if not isinstance(node, ast.Load):
             # parseprint(node)
             pass
         ast.NodeVisitor.generic_visit(self, node)
-        
+
     def visit_Expr(self, node):
-        
+
         # parseprint(node)
         ast.NodeVisitor.generic_visit(self, node)
 
@@ -285,31 +310,31 @@ class XQuery(ast.NodeVisitor):
         self.stack = []
 
         ast.NodeVisitor.generic_visit(self, node)
-         
+
     def visit_Int(self, node):
         self.emit(node.n)
         ast.NodeVisitor.generic_visit(self, node)
-        
+
     def visit_Num(self, node):
         self.emit(node.n)
         ast.NodeVisitor.generic_visit(self, node)
-        
+
     def visit_Str(self, node):
         s = node.s
 
-        
         if "*" in node.s:
             if self.relations[self.relation_index].where.endswith(' = '):
-                s = s.replace("*", "%")                
-                parts = self.relations[self.relation_index].where.rpartition(' = ')
+                s = s.replace("*", "%")
+                parts = self.relations[self.relation_index].where.rpartition(
+                    ' = ')
                 self.relations[self.relation_index].where = parts[0] + ' LIKE '
-        
+
         # if node.s preceded by equals
         # replace equals with LIKE (or ilike)
         # and replace start with %
         self.emit(self.single_quoted(s))
         ast.NodeVisitor.generic_visit(self, node)
-        
+
     def visit_Call(self, node):
         if node.func.id.lower() in XQuery.aggregate_functions[self.vendor]:
             self.aggregate()
@@ -335,7 +360,7 @@ class XQuery(ast.NodeVisitor):
     def visit_Lt(self, node):
         self.emit(" < ")
         ast.NodeVisitor.generic_visit(self, node)
-        
+
     def visit_Eq(self, node):
         self.emit(" = ")
         ast.NodeVisitor.generic_visit(self, node)
@@ -371,7 +396,7 @@ class XQuery(ast.NodeVisitor):
     def visit_BinOp(self, node):
         # print("v"*44)
         # print(node.op)
-        # print("^"*44)        
+        # print("^"*44)
         self.emit("(")
         ast.NodeVisitor.visit(self, node.left)
         ast.NodeVisitor.visit(self, node.op)
@@ -393,21 +418,21 @@ class XQuery(ast.NodeVisitor):
 
             ast.NodeVisitor.visit(self, el)
             exp = self.relations[self.relation_index].expression_str
-            
+
             self.push_column_expression(exp.strip(', '))
             self.relations[self.relation_index].expression_str = ''
             # print("^"*66)
-            if not i == len(node.elts)-1:
+            if not i == len(node.elts) - 1:
                 self.emit(", ")
-            
+
     def visit_Arguments(self, node):
         self.emit('|')
         ast.NodeVisitor.generic_visit(self, node)
-            
+
     def visit_args(self, node):
         self.emit('|')
         ast.NodeVisitor.generic_visit(self, node)
-            
+
     def visit_Attribute(self, node):
 
         self.stack.append(node.attr)
@@ -431,21 +456,21 @@ class XQuery(ast.NodeVisitor):
 
         relation_sources = []
         search = None
-        offset = 0        
+        offset = 0
         while True:
             # print("SEARCHING: {}, offset={}".format(s, offset))
             search = re.search("->|<-|<>", s[offset:])
 
             if search:
-                relation_sources.append(s[:search.start()+offset].strip())
+                relation_sources.append(s[:search.start() + offset].strip())
                 # print("FOUND: {}, start={}".format(s[:search.start()+offset], search.start()))
-                s = s[search.start()+offset:]
+                s = s[search.start() + offset:]
                 # print("REDUCED: {}".format(s))
             else:
                 relation_sources.append(s.strip())
                 # print("LAST: {}".format(s))
                 break
-            
+
             offset = 2
             # input("Press Enter to continue...")
 
@@ -473,7 +498,7 @@ class XQuery(ast.NodeVisitor):
         if col:
             yield col.strip()
         return None
-    
+
     def parse_column_aliases(self, select_src):
         pattern = "\(.*?\)|(,)"
         # assume parens, remove them
@@ -487,27 +512,27 @@ class XQuery(ast.NodeVisitor):
         for col in self.get_col(s):
             a = col.split(" as ")
             if len(a) == 1:
-                aliases.append((a[0], slugify(a[0].replace(".", "_").replace(" ", "_")).replace("-", "_")))
+                aliases.append((a[0],
+                                slugify(a[0].replace(".", "_").replace(
+                                    " ", "_")).replace("-", "_")))
             elif len(a) == 2:
                 aliases.append((a[0], a[1]))
             else:
                 raise Exception("Error defining column")
-            
+
         return aliases
 
-            
     def parse(self):
         """Parse column expressions.
 
         If you call it twice, it fails second time.
 
         """
-        
+
         if self.sql:
             return self.sql
 
         pattern = "(->|<-|<>)?\s*(\(.*\))?\s*([\w]+)[\s]*(\{.*\})?\s*([\w]+)?"
-        
         """
         We get a relation string like this: 
         
@@ -524,7 +549,7 @@ class XQuery(ast.NodeVisitor):
 
         for i, relation_source in enumerate(relation_sources):
             # print("Parsing relation: {}".format(relation_source))
-            
+
             m = re.match(pattern, relation_source)
             if m:
                 join_type = m.group(1)
@@ -570,7 +595,7 @@ class XQuery(ast.NodeVisitor):
             if select_src:
                 self.expression_context = 'select'
                 self.visit(ast.parse(select_src))
-                
+
             if where_src:
                 self.expression_context = 'where'
                 self.visit(ast.parse(where_src))
@@ -582,17 +607,20 @@ class XQuery(ast.NodeVisitor):
         #     print("   join         : {}".format(r.join_type))
         #     print("   fk_relation  : {}".format(r.fk_relation))
         #     print("   fk_field     : {}".format(r.fk_field))
-        #     print("   related_field: {}".format(r.related_field))            
-        #     print("   select       : {}".format(r.select))            
+        #     print("   related_field: {}".format(r.related_field))
+        #     print("   select       : {}".format(r.select))
         #     print("   where        : {}".format(r.where))
         #     print("   alias        : {}".format(r.alias))
 
         self.relations.reverse()
 
         master_relation = self.relations.pop()
-        s = "SELECT {} FROM {}".format(master_relation.select, master_relation.model_table)
+        s = "SELECT {} FROM {}".format(master_relation.select,
+                                       master_relation.model_table)
         for i, relation in enumerate(self.relations):
-            s += " {} {} ON {} ".format(relation.join_operator, relation.model_table, relation.join_condition_expression)
+            s += " {} {} ON {} ".format(relation.join_operator,
+                                        relation.model_table,
+                                        relation.join_condition_expression)
             if relation.where:
                 s += " WHERE {}".format(relation.where)
         if master_relation.where:
@@ -605,7 +633,7 @@ class XQuery(ast.NodeVisitor):
             s += " LIMIT {}".format(int(self.limit))
         self.sql = s
         return self.sql
-    
+
     def execute(self, parameters=None):
         sql = self.parse()
         print(sql)
@@ -614,7 +642,7 @@ class XQuery(ast.NodeVisitor):
         # we record the column names from the cursor
         # but we have our own aliases in self.column_headers
         self.col_names = [desc[0] for desc in self.cursor.description]
-        
+
     def dicts(self, parameters=None):
         if not self.cursor:
             self.execute(parameters)
@@ -625,7 +653,7 @@ class XQuery(ast.NodeVisitor):
             row_dict = dict(zip(self.column_headers, row))
             yield row_dict
         return
-    
+
     def tuples(self, parameters=None):
         if not self.cursor:
             self.execute(parameters)
@@ -643,7 +671,6 @@ class XQuery(ast.NodeVisitor):
     def objs(self, parameters=None):
         for d in self.dicts(parameters):
             yield XQueryInstance(d, xquery=self)
-            
 
     def csv(self, parameters=None):
         if not self.cursor:
@@ -656,4 +683,3 @@ class XQuery(ast.NodeVisitor):
             writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC)
             writer.writerow(row)
             yield output.getvalue()
-        
