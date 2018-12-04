@@ -1,6 +1,8 @@
 Djaq: Django Queries
 ====================
 
+copyright (c) Paul Wolf
+
 To Install:
 
     git clone git@github.com:paul-wolf/djaq.git
