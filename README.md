@@ -23,7 +23,7 @@ install dependencies for the sample application:
     cd bookshop
     pip install -r requirements.txt
 
-Make sure the virtualenv is activiated! The sample database is already
+Make sure the virtualenv is activated! The sample database is already
 part of source code now (sqlite). The example application comes with a
 management command to run queries:
 

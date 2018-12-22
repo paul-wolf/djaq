@@ -2,12 +2,10 @@
 .coverage
 exp_flymake.py	
 .venv
-
-# Log from Ubuntu Xenial VM
-/ubuntu-xenial-16.04-cloudimg-console.log
+log
 
 django.wsgi
-#log/*
+
 deployment/.vagrant
 
 *_local.py
@@ -73,4 +71,3 @@ reports/
 .ENV
 celerybeat-schedule
 
-vodka/settings/local.py

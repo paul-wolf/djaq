@@ -12,7 +12,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('src', type=str)
         parser.add_argument('--format',
-                            default='objs', # dicts, tuples, json
+                            default='objs', # dicts, tuples, json, csv
                             action='store',
                             dest='format',
                             type=str)
