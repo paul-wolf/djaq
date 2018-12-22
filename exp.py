@@ -10,6 +10,7 @@ from django.db import connections, models
 from django.db.models.query import QuerySet
 from django.db.models.sql import UpdateQuery
 from django.utils.text import slugify
+from django.core.serializers.json import DjangoJSONEncoder
 
 from .instance import XQueryInstance
 from .astpp import parseprint
@@ -75,6 +76,8 @@ class XQuery(ast.NodeVisitor):
             self.column_expressions = []
             self.where = ''
             self.group_by = False
+            self.order_by = ''
+            self.order_by_direction = '+'
             self.xquery = xquery
 
         @property
@@ -135,7 +138,7 @@ class XQuery(ast.NodeVisitor):
         s = exp.lower().strip("(").split("(")[0]
         return s in self.vendor_aggregate_functions
 
-    def __init__(self, source, using='default', limit=None, name=None):
+    def __init__(self, source, using='default', limit=None, offset=None, order_by=None, name=None):
 
         if name:
             XQuery.directory[name] = self
@@ -147,6 +150,8 @@ class XQuery(ast.NodeVisitor):
         self.relation_index = 0  # this is the relation being parsed currently
         self.source = source
         self.limit = limit
+        self.offset = offset
+        self.order_by = order_by
         self.sql = None
         self.cursor = None
         self.col_names = None
@@ -281,11 +286,16 @@ class XQuery(ast.NodeVisitor):
     def emit_where(self, s):
         self.relations[self.relation_index].where += str(s)
 
+    def emit_order_by(self, s):
+        self.relations[self.relation_index].order_by += str(s)
+
     def emit(self, s):
         if self.expression_context == 'select':
             self.emit_select(s)
         elif self.expression_context == 'where':
             self.emit_where(s)
+        elif self.expression_context == 'order_by':
+            self.emit_order_by(s)
 
     def single_quoted(self, s):
         return "'{}'".format(s)
@@ -532,7 +542,7 @@ class XQuery(ast.NodeVisitor):
         if self.sql:
             return self.sql
 
-        pattern = "(->|<-|<>)?\s*(\(.*\))?\s*([\w]+)[\s]*(\{.*\})?\s*([\w]+)?"
+        pattern = "(->|<-|<>)?\s*(\(.*\))?\s*([\w]+)[\s]*(\{.*\})?\s*([\w]+)?\s*(order_by)?\s*(\+|\-)?(\(.*\))?"
         """
         We get a relation string like this: 
         
@@ -557,6 +567,9 @@ class XQuery(ast.NodeVisitor):
                 model_name = m.group(3)
                 where_src = m.group(4)
                 alias = m.group(5) if m.group(5) else model_name
+                order_by_direction = m.group(7)
+                order_by_src = m.group(8)
+
             elif re.match("^(\(.*\))$", self.source):
                 join_type = None
                 # strip whitespace
@@ -566,16 +579,20 @@ class XQuery(ast.NodeVisitor):
                 select_src = src.strip()
                 model_name = None
                 where_src = None
+                order_by_src = None
+                order_by_direction = None
                 alias = None
             else:
                 raise Exception("Invalid source")
 
-            # print("join_type={}, select_src={}, model_name={}, where_src={}, alias={}".format(
-            #     join_type,
-            #     select_src,
-            #     model_name,
-            #     where_src,
-            #     alias))
+            print("join_type={}, select_src={}, model_name={}, where_src={}, order_by_src={}, order_by_direction={}, alias={}".format(
+                join_type,
+                select_src,
+                model_name,
+                where_src,
+                order_by_src,
+                order_by_direction,
+                alias))
 
             # we need to generate column headers and remove
             # aliases. tuples are (exp, alias)
@@ -591,6 +608,7 @@ class XQuery(ast.NodeVisitor):
                 # print("Relation already existed: {}".format(relation))
                 pass
             self.relation_index = i
+            relation.order_by_direction = order_by_direction
 
             if select_src:
                 self.expression_context = 'select'
@@ -600,17 +618,23 @@ class XQuery(ast.NodeVisitor):
                 self.expression_context = 'where'
                 self.visit(ast.parse(where_src))
 
+            if order_by_src:
+                self.expression_context = 'order_by'
+                self.visit(ast.parse(order_by_src))
+
         # print("Database vendor: {}".format(self.vendor))
 
-        # for r in self.relations:
-        #     print("Relation        : {}".format(str(r)))
-        #     print("   join         : {}".format(r.join_type))
-        #     print("   fk_relation  : {}".format(r.fk_relation))
-        #     print("   fk_field     : {}".format(r.fk_field))
-        #     print("   related_field: {}".format(r.related_field))
-        #     print("   select       : {}".format(r.select))
-        #     print("   where        : {}".format(r.where))
-        #     print("   alias        : {}".format(r.alias))
+        for r in self.relations:
+            print("Relation        : {}".format(str(r)))
+            print("   join         : {}".format(r.join_type))
+            print("   fk_relation  : {}".format(r.fk_relation))
+            print("   fk_field     : {}".format(r.fk_field))
+            print("   related_field: {}".format(r.related_field))
+            print("   select       : {}".format(r.select))
+            print("   where        : {}".format(r.where))
+            print("   order_by     : {}".format(r.order_by))
+            print("   order_by_dir : {}".format(r.order_by_direction))
+            print("   alias        : {}".format(r.alias))
 
         self.relations.reverse()
 
@@ -623,14 +647,24 @@ class XQuery(ast.NodeVisitor):
                                         relation.join_condition_expression)
             if relation.where:
                 s += " WHERE {}".format(relation.where)
+            if relation.order_by:
+                s += " ORDER BY {}".format(relation.order_by)
+                if relation.order_by_direction == '-':
+                    s += ' DESC'
         if master_relation.where:
             s += " WHERE {}".format(master_relation.where)
         if master_relation.group_by:
             gb = master_relation.group_by_columns()
             if gb:
                 s += " GROUP BY {}".format(gb)
+        if master_relation.order_by:
+            s += " ORDER BY {}".format(master_relation.order_by)
+            if master_relation.order_by_direction == '-':
+                s += ' DESC'
         if self.limit:
             s += " LIMIT {}".format(int(self.limit))
+        if self.offset:
+            s += " OFFSET {}".format(int(self.offset))
         self.sql = s
         return self.sql
 
@@ -664,9 +698,9 @@ class XQuery(ast.NodeVisitor):
             yield row
         return
 
-    def json(self, parameters=None):
+    def json(self, parameters=None, ):
         for d in self.dicts(parameters):
-            yield json.dumps(d)
+            yield json.dumps(d, cls=DjangoJSONEncoder)
 
     def objs(self, parameters=None):
         for d in self.dicts(parameters):
