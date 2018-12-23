@@ -79,6 +79,7 @@ class XQuery(ast.NodeVisitor):
             self.order_by = ''
             self.order_by_direction = '+'
             self.xquery = xquery
+            self.src = None
 
         @property
         def model_table(self):
@@ -332,6 +333,12 @@ class XQuery(ast.NodeVisitor):
     def visit_Str(self, node):
         s = node.s
 
+        if node.s.strip().upper().startswith("SELECT "):
+            # this is a literal sql subquery
+            self.emit("({})".format(node.s))
+            ast.NodeVisitor.generic_visit(self, node)
+            return 
+
         if "*" in node.s:
             if self.relations[self.relation_index].where.endswith(' = '):
                 s = s.replace("*", "%")
@@ -404,9 +411,9 @@ class XQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_BinOp(self, node):
-        # print("v"*44)
-        # print(node.op)
-        # print("^"*44)
+        print("v"*44)
+        print(node.op)
+        print("^"*44)
         self.emit("(")
         ast.NodeVisitor.visit(self, node.left)
         ast.NodeVisitor.visit(self, node.op)
@@ -542,7 +549,7 @@ class XQuery(ast.NodeVisitor):
         if self.sql:
             return self.sql
 
-        pattern = "(->|<-|<>)?\s*(\(.*\))?\s*([\w]+)[\s]*(\{.*\})?\s*([\w]+)?\s*(order_by)?\s*(\+|\-)?(\(.*\))?"
+        pattern = "(->|<-|<>)?\s*(\(.*\))?\s*([\w]+)[\s]*(\{.*\})?\s*([\w]+)?\s*(order_by|order by)?\s*(\+|\-)?(\(.*\))?"
         """
         We get a relation string like this: 
         
@@ -605,14 +612,17 @@ class XQuery(ast.NodeVisitor):
                 relation = self.add_relation(model=model, alias=alias)
                 # print("Created JoinRelation: {}".format(relation))
             else:
-                # print("Relation already existed: {}".format(relation))
+                print("Relation already existed: {}".format(relation))
                 pass
             self.relation_index = i
             relation.order_by_direction = order_by_direction
 
             if select_src:
-                self.expression_context = 'select'
-                self.visit(ast.parse(select_src))
+                if select_src.upper().startswith("'(SELECT "):
+                    relation.src = select_src
+                else:
+                    self.expression_context = 'select'
+                    self.visit(ast.parse(select_src))
 
             if where_src:
                 self.expression_context = 'where'
@@ -667,6 +677,15 @@ class XQuery(ast.NodeVisitor):
             s += " OFFSET {}".format(int(self.offset))
         self.sql = s
         return self.sql
+
+    def source(self, parameters=None):
+        sql = self.parse()
+        print(sql)
+        sql = sql.replace("'%s'", "%s")
+        self.cursor = self.connection.cursor().execute(sql, parameters)
+        # we record the column names from the cursor
+        # but we have our own aliases in self.column_headers
+        self.col_names = [desc[0] for desc in self.cursor.description]
 
     def execute(self, parameters=None):
         sql = self.parse()
