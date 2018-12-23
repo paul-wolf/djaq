@@ -339,6 +339,14 @@ class XQuery(ast.NodeVisitor):
             ast.NodeVisitor.generic_visit(self, node)
             return 
 
+        if node.s.strip().startswith('@'):
+            # A named XQuery
+            # get source
+            xquery_name = node.s[1:]
+            xq = XQuery.directory[xquery_name]
+            sql = xq.source()
+            self.emit("({})".format(sql))
+
         if "*" in node.s:
             if self.relations[self.relation_index].where.endswith(' = '):
                 s = s.replace("*", "%")
@@ -679,13 +687,14 @@ class XQuery(ast.NodeVisitor):
         return self.sql
 
     def source(self, parameters=None):
+        """Return source for xquery.
+        TODO: insert parameters
+        """
+
         sql = self.parse()
         print(sql)
         sql = sql.replace("'%s'", "%s")
-        self.cursor = self.connection.cursor().execute(sql, parameters)
-        # we record the column names from the cursor
-        # but we have our own aliases in self.column_headers
-        self.col_names = [desc[0] for desc in self.cursor.description]
+        return sql
 
     def execute(self, parameters=None):
         sql = self.parse()
