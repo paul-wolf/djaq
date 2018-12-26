@@ -1,4 +1,5 @@
 Django
+psycopg2-2.7.6.1
 Faker
 factory_boy
 

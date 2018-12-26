@@ -139,15 +139,15 @@ class XQuery(ast.NodeVisitor):
         s = exp.lower().strip("(").split("(")[0]
         return s in self.vendor_aggregate_functions
 
-    def __init__(self, source, using='default', limit=None, offset=None, order_by=None, name=None):
+    def __init__(self, source, using='default', limit=None, offset=None, order_by=None, name=None, verbosity=1):
 
         if name:
             XQuery.directory[name] = self
 
         self.connection = connections[using]
         self.vendor = self.connection.vendor
-        # self.compiler = query.get_compiler(connection=connection)
 
+        self.verbosity = verbosity
         self.relation_index = 0  # this is the relation being parsed currently
         self.source = source
         self.limit = limit
@@ -330,6 +330,18 @@ class XQuery(ast.NodeVisitor):
         self.emit(node.n)
         ast.NodeVisitor.generic_visit(self, node)
 
+    def resolve_name(self, name):
+        if name in XQuery.directory:
+            return XQuery.directory[xquery_name]
+        # check locals, globals
+        else:
+            # TODO: throw exception
+            return None
+
+    def queryset_source(self, queryset):
+        sql, sql_params = queryset.query.get_compiler(connection=self.connection).as_sql()
+        return sql
+
     def visit_Str(self, node):
         s = node.s
 
@@ -340,12 +352,19 @@ class XQuery(ast.NodeVisitor):
             return 
 
         if node.s.strip().startswith('@'):
-            # A named XQuery
+            # A named XQuery, QuerySet, List, etc
             # get source
-            xquery_name = node.s[1:]
-            xq = XQuery.directory[xquery_name]
-            sql = xq.source()
+            name = node.s[1:]
+            obj = self.resolve_name(name)
+            if isinstance(obj, XQuery):
+                sql = xq.source()
+            elif isinstance(obj, List):
+                sql = str(tuple(obj)).strip('(').strip(')')
+            elif isinstance(obj, QuerySet):
+                sql = self.queryset_source(obj)
+
             self.emit("({})".format(sql))
+            return 
 
         if "*" in node.s:
             if self.relations[self.relation_index].where.endswith(' = '):
@@ -419,9 +438,6 @@ class XQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_BinOp(self, node):
-        print("v"*44)
-        print(node.op)
-        print("^"*44)
         self.emit("(")
         ast.NodeVisitor.visit(self, node.left)
         ast.NodeVisitor.visit(self, node.op)
@@ -600,15 +616,16 @@ class XQuery(ast.NodeVisitor):
             else:
                 raise Exception("Invalid source")
 
-            print("join_type={}, select_src={}, model_name={}, where_src={}, order_by_src={}, order_by_direction={}, alias={}".format(
-                join_type,
-                select_src,
-                model_name,
-                where_src,
-                order_by_src,
-                order_by_direction,
-                alias))
-
+            if self.verbosity > 1:
+                print("join_type={}, select_src={}, model_name={}, where_src={}, order_by_src={}, order_by_direction={}, alias={}".format(
+                    join_type,
+                    select_src,
+                    model_name,
+                    where_src,
+                    order_by_src,
+                    order_by_direction,
+                    alias))
+                
             # we need to generate column headers and remove
             # aliases. tuples are (exp, alias)
             column_tuples = self.parse_column_aliases(select_src)
@@ -620,8 +637,9 @@ class XQuery(ast.NodeVisitor):
                 relation = self.add_relation(model=model, alias=alias)
                 # print("Created JoinRelation: {}".format(relation))
             else:
-                print("Relation already existed: {}".format(relation))
-                pass
+                if self.verbosity > 2:
+                    print("Relation already existed: {}".format(relation))
+
             self.relation_index = i
             relation.order_by_direction = order_by_direction
 
@@ -640,19 +658,21 @@ class XQuery(ast.NodeVisitor):
                 self.expression_context = 'order_by'
                 self.visit(ast.parse(order_by_src))
 
-        # print("Database vendor: {}".format(self.vendor))
+        if self.verbosity > 2:
+            print("Database vendor: {}".format(self.vendor))
 
-        for r in self.relations:
-            print("Relation        : {}".format(str(r)))
-            print("   join         : {}".format(r.join_type))
-            print("   fk_relation  : {}".format(r.fk_relation))
-            print("   fk_field     : {}".format(r.fk_field))
-            print("   related_field: {}".format(r.related_field))
-            print("   select       : {}".format(r.select))
-            print("   where        : {}".format(r.where))
-            print("   order_by     : {}".format(r.order_by))
-            print("   order_by_dir : {}".format(r.order_by_direction))
-            print("   alias        : {}".format(r.alias))
+        if self.verbosity > 1:
+            for r in self.relations:
+                print("Relation        : {}".format(str(r)))
+                print("   join         : {}".format(r.join_type))
+                print("   fk_relation  : {}".format(r.fk_relation))
+                print("   fk_field     : {}".format(r.fk_field))
+                print("   related_field: {}".format(r.related_field))
+                print("   select       : {}".format(r.select))
+                print("   where        : {}".format(r.where))
+                print("   order_by     : {}".format(r.order_by))
+                print("   order_by_dir : {}".format(r.order_by_direction))
+                print("   alias        : {}".format(r.alias))
 
         self.relations.reverse()
 
@@ -692,7 +712,8 @@ class XQuery(ast.NodeVisitor):
         """
 
         sql = self.parse()
-        print(sql)
+        if self.verbosity > 0:
+            print(sql)
         sql = sql.replace("'%s'", "%s")
         return sql
 
@@ -700,7 +721,10 @@ class XQuery(ast.NodeVisitor):
         sql = self.parse()
         print(sql)
         sql = sql.replace("'%s'", "%s")
-        self.cursor = self.connection.cursor().execute(sql, parameters)
+        # for sqlite3
+        # self.cursor = self.connection.cursor().execute(sql, parameters)
+        self.cursor = self.connection.cursor()
+        self.cursor.execute(sql, parameters)
         # we record the column names from the cursor
         # but we have our own aliases in self.column_headers
         self.col_names = [desc[0] for desc in self.cursor.description]
