@@ -5,12 +5,17 @@ import re
 import ast
 from ast import AST, iter_fields, parse
 from collections import defaultdict
+import uuid
+
+import psycopg2
+from psycopg2.extras import DictCursor
 
 from django.db import connections, models
 from django.db.models.query import QuerySet
 from django.db.models.sql import UpdateQuery
 from django.utils.text import slugify
 from django.core.serializers.json import DjangoJSONEncoder
+from django.conf import settings
 
 from .instance import XQueryInstance
 from .astpp import parseprint
@@ -81,6 +86,7 @@ class XQuery(ast.NodeVisitor):
             self.xquery = xquery
             self.src = None
 
+
         @property
         def model_table(self):
             return self.model._meta.db_table
@@ -150,6 +156,7 @@ class XQuery(ast.NodeVisitor):
         if data:
             XQuery.directory.update(data)
 
+        self.using = using
         self.connection = connections[using]
         self.vendor = self.connection.vendor
 
@@ -169,8 +176,11 @@ class XQuery(ast.NodeVisitor):
         self.column_expressions = []
         self.relations = []
         self.parsed = False
-        self.expression_context = 'select'  # change to 'where' later
-        self.parameters = []
+        self.expression_context = 'select'  # change to 'where' or 'func' later
+        self.function_context = ''  
+        self.fstack = [] # function stack
+        self.parameters = [] # query parameters
+
 
         # self.group_by = False
         if self.vendor in XQuery.aggregate_functions:
@@ -298,6 +308,10 @@ class XQuery(ast.NodeVisitor):
     def emit_order_by(self, s):
         self.relations[self.relation_index].order_by += str(s)
 
+    def emit_func(self, s):
+        """Write to current argument on the stack of the current function call."""
+        self.fstack[-1]['args'][-1] += str(s)
+                       
     def emit(self, s):
         if self.expression_context == 'select':
             self.emit_select(s)
@@ -305,6 +319,8 @@ class XQuery(ast.NodeVisitor):
             self.emit_where(s)
         elif self.expression_context == 'order_by':
             self.emit_order_by(s)
+        elif self.expression_context == 'func':
+            self.emit_func(s)
 
     def single_quoted(self, s):
         return "'{}'".format(s)
@@ -388,15 +404,28 @@ class XQuery(ast.NodeVisitor):
         self.emit(self.single_quoted(s))
         ast.NodeVisitor.generic_visit(self, node)
 
+
+
     def visit_Call(self, node):
         if node.func.id.lower() in XQuery.aggregate_functions[self.vendor]:
             self.aggregate()
-        self.emit(node.func.id + "(")
+
+
+        last_context = self.expression_context
+        self.expression_context = 'func'
+        self.fstack.append({'funcname': node.func.id, 'args': []})
         for i, arg in enumerate(node.args):
-            if i:
-                self.emit(", ")
+            self.fstack[-1]['args'].append('')
             ast.NodeVisitor.visit(self, arg)
-        self.emit(")")
+        self.expression_context = last_context
+        fcall = self.fstack.pop()
+        if fcall['funcname'].upper() == 'IIF':
+            s = "CASE WHEN {} THEN {} ELSE {} END".format(*fcall['args'])
+            self.emit(s)
+        else:
+            self.emit("{}({})".format(fcall['funcname'], ", ".join(fcall['args'])))
+
+                           
 
     def visit_Add(self, node):
         self.emit(" + ")
@@ -716,8 +745,8 @@ class XQuery(ast.NodeVisitor):
         return self.sql
 
     def query(self, parameters=None):
-        """Return source for xquery.
-        TODO: insert parameters
+        """Return source for xquery and parameters.
+
         """
 
         if parameters:
@@ -728,7 +757,42 @@ class XQuery(ast.NodeVisitor):
         sql = sql.replace("'%s'", "%s")
         return sql, self.parameters
 
-    def execute(self, parameters=None):
+    def rewind(self):
+        """Rewind cursor.
+
+        Full re-execution of query!
+        """
+        self.cursor = None
+        return self
+
+    def pg_cursor(self, using=None):
+        """
+
+        'dbname=test user=postgres password=secret'
+
+        dbname – the database name (database is a deprecated alias)
+        user – user name used to authenticate
+        password – password used to authenticate
+        host – database host address (defaults to UNIX socket if not provided)
+        port – connection port number (defaults to 5432 if not provided)
+        """
+
+        using = using if using else self.using
+
+        data = {}
+        data['name'] = settings.DATABASES[using]['NAME']
+        data['user'] = settings.DATABASES[using]['USER']
+        if 'PASSWORD' in settings.DATABASES[using]:
+            data['password'] = settings.DATABASES[using]['PASSWORD']
+        dsn = "dbname={name} user={user} password={password}".format(**data)
+        dsn = "dbname={name} user={user}".format(**data)
+        conn = psycopg2.connect(dsn)
+        cursor_name = uuid.uuid4().hex
+        cursor = conn.cursor(cursor_name)
+        cursor.itersize = 100
+        return cursor
+
+    def execute(self, parameters=None, cursor_name=None):
         if parameters:
             self.parameters.extend(parameters)
         sql = self.parse()
@@ -736,11 +800,14 @@ class XQuery(ast.NodeVisitor):
         sql = sql.replace("'%s'", "%s")
         # for sqlite3
         # self.cursor = self.connection.cursor().execute(sql, parameters)
+        # self.cursor = self.pg_cursor()
         self.cursor = self.connection.cursor()
         self.cursor.execute(sql, self.parameters)
         # we record the column names from the cursor
         # but we have our own aliases in self.column_headers
-        self.col_names = [desc[0] for desc in self.cursor.description]
+        # self.col_names = [desc[0] for desc in self.cursor.description]
+
+
 
     def dicts(self, parameters=None):
         if not self.cursor:

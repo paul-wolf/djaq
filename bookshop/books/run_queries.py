@@ -151,6 +151,44 @@ def q_sub_list(**kwargs):
     for rec in xq.tuples():
         l.append(l)
 
+@timeit
+def q_rewind(**kwargs):
+    xq = XQ("(b.name) Book b")
+    l = []
+    for rec in xq.tuples():
+        l.append(rec)
+    l = []
+    for rec in xq.rewind().tuples():
+        l.append(rec)
+    
+@timeit
+def q_rewind_queryset(**kwargs):
+    qs = Book.objects.all()
+    l = []
+    for rec in qs:
+        l.append(rec)
+    l = []
+    for rec in qs:
+        l.append(rec)
+    
+
+@timeit
+def q_conditional_sum(**kwargs):
+    xq = XQ("""
+    (sum(iif(b.rating >= 3, b.rating, 0)) as below_3, sum(iif(b.rating > 3, b.rating, 0)) as above_3) Book b
+        """)
+    for rec in xq.tuples():
+        print(rec)
+
+@timeit
+def q_conditional_sum_queryset(**kwargs):
+    above_3 = Count('book', filter=Q(book__rating__gt=3))
+    below_3 = Count('book', filter=Q(book__rating__lte=3))
+    qs = Publisher.objects.annotate(below_3=below_3).annotate(above_3=above_3)
+    l = []
+    for rec in qs:
+        l.append(rec)
+
 def run(options):
     """Run all functions in this module starting with 'q_'. """
 
