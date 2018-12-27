@@ -1,12 +1,12 @@
 import timeit
 import time
 import importlib
+import traceback
 
 from django.db.models import Q, Avg, Count, Min, Max, Sum, FloatField
-
 from xquery.exp import XQuery as XQ
-
 from books.models import Author, Publisher, Book, Store
+
 
 def timeit(method):
     """Decorator to print timing of function call."""
@@ -24,10 +24,12 @@ def timeit(method):
         return result
     return timed
 
+
 def sql(queryset):
     """Get sql source for a queryset."""
     sql, sql_params = queryset.query.get_compiler(using=queryset.db).as_sql()
     return sql
+
 
 @timeit
 def q_avg_price(**kwargs):
@@ -35,6 +37,7 @@ def q_avg_price(**kwargs):
     l = []
     for rec in xq.tuples():
         l.append(rec)
+
 
 @timeit
 def q_avg_price_queryset(**kwargs):
@@ -45,12 +48,14 @@ def q_avg_price_queryset(**kwargs):
     for rec in qs:
         l.append(rec)
 
+
 @timeit
 def q_all_books(**kwargs):
     xq = XQ("(b.id, b.name) Book b")
     l = []
     for rec in xq.tuples():
         l.append(rec)
+
 
 @timeit
 def q_all_books_queryset(**kwargs):
@@ -60,6 +65,7 @@ def q_all_books_queryset(**kwargs):
     print(sql(qs))
     for rec in qs:
         l.append(rec)
+
 
 @timeit
 def q_diff_avg_price(**kwargs):
@@ -79,23 +85,25 @@ def q_diff_avg_price_queryset(**kwargs):
 
 
 @timeit
-def q_books_per_publisher():
+def q_books_per_publisher(**kwargs):
 
     l = []
     xq = XQ("(Publisher.name, count(Book.id) as num_books) Book b")
     for rec in xq.tuples():
         l.append(rec)
 
+
 @timeit
-def q_books_per_publisher_queryset():
+def q_books_per_publisher_queryset(**kwargs):
 
     l = []
     qs = Publisher.objects.annotate(num_books=Count('book'))
     for rec in qs:
         l.append(rec)
 
+
 @timeit
-def q_books_avg_min_max():
+def q_books_avg_min_max(**kwargs):
 
     l = []
     xq = XQ("(avg(b.price), max(b.price), min(b.price)) Book b")
@@ -104,19 +112,58 @@ def q_books_avg_min_max():
     
 
 @timeit
-def q_books_avg_min_max_queryset():
+def q_books_avg_min_max_queryset(**kwargs):
 
     l = []
     qs = Book.objects.aggregate(Avg('price'), Max('price'), Min('price'))
     for rec in qs:
         l.append(rec)
 
-def run():
+@timeit
+def q_sub_query(**kwargs):
+
+    xq_sub = XQ("(b.id) Book{name == 'B*'} b", name='xq_sub')
+    xq = XQ("(b.name, b.price) Book{id in '@xq_sub'} b")
+    print(xq.query())
+    return 
+    l = []
+    for rec in xq.tuples():
+        l.append(l)
+
+@timeit
+def q_sub_queryset(**kwargs):
+
+    qs = Book.objects.filter(name__startswith="B").only('id')
+    xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", data={"qs_sub": qs})
+
+    l = []
+    for rec in xq.tuples():
+        l.append(l)
+
+@timeit
+def q_sub_list(**kwargs):
+
+    qs = Book.objects.filter(name__startswith="B").only('id')
+    ids = [rec.id for rec in qs]
+    xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", data={"qs_sub": ids})
+
+    l = []
+    for rec in xq.tuples():
+        l.append(l)
+
+def run(options):
     """Run all functions in this module starting with 'q_'. """
 
     m = importlib.import_module(__name__)
-    funcs = [f for f in dir(m) if f.startswith('q_')]
-    for funcname in funcs:
-        func = getattr(m, funcname)
-        func()
 
+    funcname = options.get('funcname')
+    if funcname:
+        getattr(m, funcname)()
+        return
+
+    for funcname in [f for f in dir(m) if f.startswith('q_')]:
+        try:
+            print("----------------------- {}".format(funcname))
+            getattr(m, funcname)()
+        except Exception as e:
+            traceback.print_exc()

@@ -7,12 +7,6 @@ from books.models import Author, Publisher, Book, Store
 
 fake = Faker()
 
-COUNT_BOOKS = 1000
-COUNT_PUBLISHERS = COUNT_BOOKS * 0.1
-COUNT_STORES = COUNT_BOOKS * 0.2
-COUNT_AUTHORS = COUNT_BOOKS * 1.5
-
-
 class AuthorFactory(factory.Factory):
     class Meta:
         model = Author
@@ -63,12 +57,19 @@ class StoreFactory(factory.Factory):
     #             self.books.add(book)
 
                 
-def build_data():
+def build_data(book_count=None):
 
     authors = []
     publishers = []
     books = []
     
+    if not book_count:
+        book_count = 1000
+
+    COUNT_PUBLISHERS = book_count * 0.1
+    COUNT_STORES = book_count * 0.2
+    COUNT_AUTHORS = book_count * 1.5
+
     while Author.objects.all().count() < COUNT_AUTHORS:
         author = AuthorFactory.create(name=fake.name(),
                                       age=random.choice(range(20, 80))).save()
@@ -81,7 +82,7 @@ def build_data():
     else:
         publishers = list(Publisher.objects.all())
 
-    while Book.objects.all().count() < COUNT_BOOKS:
+    while Book.objects.all().count() < book_count:
         book = BookFactory.create(
             name = factory.Faker('sentence', nb_words=4),
             pages = random.choice(range(100, 800)),

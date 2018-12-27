@@ -139,10 +139,16 @@ class XQuery(ast.NodeVisitor):
         s = exp.lower().strip("(").split("(")[0]
         return s in self.vendor_aggregate_functions
 
-    def __init__(self, source, using='default', limit=None, offset=None, order_by=None, name=None, verbosity=1):
+    def __init__(self, source, using='default', limit=None, offset=None, 
+                 order_by=None, 
+                 name=None, 
+                 data=None, 
+                 verbosity=1):
 
         if name:
             XQuery.directory[name] = self
+        if data:
+            XQuery.directory.update(data)
 
         self.connection = connections[using]
         self.vendor = self.connection.vendor
@@ -164,6 +170,8 @@ class XQuery(ast.NodeVisitor):
         self.relations = []
         self.parsed = False
         self.expression_context = 'select'  # change to 'where' later
+        self.parameters = []
+
         # self.group_by = False
         if self.vendor in XQuery.aggregate_functions:
             self.vendor_aggregate_functions = XQuery.aggregate_functions[
@@ -332,7 +340,7 @@ class XQuery(ast.NodeVisitor):
 
     def resolve_name(self, name):
         if name in XQuery.directory:
-            return XQuery.directory[xquery_name]
+            return XQuery.directory[name]
         # check locals, globals
         else:
             # TODO: throw exception
@@ -340,7 +348,7 @@ class XQuery(ast.NodeVisitor):
 
     def queryset_source(self, queryset):
         sql, sql_params = queryset.query.get_compiler(connection=self.connection).as_sql()
-        return sql
+        return sql, sql_params
 
     def visit_Str(self, node):
         s = node.s
@@ -357,12 +365,13 @@ class XQuery(ast.NodeVisitor):
             name = node.s[1:]
             obj = self.resolve_name(name)
             if isinstance(obj, XQuery):
-                sql = xq.source()
-            elif isinstance(obj, List):
+                sql, sql_params = obj.query()
+            elif isinstance(obj, list):
                 sql = str(tuple(obj)).strip('(').strip(')')
             elif isinstance(obj, QuerySet):
-                sql = self.queryset_source(obj)
-
+                sql, sql_params = self.queryset_source(obj)
+                self.parameters.extend(sql_params)
+            
             self.emit("({})".format(sql))
             return 
 
@@ -706,25 +715,29 @@ class XQuery(ast.NodeVisitor):
         self.sql = s
         return self.sql
 
-    def source(self, parameters=None):
+    def query(self, parameters=None):
         """Return source for xquery.
         TODO: insert parameters
         """
 
+        if parameters:
+            self.parameters.extend(parameters)
         sql = self.parse()
         if self.verbosity > 0:
             print(sql)
         sql = sql.replace("'%s'", "%s")
-        return sql
+        return sql, self.parameters
 
     def execute(self, parameters=None):
+        if parameters:
+            self.parameters.extend(parameters)
         sql = self.parse()
         print(sql)
         sql = sql.replace("'%s'", "%s")
         # for sqlite3
         # self.cursor = self.connection.cursor().execute(sql, parameters)
         self.cursor = self.connection.cursor()
-        self.cursor.execute(sql, parameters)
+        self.cursor.execute(sql, self.parameters)
         # we record the column names from the cursor
         # but we have our own aliases in self.column_headers
         self.col_names = [desc[0] for desc in self.cursor.description]
