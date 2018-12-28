@@ -25,8 +25,15 @@ from .app_utils import model_field, find_model_class, model_path
 class XQuery(ast.NodeVisitor):
 
     # keep a record of named instances
+    
     directory = {}
-
+    functions = {
+        "IIF": "CASE WHEN {} THEN {} ELSE {} END",
+        "LIKE": "{} LIKE {}",
+        "ILIKE": "{} ILIKE {}",
+        "REGEX": "{} ~ {}",
+    }
+    
     aggregate_functions = {
         "unknown": [
             'avg',
@@ -297,6 +304,19 @@ class XQuery(ast.NodeVisitor):
         relation = self.add_relation(model)
         return self.push_attribute_relations(attribute_list, relation)
 
+    def resolve_name(self, name):
+        if name in XQuery.directory:
+            return XQuery.directory[name]
+        # check locals, globals
+        else:
+            # TODO: throw exception
+            return None
+
+    def queryset_source(self, queryset):
+        sql, sql_params = queryset.query.get_compiler(
+            connection=self.connection).as_sql()
+        return sql, sql_params
+
     def emit_select(self, s):
         self.relations[self.relation_index].select += str(s)
         self.relations[self.relation_index].expression_str += str(s)
@@ -356,19 +376,6 @@ class XQuery(ast.NodeVisitor):
         self.emit(node.n)
         ast.NodeVisitor.generic_visit(self, node)
 
-    def resolve_name(self, name):
-        if name in XQuery.directory:
-            return XQuery.directory[name]
-        # check locals, globals
-        else:
-            # TODO: throw exception
-            return None
-
-    def queryset_source(self, queryset):
-        sql, sql_params = queryset.query.get_compiler(
-            connection=self.connection).as_sql()
-        return sql, sql_params
-
     def visit_Str(self, node):
         s = node.s
 
@@ -395,6 +402,7 @@ class XQuery(ast.NodeVisitor):
             return
 
         if "*" in node.s:
+            # quite the hack here
             if self.relations[self.relation_index].where.endswith(' = '):
                 s = s.replace("*", "%")
                 parts = self.relations[self.relation_index].where.rpartition(
@@ -419,9 +427,9 @@ class XQuery(ast.NodeVisitor):
             ast.NodeVisitor.visit(self, arg)
         self.expression_context = last_context
         fcall = self.fstack.pop()
-        if fcall['funcname'].upper() == 'IIF':
-            s = "CASE WHEN {} THEN {} ELSE {} END".format(*fcall['args'])
-            self.emit(s)
+        funcname = fcall['funcname'].upper()
+        if funcname in XQuery.functions:
+            self.emit(XQuery.functions[funcname].format(*fcall['args']))
         else:
             self.emit("{}({})".format(fcall['funcname'],
                                       ", ".join(fcall['args'])))
@@ -797,7 +805,10 @@ class XQuery(ast.NodeVisitor):
         # self.cursor = self.connection.cursor().execute(sql, parameters)
         # self.cursor = self.pg_cursor()
         self.cursor = self.connection.cursor()
-        self.cursor.execute(sql, self.parameters)
+        if parameters is not None and len(parameters):
+            self.cursor.execute(sql, self.parameters)
+        else:
+            self.cursor.execute(sql)
         # we record the column names from the cursor
         # but we have our own aliases in self.column_headers
         # self.col_names = [desc[0] for desc in self.cursor.description]
