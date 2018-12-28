@@ -145,11 +145,12 @@ def q_sub_list(**kwargs):
 
     qs = Book.objects.filter(name__startswith="B").only('id')
     ids = [rec.id for rec in qs]
-    xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", data={"qs_sub": ids})
+    xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", data={"qs_sub": ids}, verbosity=0)
 
     l = []
     for rec in xq.tuples():
         l.append(l)
+
 
 @timeit
 def q_rewind(**kwargs):

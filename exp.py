@@ -86,7 +86,6 @@ class XQuery(ast.NodeVisitor):
             self.xquery = xquery
             self.src = None
 
-
         @property
         def model_table(self):
             return self.model._meta.db_table
@@ -145,10 +144,14 @@ class XQuery(ast.NodeVisitor):
         s = exp.lower().strip("(").split("(")[0]
         return s in self.vendor_aggregate_functions
 
-    def __init__(self, source, using='default', limit=None, offset=None, 
-                 order_by=None, 
-                 name=None, 
-                 data=None, 
+    def __init__(self,
+                 source,
+                 using='default',
+                 limit=None,
+                 offset=None,
+                 order_by=None,
+                 name=None,
+                 data=None,
                  verbosity=1):
 
         if name:
@@ -177,10 +180,9 @@ class XQuery(ast.NodeVisitor):
         self.relations = []
         self.parsed = False
         self.expression_context = 'select'  # change to 'where' or 'func' later
-        self.function_context = ''  
-        self.fstack = [] # function stack
-        self.parameters = [] # query parameters
-
+        self.function_context = ''
+        self.fstack = []  # function stack
+        self.parameters = []  # query parameters
 
         # self.group_by = False
         if self.vendor in XQuery.aggregate_functions:
@@ -311,7 +313,7 @@ class XQuery(ast.NodeVisitor):
     def emit_func(self, s):
         """Write to current argument on the stack of the current function call."""
         self.fstack[-1]['args'][-1] += str(s)
-                       
+
     def emit(self, s):
         if self.expression_context == 'select':
             self.emit_select(s)
@@ -363,7 +365,8 @@ class XQuery(ast.NodeVisitor):
             return None
 
     def queryset_source(self, queryset):
-        sql, sql_params = queryset.query.get_compiler(connection=self.connection).as_sql()
+        sql, sql_params = queryset.query.get_compiler(
+            connection=self.connection).as_sql()
         return sql, sql_params
 
     def visit_Str(self, node):
@@ -373,7 +376,7 @@ class XQuery(ast.NodeVisitor):
             # this is a literal sql subquery
             self.emit("({})".format(node.s))
             ast.NodeVisitor.generic_visit(self, node)
-            return 
+            return
 
         if node.s.strip().startswith('@'):
             # A named XQuery, QuerySet, List, etc
@@ -387,9 +390,9 @@ class XQuery(ast.NodeVisitor):
             elif isinstance(obj, QuerySet):
                 sql, sql_params = self.queryset_source(obj)
                 self.parameters.extend(sql_params)
-            
+
             self.emit("({})".format(sql))
-            return 
+            return
 
         if "*" in node.s:
             if self.relations[self.relation_index].where.endswith(' = '):
@@ -404,12 +407,9 @@ class XQuery(ast.NodeVisitor):
         self.emit(self.single_quoted(s))
         ast.NodeVisitor.generic_visit(self, node)
 
-
-
     def visit_Call(self, node):
         if node.func.id.lower() in XQuery.aggregate_functions[self.vendor]:
             self.aggregate()
-
 
         last_context = self.expression_context
         self.expression_context = 'func'
@@ -423,9 +423,8 @@ class XQuery(ast.NodeVisitor):
             s = "CASE WHEN {} THEN {} ELSE {} END".format(*fcall['args'])
             self.emit(s)
         else:
-            self.emit("{}({})".format(fcall['funcname'], ", ".join(fcall['args'])))
-
-                           
+            self.emit("{}({})".format(fcall['funcname'],
+                                      ", ".join(fcall['args'])))
 
     def visit_Add(self, node):
         self.emit(" + ")
@@ -655,15 +654,11 @@ class XQuery(ast.NodeVisitor):
                 raise Exception("Invalid source")
 
             if self.verbosity > 1:
-                print("join_type={}, select_src={}, model_name={}, where_src={}, order_by_src={}, order_by_direction={}, alias={}".format(
-                    join_type,
-                    select_src,
-                    model_name,
-                    where_src,
-                    order_by_src,
-                    order_by_direction,
-                    alias))
-                
+                print(
+                    "join_type={}, select_src={}, model_name={}, where_src={}, order_by_src={}, order_by_direction={}, alias={}"
+                    .format(join_type, select_src, model_name, where_src,
+                            order_by_src, order_by_direction, alias))
+
             # we need to generate column headers and remove
             # aliases. tuples are (exp, alias)
             column_tuples = self.parse_column_aliases(select_src)
@@ -807,8 +802,6 @@ class XQuery(ast.NodeVisitor):
         # but we have our own aliases in self.column_headers
         # self.col_names = [desc[0] for desc in self.cursor.description]
 
-
-
     def dicts(self, parameters=None):
         if not self.cursor:
             self.execute(parameters)
@@ -830,7 +823,7 @@ class XQuery(ast.NodeVisitor):
             yield row
         return
 
-    def json(self, parameters=None, ):
+    def json(self, parameters=None):
         for d in self.dicts(parameters):
             yield json.dumps(d, cls=DjangoJSONEncoder)
 
@@ -849,3 +842,38 @@ class XQuery(ast.NodeVisitor):
             writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC)
             writer.writerow(row)
             yield output.getvalue()
+
+    def value(self, parameters=None):
+        for t in self.tuples(parameters=parameters):
+            return t[0]
+
+    def __repr__(self):
+        return "XQuery: {}".format(self.source)
+
+    def __str__(self):
+        l = []
+        for i, d in enumerate(self.dicts()):
+            l.append(d)
+            if i == 10:
+                break
+        return str(l)
+
+    def __iter__(self):
+        return self.objs()
+
+    # def __len__(self):
+    #     return len()
+
+    # def __getitem__(self, position):
+    #     return self.
+
+    def __enter__(self):
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+
+        if exc_type:
+            pass
+        else:
+            pass
