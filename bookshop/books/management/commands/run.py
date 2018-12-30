@@ -17,6 +17,12 @@ class Command(BaseCommand):
                             dest='funcname',
                             type=str)
 
+        parser.add_argument('--verbose',
+                            default=0, 
+                            action='store',
+                            dest='verbosity',
+                            type=int)
+
 
     def handle(self, *args, **options):
         run(options)

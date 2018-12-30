@@ -70,7 +70,10 @@ def q_all_books_queryset(**kwargs):
 @timeit
 def q_diff_avg_price(**kwargs):
     l = []
-    xq = XQ("(Publisher.name, max(Book.price) - avg(Book.price) as price_diff) Book b")
+    xq = XQ("""
+    (Publisher.name, max(Book.price) - 
+    avg(Book.price) as price_diff) Book b
+    """)
     for rec in xq.tuples():
         l.append(rec)
 
@@ -124,8 +127,6 @@ def q_sub_query(**kwargs):
 
     xq_sub = XQ("(b.id) Book{name == 'B*'} b", name='xq_sub')
     xq = XQ("(b.name, b.price) Book{id in '@xq_sub'} b")
-    print(xq.query())
-    return 
     l = []
     for rec in xq.tuples():
         l.append(l)
@@ -135,7 +136,6 @@ def q_sub_queryset(**kwargs):
 
     qs = Book.objects.filter(name__startswith="B").only('id')
     xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", data={"qs_sub": qs})
-
     l = []
     for rec in xq.tuples():
         l.append(l)
@@ -151,7 +151,40 @@ def q_sub_list(**kwargs):
     for rec in xq.tuples():
         l.append(l)
 
+@timeit
+def q_params(**kwargs):
 
+    # xq = XQ("(b.id, b.name) Book{b.id == 108955 or regex(b.name, 'I .*') and b.name == 'Personal occur admit play.'} b ", verbosity=kwargs['verbosity'])
+            
+    xq = XQ("(b.id, b.name) Book{b.id == '%s' and regex(b.name, '%s')} b ", verbosity=kwargs['verbosity'])
+            
+
+    qs = Book.objects.filter(name__startswith="B").only('id')
+    ids = [rec.id for rec in qs][:3]
+    # xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", data={"qs_sub": ids}, verbosity=3)
+
+    l = []
+    for rec in xq.tuples(parameters=[135794, 'I.*']):
+        print(rec)
+        
+
+@timeit
+def q_grouping(**kwargs):
+            
+    xq = XQ("(b.id, b.name) Book{(b.id == 1 or b.id == 2) and b.id == 3} b ",            
+            verbosity=kwargs['verbosity'])
+            
+
+    qs = Book.objects.filter(name__startswith="B").only('id')
+    ids = [rec.id for rec in qs][:3]
+    l = []
+    for rec in xq.limit(10).tuples(parameters=[135794, 'I.*']):
+        print(rec)
+        
+@timeit
+def q_implicit_model(**kwargs):
+    str(XQ("(Book.name, Book.id)"))
+    
 @timeit
 def q_rewind(**kwargs):
     xq = XQ("(b.name) Book b")
@@ -197,12 +230,12 @@ def run(options):
 
     funcname = options.get('funcname')
     if funcname:
-        getattr(m, funcname)()
+        getattr(m, funcname)(**options)
         return
 
     for funcname in [f for f in dir(m) if f.startswith('q_')]:
         try:
             print("----------------------- {}".format(funcname))
-            getattr(m, funcname)()
+            getattr(m, funcname)(**options)
         except Exception as e:
             traceback.print_exc()
