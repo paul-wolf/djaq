@@ -169,13 +169,18 @@ class XQuery(ast.NodeVisitor):
                  offset=None,
                  order_by=None,
                  name=None,
-                 data=None,
+                 context=None,
+                 names=None,
                  verbosity=1):
 
+        self._context = context
+        
         if name:
             XQuery.directory[name] = self
-        if data:
-            XQuery.directory.update(data)
+
+        # these can be names of other objects
+        if names:
+            XQuery.directory.update(names)
 
         self.using = using
         self.connection = connections[using]
@@ -828,13 +833,13 @@ class XQuery(ast.NodeVisitor):
         self.sql = s
         return self.sql
 
-    def query(self, parameters=None):
+    def query(self, context=None):
         """Return source for xquery and parameters.
 
         """
 
-        if parameters:
-            self.parameters.extend(parameters)
+        self.context(context)
+        
         sql = self.parse()
         if self.verbosity > 0:
             print(sql)
@@ -856,7 +861,16 @@ class XQuery(ast.NodeVisitor):
     def offset(self, offset):
         self._offset = offset
         return self
+
+    def context(self, context):
+        """Update our context with dict context."""
+        if not self._context:
+            self._context = {}
+        if context:
+            self._context.update(context)
+        return self
     
+        
     def pg_cursor(self, using=None):
         """
 
@@ -884,25 +898,36 @@ class XQuery(ast.NodeVisitor):
         cursor.itersize = 100
         return cursor
 
-    def execute(self, parameters=None):
+    
+    def execute(self, context=None):
         """Create a cursor and execute the sql."""
-        
-        if parameters:
-            self.parameters.extend(parameters)
-        else:
-            parameters = self.parameters
+
+        self.context(context)
             
         sql = self.parse()
         
-        sql = sql.replace("'%s'", "%s")
-        
+        # sql = sql.replace("'%s'", "%s")
+
+        # now replace variables placeholders to be valid dict placeholders
+        p = re.compile(r"\'\$\(([\w]*)\)\'")
+        sql = re.sub(p, lambda x: "%({})s".format(x.group(1)), sql)
+
+        print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
+        print(sql)
+        conn = connections['default']
+        cursor = conn.cursor()
+        print(cursor.mogrify(sql, self._context))
+        print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+            
+
+
         self.cursor = self.connection.cursor()
 
         try:
-            if parameters is not None and len(parameters):
+            if len(self._context):
                 if self.verbosity:
-                    print("sql={}, parameters={}".format(sql, parameters))
-                self.cursor.execute(sql, parameters)
+                    print("sql={}, params={}".format(sql, self._context))
+                self.cursor.execute(sql, self._context)
             else: 
                 if self.verbosity:
                     print("sql={}".format(sql))
@@ -912,25 +937,26 @@ class XQuery(ast.NodeVisitor):
         except psycopg2.ProgrammingError as pe:
             print(pe)
 
-            
         # we record the column names from the cursor
         # but we have our own aliases in self.column_headers
         # self.col_names = [desc[0] for desc in self.cursor.description]
 
-    def dicts(self, parameters=None):
+    
+    def dicts(self, data=None):
         if not self.cursor:
-            self.execute(parameters)
+            self.execute(data)
         while True:
             row = self.cursor.fetchone()
+
             if row is None:
                 break
             row_dict = dict(zip(self.column_headers, row))
             yield row_dict
         return
 
-    def tuples(self, parameters=None):
+    def tuples(self, data=None):
         if not self.cursor:
-            self.execute(parameters)
+            self.execute(data)
         while True:
             try:
                 row = self.cursor.fetchone()
@@ -944,17 +970,17 @@ class XQuery(ast.NodeVisitor):
             yield row
         return
 
-    def json(self, parameters=None):
-        for d in self.dicts(parameters):
-            yield json.dumps(d, cls=DjangoJSONEncoder)
+    def json(self, data=None, encoder=DjangoJSONEncoder):
+        for d in self.dicts(data):
+            yield json.dumps(d, cls=encoder)
 
-    def objs(self, parameters=None):
-        for d in self.dicts(parameters):
+    def objs(self, data=None):
+        for d in self.dicts(data):
             yield XQueryInstance(d, xquery=self)
 
-    def csv(self, parameters=None):
+    def csv(self, data=None):
         if not self.cursor:
-            self.execute(parameters)
+            self.execute(data)
         while True:
             output = io.StringIO()
             row = self.cursor.fetchone()
@@ -964,8 +990,8 @@ class XQuery(ast.NodeVisitor):
             writer.writerow(row)
             yield output.getvalue()
 
-    def value(self, parameters=None):
-        for t in self.tuples(parameters=parameters):
+    def value(self, data=None):
+        for t in self.tuples(data=data):
             return t[0]
 
     def __repr__(self):

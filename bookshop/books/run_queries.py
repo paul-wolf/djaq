@@ -135,7 +135,7 @@ def q_sub_query(**kwargs):
 def q_sub_queryset(**kwargs):
 
     qs = Book.objects.filter(name__startswith="B").only('id')
-    xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", data={"qs_sub": qs})
+    xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", names={"qs_sub": qs})
     l = []
     for rec in xq.tuples():
         l.append(l)
@@ -145,7 +145,7 @@ def q_sub_list(**kwargs):
 
     qs = Book.objects.filter(name__startswith="B").only('id')
     ids = [rec.id for rec in qs]
-    xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", data={"qs_sub": ids}, verbosity=0)
+    xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", names={"qs_sub": ids}, verbosity=0)
 
     l = []
     for rec in xq.tuples():
@@ -154,17 +154,20 @@ def q_sub_list(**kwargs):
 @timeit
 def q_params(**kwargs):
 
-    # xq = XQ("(b.id, b.name) Book{b.id == 108955 or regex(b.name, 'I .*') and b.name == 'Personal occur admit play.'} b ", verbosity=kwargs['verbosity'])
-            
-    xq = XQ("(b.id, b.name) Book{b.id == '%s' and regex(b.name, '%s')} b ", verbosity=kwargs['verbosity'])
-            
+    xq = XQ("""(b.id, b.name) Book{b.id == 1 or 
+    regex(b.name, '$(mynamepattern)')} b """, 
+    verbosity=kwargs['verbosity'])
+    print(str(xq.context({'mynamepattern':'I.*'})))
+    return
 
-    qs = Book.objects.filter(name__startswith="B").only('id')
-    ids = [rec.id for rec in qs][:3]
-    # xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", data={"qs_sub": ids}, verbosity=3)
+    xq = XQ("""(b.id, b.name) Book{b.id == '$(myid)' or 
+    regex(b.name, '$(mynamepattern)')} b """, 
+    verbosity=kwargs['verbosity'])
 
+    
+    
     l = []
-    for rec in xq.tuples(parameters=[135794, 'I.*']):
+    for rec in xq.context({'myid': 1, 'mynamepattern':'I%'}).tuples():
         print(rec)
         
 
@@ -178,12 +181,20 @@ def q_grouping(**kwargs):
     qs = Book.objects.filter(name__startswith="B").only('id')
     ids = [rec.id for rec in qs][:3]
     l = []
-    for rec in xq.limit(10).tuples(parameters=[135794, 'I.*']):
+    for rec in xq.limit(10).tuples():
         print(rec)
         
 @timeit
 def q_implicit_model(**kwargs):
     str(XQ("(Book.name, Book.id)"))
+    
+@timeit
+def q_ilike(**kwargs):
+    xq = XQ("(b.name) Book{ilike(b.name, '$(name_pattern)')} b ")
+    print(str(xq.context({"name_pattern": "C%"})))
+
+    name_pattern = "C%"
+    print(str(xq.rewind().context(locals())))    
     
 @timeit
 def q_rewind(**kwargs):
