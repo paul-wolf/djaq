@@ -3,7 +3,7 @@ import time
 import importlib
 import traceback
 
-from django.db.models import Q, Avg, Count, Min, Max, Sum, FloatField
+from django.db.models import Q, Avg, Count, Min, Max, Sum, FloatField, Subquery, OuterRef
 from xquery.exp import XQuery as XQ
 from books.models import Author, Publisher, Book, Store
 
@@ -225,6 +225,36 @@ def q_conditional_sum(**kwargs):
     for rec in xq.tuples():
         print(rec)
 
+
+@timeit
+def q_subquery(**kwargs):
+    
+    pubs = XQ("(p.id) Publisher p", name='pubs')
+    books = XQ("(b.name) Book{publisher in '@pubs'} b")
+    if kwargs.get('sql'):
+        print(books.query())
+    l = []
+    for rec in books.tuples():
+        l.append(rec)
+        
+@timeit
+def q_subquery_outerref(**kwargs):
+    qs = Book.objects.filter(publisher__in=Subquery(Publisher.objects.filter(pk=OuterRef('publisher')).only('pk')))
+    if kwargs.get('sql'):
+        print(sql(qs))
+    l = []
+    for rec in qs:
+        l.append(rec)
+
+@timeit
+def q_count(**kwargs):
+    # print(XQ("(Book.id)").count())
+    print(XQ("(count(Book.id)) Book").value())
+
+@timeit
+def q_count_queryset(**kwargs):
+    print(Book.objects.all().count())
+
 @timeit
 def q_conditional_sum_queryset(**kwargs):
     above_3 = Count('book', filter=Q(book__rating__gt=3))
@@ -239,14 +269,17 @@ def run(options):
 
     m = importlib.import_module(__name__)
 
-    funcname = options.get('funcname')
-    if funcname:
-        getattr(m, funcname)(**options)
-        return
+    pattern = options.get('funcname')
 
     for funcname in [f for f in dir(m) if f.startswith('q_')]:
         try:
-            print("----------------------- {}".format(funcname))
-            getattr(m, funcname)(**options)
+            
+            if pattern:
+                if funcname.startswith(pattern):
+                    print("----------------------- {}".format(funcname))
+                    getattr(m, funcname)(**options)
+            else:
+                print("----------------------- {}".format(funcname))
+                getattr(m, funcname)(**options)
         except Exception as e:
             traceback.print_exc()

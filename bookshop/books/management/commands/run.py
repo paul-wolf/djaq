@@ -22,6 +22,11 @@ class Command(BaseCommand):
                             action='store',
                             dest='verbosity',
                             type=int)
+        
+        parser.add_argument('--sql',
+                            default=False, 
+                            action='store_true',
+                            dest='sql')
 
 
     def handle(self, *args, **options):

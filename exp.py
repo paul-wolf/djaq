@@ -171,7 +171,7 @@ class XQuery(ast.NodeVisitor):
                  name=None,
                  context=None,
                  names=None,
-                 verbosity=1):
+                 verbosity=0):
 
         self._context = context
         
@@ -250,7 +250,7 @@ class XQuery(ast.NodeVisitor):
                     if alias == relation.alias:
                         return relation
                     else:
-                        # these means we have two different aliases
+                        # this means we have two different aliases
                         # let a new relation be created
                         pass
                 else:
@@ -412,7 +412,7 @@ class XQuery(ast.NodeVisitor):
             return
 
         if node.s.strip().startswith('@'):
-            print(node.s)
+
             # A named XQuery, QuerySet, List
             # get source
             name = node.s[1:]
@@ -425,6 +425,8 @@ class XQuery(ast.NodeVisitor):
             elif isinstance(obj, QuerySet):
                 sql, sql_params = self.queryset_source(obj)
                 self.parameters.extend(sql_params)
+            else:
+                raise Exception("Name not found: {}".format(name))
 
             self.emit("({})".format(sql))
             return
@@ -459,7 +461,13 @@ class XQuery(ast.NodeVisitor):
         funcname = fcall['funcname'].upper()
         if funcname in XQuery.functions:
             # Fill our custom SQL template with arguments
-            self.emit(XQuery.functions[funcname].format(*fcall['args']))
+            t = XQuery.functions[funcname]
+            if isinstance(t, str):
+                self.emit(t.format(*fcall['args']))
+            elif callable(t):
+                self.emit(t(funcname, fcall['args']))
+            else:
+                raise Exception("Can't mutate function: {}".format(funcname))
         else:
             # Construct the function call with given arguments
             # and expect the underlying db to support this function in upper case
@@ -713,7 +721,7 @@ class XQuery(ast.NodeVisitor):
             # print("Parsing relation: {}".format(relation_source))
             index, join_type, relation_source = self.get_join_type(relation_source)            
             index, select_src, relation_source = self.get_select(relation_source)
-            print(relation_source)
+            # print(relation_source)
             m = re.match(pattern, relation_source.strip())
             if m:
                 model_name = m.group(1)
@@ -867,6 +875,7 @@ class XQuery(ast.NodeVisitor):
         if not self._context:
             self._context = {}
         if context:
+            self.cursor = None # cause the query to be re-evaluated
             self._context.update(context)
         return self
     
@@ -899,7 +908,7 @@ class XQuery(ast.NodeVisitor):
         return cursor
 
     
-    def execute(self, context=None):
+    def execute(self, context=None, count=False):
         """Create a cursor and execute the sql."""
 
         self.context(context)
@@ -912,18 +921,18 @@ class XQuery(ast.NodeVisitor):
         p = re.compile(r"\'\$\(([\w]*)\)\'")
         sql = re.sub(p, lambda x: "%({})s".format(x.group(1)), sql)
 
-        print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
-        print(sql)
+        # print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
+        # print(sql)
         conn = connections['default']
         cursor = conn.cursor()
-        print(cursor.mogrify(sql, self._context))
-        print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
-            
-
+        # print(cursor.mogrify(sql, self._context))
+        # print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 
         self.cursor = self.connection.cursor()
 
         try:
+            if count:
+                sql = "SELECT COUNT(*) FROM ({}) c".format(sql)
             if len(self._context):
                 if self.verbosity:
                     print("sql={}, params={}".format(sql, self._context))
@@ -994,6 +1003,10 @@ class XQuery(ast.NodeVisitor):
         for t in self.tuples(data=data):
             return t[0]
 
+    def count(self, data=None):
+        self.execute(data, count=True)
+        return self.cursor.fetchone()[0]
+        
     def __repr__(self):
         return "XQuery: {}".format(self.source)
 
@@ -1007,12 +1020,6 @@ class XQuery(ast.NodeVisitor):
 
     def __iter__(self):
         return self.objs()
-
-    # def __len__(self):
-    #     return len()
-
-    # def __getitem__(self, position):
-    #     return self.
 
     def __enter__(self):
 
