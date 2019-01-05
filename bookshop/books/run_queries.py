@@ -4,7 +4,7 @@ import importlib
 import traceback
 
 from django.db.models import Q, Avg, Count, Min, Max, Sum, FloatField, Subquery, OuterRef
-from xquery.exp import DjangoQuery as DQ
+from djaq.query import DjangoQuery as DQ
 from books.models import Author, Publisher, Book, Store
 
 
