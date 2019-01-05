@@ -37,19 +37,26 @@ Reasons why Djaq might be a reasonable alternative to Querysets for some use cas
 
 ##Requirements
 
-* >= Django 2.1
-* Postgresql
+* Django 2.1 or higher
+* Postgresql 
 
 To Install:
 
     pip install Djaq
 
-This will install it into your Django project. Djaq cannot be used outside of Django. There is a sample Django project, `bookshop`. If you want to try this, clone the django repo:
+This will install it into your Django project, probably into your virtual environment.
+
+Sample Project
+--------------
+
+If you want to use Djaq right away in your own test project and you feel confident, crack on. In that case skip the following instructions for using the sample project. There is a sample Django project, `bookshop`. If you want to try this, clone the django repo:
 
     git clone git@github.com:paul-wolf/djaq.git
     cd djaq/bookshop
 
-Create the virtualenv:
+If you clone the repo and use the sample project, you don't need to
+include Djaq as a requirement because it's included as a module by a
+softlink. Create the virtualenv:
 
     virtualenv -p python3 .venv    
 
@@ -62,8 +69,30 @@ requirements. To install dependencies for the sample application:
 
     pip install -r requirements.txt
 
-Make sure the virtualenv is activated! The example application comes with a
-management command to run queries:
+Now make sure there is a Postgresql instance running. The settings are like this:
+
+```
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'bookshop',
+    },
+```
+	
+So, it assumes peer authentication. Now you can migrate. Make sure the virtualenv is activated! 
+
+
+    ./manage.py migrate
+
+We provide a script to create some sample data:
+
+    ./manage.py build_data --book-count 2000
+
+This creates 2000 books and associated data. 
+
+
+The example app comes with a management command to run
+queries:
 
     ./manage.py djaq "(Publisher.name, max(Book.price) - round(avg(Book.price)) as diff) Book b"  --format json
 
@@ -263,7 +292,8 @@ Some other features:
 
 will return a single integer value representing the count of books. 
 
-##Comparing features
+Comparing features
+------------------
 
 Unsurprisingly, Django provides significant options for adjusting query generation to fit a use case, `only()`, `select_related()`, `prefetch_related()` are all highly useful for different cases. Here's a point-by-point comparison with Djaq:
 
@@ -277,11 +307,13 @@ Unsurprisingly, Django provides significant options for adjusting query generati
 
 Djaq does not try to hide as much about the underlying data structures as Querysets. Djaq does less to hide underlying SQL features. I think there are two types of django developer those who design a data schema and then design Django models to embody that and those who write Django models and let Django take care of the underlying schema. It may be the former type of Django developer will be more drawn to Djaq.
 
-##Results vs Model Instances
+Results vs Model Instances
+--------------------------
 
 The Djaq generator `.objs()` returns a `DQResult` class instance. Djaq produces 'results' in contrast to model instances. Depending on what methods you use on QuerySets you may get Django Model instances or a list or a dict, etc. Djaq never returns a model instance. But you can easily get a model instance via the DQResult. 
 
-##Functions
+Functions
+---------
 
 In the following: 
 
@@ -311,7 +343,8 @@ We can simplify further by creating a new function. The IIF function is defined 
         sumif(b.rating >= 5, b.rating, 0) as above_5
         ) Book b""")
 
-##Parameters
+Parameters
+----------
 
 We call the Django connection cursor approximately like this: 
 
@@ -341,7 +374,8 @@ To get all books starting with 'Bar'. Or:
 
 Provided that `request.POST` has a `name_search` key/value. 
 
-##Column expressions
+Column expressions
+------------------
 
 Doing column arithmetic is much more natural and does not require the voodoo of F expressions: 
 
@@ -362,7 +396,8 @@ Doing column arithmetic is much more natural and does not require the voodoo of 
         b.price - (b.price*0.2) as diff
         ) Book b""")
 
-##Subqueries and IN clause
+Subqueries and IN clause
+------------------------
 
 You can reference subqueries within a Djaq expression using
 
@@ -386,7 +421,8 @@ Note that you have to pass a name to the DjangoQuery to reference it later. We c
 
 As with QuerySets it is nearly always faster to generate a sub query than use an itemised list. 
 
-##Django Subquery and OuterRef
+Django Subquery and OuterRef
+----------------------------
 
 The following do pretty much the same thing:
 
@@ -400,7 +436,8 @@ The following do pretty much the same thing:
 
 Obviously, in both cases, you would be filtering Publisher to make it actually useful, but the effect and verbosity can be extrapolated as roughly the same as above.
 
-##Order by
+Order by
+--------
 
 You can order_by like this: 
 
@@ -412,7 +449,8 @@ Descending order:
     
 You can use either `+` or `-` for ASC or DESC. 
 
-##Count
+Count
+-----
 
 There are a couple ways to count results. These both return the same thing:
 
@@ -420,11 +458,13 @@ There are a couple ways to count results. These both return the same thing:
     
     DQ("(count(Book.id)) Book").value()
 
-##Datetimes
+Datetimes
+---------
 
 Datetimes are provided as strings in the iso format that your backend expects, like '2019-01-01 18:00:00'. 
 
-##Slicing
+Slicing
+-------
 
 You cannot slice a DjangoQuery at this time because this would frustrate a design goal of Djaq to provide the performance advantages of cursor-like behaviour. 
 
@@ -434,7 +474,8 @@ We will probably provide a separate class to provide slice behaviour in the futu
 
 Which will provide you with the first hundred results starting from the 1000th record. 
 
-##Rewind cursor
+Rewind cursor
+-------------
 
 You can rewind the cursor but this is just executing the SQL again: 
 
@@ -449,7 +490,8 @@ You can rewind the cursor but this is just executing the SQL again:
 
 If you call `DjangoQuery.context(data)`, that will effectively rewind the cursor since an entirely new query is created and the implementation currently doesn't care if `data` is the same context as previously supplied.
 
-##Implementation Notes
+Implementation Notes
+--------------------
 
 The parser for Djaq is kind of a mixed bag. It uses regular expressions, custom character stream processing and mostly Python's Abstract Syntax Tree module. The manner of parsing is not necessarily optimal and I'm no compiler expert by a long shot. But the performance overhead and features seem acceptable at this time. 
 
@@ -479,7 +521,8 @@ In contrast, Djaq is the exact inverse of those ORM APIs. It is a language more 
 
 The intent is to provide broad portability comparable to QuerySets. Various steps need to be taken to make Djaq more portable (it will be most compatible at the start with Postgresql). For instance, the ability to access db functions directly could lead to dependence on a particular DB's SQL. But this can be largely mitigated by providing custom functions for all the fuctions that you wish to use. We need to make the custom function feature provide different sets of functions per backend, a planned development. But ultimately the choice to use proprietary functions is something I think should be left to the user. Even with Django QuerySets there are various ways to use proprietary features of a db backend. 
 
-##Djaq comparative weaknesses 
+Djaq comparative weaknesses
+---------------------------
 
 Just as QuerySets exhibit weaknesses as a result of feature priorities, so does Djaq. But aside from incomplete features, the biggest shortcoming is that it will be missing many things present in the Django API, especially for edge cases and those myriad smaller cases that are only exposed through years of experience. 
 
@@ -495,7 +538,8 @@ Just as QuerySets exhibit weaknesses as a result of feature priorities, so does 
 
 * All the above examples have been tested and work with Postgresql and to a lesser extent tested with SQLite3. They might work with MySQL, Oracle, etc. Maybe. Obviously, the Django ORM has been extensively tested with all the databases it claims to support. 
 
-##Future
+Future
+------
 
 Things that would be interesting going forward:
 
@@ -505,7 +549,8 @@ Things that would be interesting going forward:
 * Direct support for GraphQL
 * Mutable Djaq queries based on context data. For instance, removing elements of a query where context data is not provided
 
-#Summary
+Summary
+=======
 
 The purpose of Djaq is to provide an *optional* alternative to QuerySets that provides more explicit control over query behaviour and a more natural, Python-based language that is more readable and learnable. Users don't need to choose one or the other. Djaq is just a separate path that might be more beneficial depending on how specific developers wish to work.
 
