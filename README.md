@@ -35,7 +35,8 @@ Reasons why Djaq might be a reasonable alternative to Querysets for some use cas
 * Eschew laziness: don't trigger queries on behalf of the user except just once in an explicit and predictable manner
 * Default to cursor semantics rather than sliceable lists of objects for better performance
 
-##Requirements
+Requirements
+------------
 
 * Django 2.1 or higher
 * Postgresql 
