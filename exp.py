@@ -217,6 +217,17 @@ class XQuery(ast.NodeVisitor):
                 'unknown']
         self.column_headers = []
 
+    def mogrify(self, sql, parameters):
+        """Create completed sql with list of parameters.
+
+        TODO: Only works for Postgresql.
+
+        """
+        
+        conn = connections[self.using]
+        cursor = conn.cursor()
+        return cursor.mogrify(sql, parameters).decode()
+        
     def dump(self):
         for k, v in self.__dict__.items():
             print("{}={}".format(k,v))
@@ -424,7 +435,7 @@ class XQuery(ast.NodeVisitor):
                 sql = str(tuple(obj)).strip('(').strip(')')
             elif isinstance(obj, QuerySet):
                 sql, sql_params = self.queryset_source(obj)
-                self.parameters.extend(sql_params)
+                sql = self.mogrify(sql, sql_params)
             else:
                 raise Exception("Name not found: {}".format(name))
 
@@ -923,7 +934,7 @@ class XQuery(ast.NodeVisitor):
 
         # print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
         # print(sql)
-        conn = connections['default']
+        conn = connections[self.using]
         cursor = conn.cursor()
         # print(cursor.mogrify(sql, self._context))
         # print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
