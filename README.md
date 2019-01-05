@@ -38,6 +38,7 @@ Reasons why Djaq might be a reasonable alternative to Querysets for some use cas
 Requirements
 ------------
 
+* Python 3.5 or higher
 * Django 2.1 or higher
 * Postgresql 
 
