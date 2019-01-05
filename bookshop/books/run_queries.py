@@ -4,7 +4,7 @@ import importlib
 import traceback
 
 from django.db.models import Q, Avg, Count, Min, Max, Sum, FloatField, Subquery, OuterRef
-from xquery.exp import XQuery as XQ
+from xquery.exp import DjangoQuery as DQ
 from books.models import Author, Publisher, Book, Store
 
 
@@ -33,9 +33,9 @@ def sql(queryset):
 
 @timeit
 def q_avg_price(**kwargs):
-    xq = XQ("(avg(b.price)) Book b")
+    dq = DQ("(avg(b.price)) Book b")
     l = []
-    for rec in xq.tuples():
+    for rec in dq.tuples():
         l.append(rec)
 
 
@@ -51,9 +51,9 @@ def q_avg_price_queryset(**kwargs):
 
 @timeit
 def q_all_books(**kwargs):
-    xq = XQ("(b.id, b.name) Book b")
+    dq = DQ("(b.id, b.name) Book b")
     l = []
-    for rec in xq.tuples():
+    for rec in dq.tuples():
         l.append(rec)
 
 
@@ -70,11 +70,11 @@ def q_all_books_queryset(**kwargs):
 @timeit
 def q_diff_avg_price(**kwargs):
     l = []
-    xq = XQ("""
+    dq = DQ("""
     (Publisher.name, max(Book.price) - 
     avg(Book.price) as price_diff) Book b
     """)
-    for rec in xq.tuples():
+    for rec in dq.tuples():
         l.append(rec)
 
 
@@ -91,8 +91,8 @@ def q_diff_avg_price_queryset(**kwargs):
 def q_books_per_publisher(**kwargs):
 
     l = []
-    xq = XQ("(Publisher.name, count(Book.id) as num_books) Book b")
-    for rec in xq.tuples():
+    dq = DQ("(Publisher.name, count(Book.id) as num_books) Book b")
+    for rec in dq.tuples():
         l.append(rec)
 
 
@@ -109,8 +109,8 @@ def q_books_per_publisher_queryset(**kwargs):
 def q_books_avg_min_max(**kwargs):
 
     l = []
-    xq = XQ("(avg(b.price), max(b.price), min(b.price)) Book b")
-    for rec in xq.tuples():
+    dq = DQ("(avg(b.price), max(b.price), min(b.price)) Book b")
+    for rec in dq.tuples():
         l.append(rec)
     
 
@@ -125,19 +125,19 @@ def q_books_avg_min_max_queryset(**kwargs):
 @timeit
 def q_sub_query(**kwargs):
 
-    xq_sub = XQ("(b.id) Book{name == 'B*'} b", name='xq_sub')
-    xq = XQ("(b.name, b.price) Book{id in '@xq_sub'} b")
+    dq_sub = DQ("(b.id) Book{name == 'B*'} b", name='dq_sub')
+    dq = DQ("(b.name, b.price) Book{id in '@dq_sub'} b")
     l = []
-    for rec in xq.tuples():
+    for rec in dq.tuples():
         l.append(l)
 
 @timeit
 def q_sub_queryset(**kwargs):
 
     qs = Book.objects.filter(name__startswith="B").only('id')
-    xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", names={"qs_sub": qs})
+    dq = DQ("(b.name, b.price) Book{id in '@qs_sub'} b", names={"qs_sub": qs})
     l = []
-    for rec in xq.tuples():
+    for rec in dq.tuples():
         l.append(l)
 
 @timeit
@@ -145,65 +145,65 @@ def q_sub_list(**kwargs):
 
     qs = Book.objects.filter(name__startswith="B").only('id')
     ids = [rec.id for rec in qs]
-    xq = XQ("(b.name, b.price) Book{id in '@qs_sub'} b", names={"qs_sub": ids}, verbosity=0)
+    dq = DQ("(b.name, b.price) Book{id in '@qs_sub'} b", names={"qs_sub": ids}, verbosity=0)
 
     l = []
-    for rec in xq.tuples():
+    for rec in dq.tuples():
         l.append(l)
 
 @timeit
 def q_params(**kwargs):
 
-    xq = XQ("""(b.id, b.name) Book{b.id == 1 or 
+    dq = DQ("""(b.id, b.name) Book{b.id == 1 or 
     regex(b.name, '$(mynamepattern)')} b """, 
     verbosity=kwargs['verbosity'])
-    print(str(xq.context({'mynamepattern':'I.*'})))
+    print(str(dq.context({'mynamepattern':'I.*'})))
     return
 
-    xq = XQ("""(b.id, b.name) Book{b.id == '$(myid)' or 
+    dq = DQ("""(b.id, b.name) Book{b.id == '$(myid)' or 
     regex(b.name, '$(mynamepattern)')} b """, 
     verbosity=kwargs['verbosity'])
 
     
     
     l = []
-    for rec in xq.context({'myid': 1, 'mynamepattern':'I%'}).tuples():
+    for rec in dq.context({'myid': 1, 'mynamepattern':'I%'}).tuples():
         print(rec)
         
 
 @timeit
 def q_grouping(**kwargs):
             
-    xq = XQ("(b.id, b.name) Book{(b.id == 1 or b.id == 2) and b.id == 3} b ",            
+    dq = DQ("(b.id, b.name) Book{(b.id == 1 or b.id == 2) and b.id == 3} b ",            
             verbosity=kwargs['verbosity'])
             
 
     qs = Book.objects.filter(name__startswith="B").only('id')
     ids = [rec.id for rec in qs][:3]
     l = []
-    for rec in xq.limit(10).tuples():
+    for rec in dq.limit(10).tuples():
         print(rec)
         
 @timeit
 def q_implicit_model(**kwargs):
-    str(XQ("(Book.name, Book.id)"))
+    str(DQ("(Book.name, Book.id)"))
     
 @timeit
 def q_ilike(**kwargs):
-    xq = XQ("(b.name) Book{ilike(b.name, '$(name_pattern)')} b ")
-    print(str(xq.context({"name_pattern": "C%"})))
+    dq = DQ("(b.name) Book{ilike(b.name, '$(name_pattern)')} b ")
+    print(str(dq.context({"name_pattern": "C%"})))
 
     name_pattern = "C%"
-    print(str(xq.rewind().context(locals())))    
+    print(str(dq.rewind().context(locals())))    
     
 @timeit
 def q_rewind(**kwargs):
-    xq = XQ("(b.name) Book b")
+    dq = DQ("(b.name) Book b")
     l = []
-    for rec in xq.tuples():
+    for rec in dq.tuples():
         l.append(rec)
     l = []
-    for rec in xq.rewind().tuples():
+    for rec in dq.rewind().tuples():
         l.append(rec)
     
 @timeit
@@ -219,18 +219,18 @@ def q_rewind_queryset(**kwargs):
 
 @timeit
 def q_conditional_sum(**kwargs):
-    xq = XQ("""
+    dq = DQ("""
     (sum(iif(b.rating >= 3, b.rating, 0)) as below_3, sum(iif(b.rating > 3, b.rating, 0)) as above_3) Book b
         """)
-    for rec in xq.tuples():
+    for rec in dq.tuples():
         print(rec)
 
 
 @timeit
 def q_subquery(**kwargs):
     
-    pubs = XQ("(p.id) Publisher p", name='pubs')
-    books = XQ("(b.name) Book{publisher in '@pubs'} b")
+    pubs = DQ("(p.id) Publisher p", name='pubs')
+    books = DQ("(b.name) Book{publisher in '@pubs'} b")
     if kwargs.get('sql'):
         print(books.query())
     l = []
@@ -248,8 +248,8 @@ def q_subquery_outerref(**kwargs):
 
 @timeit
 def q_count(**kwargs):
-    # print(XQ("(Book.id)").count())
-    print(XQ("(count(Book.id)) Book").value())
+    # print(DQ("(Book.id)").count())
+    print(DQ("(count(Book.id)) Book").value())
 
 @timeit
 def q_count_queryset(**kwargs):

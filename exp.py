@@ -13,7 +13,7 @@ from psycopg2.extras import DictCursor
 import django
 from django.db import connections, models
 from django.db.models.query import QuerySet
-from django.db.models.sql import UpdateQuery
+# from django.db.models.sql import UpdateQuery
 from django.utils.text import slugify
 from django.core.serializers.json import DjangoJSONEncoder
 from django.conf import settings
@@ -23,7 +23,7 @@ from .astpp import parseprint
 from .app_utils import model_field, find_model_class, model_path
 
 
-class XQuery(ast.NodeVisitor):
+class DjangoQuery(ast.NodeVisitor):
 
     # keep a record of named instances
     
