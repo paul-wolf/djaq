@@ -42,7 +42,10 @@ Requirements
 * Django 2.1 or higher
 * Postgresql 
 
-To Install:
+Installation
+------------
+
+From PyPi: 
 
     pip install Djaq
 
