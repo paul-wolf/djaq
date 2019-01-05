@@ -6,11 +6,11 @@ Copyright (c) Paul Wolf
 Djaq provides an alternative query language to QuerySets guided by a different set of targeted behaviours intended to force the developer to be explicit about what she wants to do and provide the fastest possible retrieval methods using the clearest possible expression. Here's an example:
 
     DQ("""(b.name,
-    		b.price as price,
-	    	0.2 as discount,
-		    b.price*0.2, as discount_price, 
-		    b.price - (b.price*0.2) as diff
-		    ) Book{b.price > 50} b""")
+           b.price as price,
+	       0.2 as discount,
+	       b.price*0.2, as discount_price, 
+           b.price - (b.price*0.2) as diff
+          ) Book{b.price > 50} b""")
 
 This will return results with name, price, discount, discount_price, diff fields for books that cost more than 50. 
 
