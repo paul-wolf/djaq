@@ -30,7 +30,8 @@ uploads/
 # Packages
 *.egg
 *.egg-info
-#dist
+dist
+MANIFEST
 build
 eggs
 parts
