@@ -120,7 +120,7 @@ class XQuery(ast.NodeVisitor):
         @property
         def join_operator(self):
             if self.join_type:
-                return XQuery.JoinRelation.JOIN_TYPES[self.join_type]
+                return self.xquery.__class__.JoinRelation.JOIN_TYPES[self.join_type]
             return 'LEFT JOIN'
 
         @property
@@ -176,11 +176,11 @@ class XQuery(ast.NodeVisitor):
         self._context = context
         
         if name:
-            XQuery.directory[name] = self
+            self.__class__.directory[name] = self
 
         # these can be names of other objects
         if names:
-            XQuery.directory.update(names)
+            self.__class__.directory.update(names)
 
         self.using = using
         self.connection = connections[using]
@@ -209,11 +209,11 @@ class XQuery(ast.NodeVisitor):
             
         
         # self.group_by = False
-        if self.vendor in XQuery.aggregate_functions:
-            self.vendor_aggregate_functions = XQuery.aggregate_functions[
+        if self.vendor in self.__class__.aggregate_functions:
+            self.vendor_aggregate_functions = self.__class__.aggregate_functions[
                 self.vendor]
         else:
-            self.vendor_aggregate_functions = XQuery.aggregate_functions[
+            self.vendor_aggregate_functions = self.__class__.aggregate_functions[
                 'unknown']
         self.column_headers = []
 
@@ -269,7 +269,7 @@ class XQuery(ast.NodeVisitor):
                         relation.alias = alias
                     return relation
 
-        relation = XQuery.JoinRelation(model, self, fk_relation, fk_field,
+        relation = self.__class__.JoinRelation(model, self, fk_relation, fk_field,
                                        related_field, join_type, alias)
         self.relations.append(relation)
 
@@ -337,8 +337,8 @@ class XQuery(ast.NodeVisitor):
         return self.push_attribute_relations(attribute_list, relation)
 
     def resolve_name(self, name):
-        if name in XQuery.directory:
-            return XQuery.directory[name]
+        if name in self.__class__.directory:
+            return self.__class__.directory[name]
         # check locals, globals
         else:
             # TODO: throw exception
@@ -424,14 +424,17 @@ class XQuery(ast.NodeVisitor):
 
         if node.s.strip().startswith('@'):
 
-            # A named XQuery, QuerySet, List
+            # A named DjangoQuery, QuerySet, List
             # get source
             name = node.s[1:]
             obj = self.resolve_name(name)
-            if isinstance(obj, XQuery):
+            if isinstance(obj, self.__class__):
                 sql, sql_params = obj.query()
                 self.parameters.extend(sql_params)
             elif isinstance(obj, list):
+                # TODO: not really safe
+                # not even type checking is good here since strings
+                # can be query expressions
                 sql = str(tuple(obj)).strip('(').strip(')')
             elif isinstance(obj, QuerySet):
                 sql, sql_params = self.queryset_source(obj)
@@ -458,7 +461,7 @@ class XQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_Call(self, node):
-        if node.func.id.lower() in XQuery.aggregate_functions[self.vendor]:
+        if node.func.id.lower() in self.__class__.aggregate_functions[self.vendor]:
             self.aggregate()
 
         last_context = self.expression_context
@@ -470,9 +473,9 @@ class XQuery(ast.NodeVisitor):
         self.expression_context = last_context
         fcall = self.fstack.pop()
         funcname = fcall['funcname'].upper()
-        if funcname in XQuery.functions:
+        if funcname in self.__class__.functions:
             # Fill our custom SQL template with arguments
-            t = XQuery.functions[funcname]
+            t = self.__class__.functions[funcname]
             if isinstance(t, str):
                 self.emit(t.format(*fcall['args']))
             elif callable(t):
@@ -853,7 +856,7 @@ class XQuery(ast.NodeVisitor):
         return self.sql
 
     def query(self, context=None):
-        """Return source for xquery and parameters.
+        """Return source for djangoquery and parameters.
 
         """
 
@@ -1019,7 +1022,7 @@ class XQuery(ast.NodeVisitor):
         return self.cursor.fetchone()[0]
         
     def __repr__(self):
-        return "XQuery: {}".format(self.source)
+        return "{}: {}".format(self.__class__.__name__, self.source)
 
     def __str__(self):
         l = []
