@@ -1,4 +1,4 @@
-"""Instance class
+"""Result class
 Thanks to http://code.activestate.com/recipes/577887-a-simple-namespace-class/
 """
 
@@ -11,17 +11,15 @@ CLASS_ATTRS = dir(_Dummy)
 del _Dummy
 
 
-class XQueryInstance(dict):
-    """A dict subclass that exposes its items as attributes.
-
-    Warning: Namespace instances do not have direct access to the
-    dict methods.
+class DQResult(dict):
+    """
+    A class providing a namespace to DjangoQuery result attributes.
 
     """
 
-    def __init__(self, obj, xquery):
+    def __init__(self, obj, dq):
         super().__init__(obj)
-        self.xquery = xquery
+        self.dq = dq
 
     def __dir__(self):
         return tuple(self)

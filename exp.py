@@ -18,7 +18,7 @@ from django.utils.text import slugify
 from django.core.serializers.json import DjangoJSONEncoder
 from django.conf import settings
 
-from .instance import XQueryInstance
+from .result import DQResult
 from .astpp import parseprint
 from .app_utils import model_field, find_model_class, model_path
 
@@ -999,7 +999,7 @@ class XQuery(ast.NodeVisitor):
 
     def objs(self, data=None):
         for d in self.dicts(data):
-            yield XQueryInstance(d, xquery=self)
+            yield DQResult(d, xquery=self)
 
     def csv(self, data=None):
         if not self.cursor:
