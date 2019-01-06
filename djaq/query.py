@@ -6,6 +6,7 @@ import ast
 from ast import AST, iter_fields, parse
 from collections import defaultdict
 import uuid
+import logging
 
 import psycopg2
 from psycopg2.extras import DictCursor
@@ -19,10 +20,48 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.conf import settings
 
 from .result import DQResult
-from .astpp import parseprint
+from .astpp import parseprint, dump as node_string
 from .app_utils import model_field, find_model_class, model_path
 
+logger = logging.getLogger(__name__)
 
+class ContextValidator(object):
+    """Base class for validating context data.
+
+    We assume context data is set before parsing. 
+
+    """
+
+    def __init__(self, dq, context):
+        self.data = context
+        self.dq = dq
+        
+    def get(self, key, value):
+        """Get the value for key.
+
+        Override this method to clean, 
+        throw exceptions, cast, etc. for a specific value
+
+        """
+        return value
+
+
+    def context(self):
+        """Copy the context data. 
+
+        Override this to customise context data processing.
+
+        """
+        d = {}
+        for k, v in self.data.items():
+            d[k] = self.get(k, v)
+        return d
+
+
+def concat(funcname, args):
+    """Return args spliced by sql concat operator."""
+    return " || ".join(args)
+    
 class DjangoQuery(ast.NodeVisitor):
 
     # keep a record of named instances
@@ -33,6 +72,7 @@ class DjangoQuery(ast.NodeVisitor):
         "LIKE": "{} LIKE {}",
         "ILIKE": "{} ILIKE {}",
         "REGEX": "{} ~ {}",
+        "CONCAT": concat,
     }
     
     aggregate_functions = {
@@ -115,6 +155,9 @@ class DjangoQuery(ast.NodeVisitor):
 
         def is_model(self, model):
             """Decide if model is equal to self's model."""
+            if model is None:
+                self.dump()
+                raise Exception("Model is None")
             return model_path(model) == model_path(self.model)
 
         @property
@@ -128,15 +171,20 @@ class DjangoQuery(ast.NodeVisitor):
             s = ''
 
             # print(self.fk_field.related_fields)
-            for related_fields in self.fk_field.related_fields:
-                # print("related_fields")
-                # print(related_fields)
-                if s:
-                    s += " AND "
-                fk = related_fields[0]
-                f = related_fields[1]
-                s += '{}.{} = {}.{}'.format(fk.model._meta.db_table, fk.column,
-                                            f.model._meta.db_table, f.column)
+            if hasattr(self.fk_field, 'related_fields'):
+                for related_fields in self.fk_field.related_fields:
+                    # print("related_fields")
+                    # print(related_fields)
+                    if s:
+                        s += " AND "
+                    fk = related_fields[0]
+                    f = related_fields[1]
+                    s += '"{}"."{}" = "{}"."{}"'.format(fk.model._meta.db_table, fk.column,
+                                                f.model._meta.db_table, f.column)
+            # might be a ManyToManyField
+            else:
+                raise Exception("Cannot support complex joins ATM")
+                        
             return "({})".format(s)
 
         def group_by_columns(self):
@@ -195,7 +243,6 @@ class DjangoQuery(ast.NodeVisitor):
         self.sql = None
         self.cursor = None
         self.col_names = None
-        self.relations = []
         self.code = ''
         self.stack = []
         self.names = []
@@ -206,7 +253,9 @@ class DjangoQuery(ast.NodeVisitor):
         self.function_context = ''
         self.fstack = []  # function stack
         self.parameters = []  # query parameters
-            
+        self.where_marker = 0
+        self.placeholder_pattern = re.compile(r"\'\$\(([\w]*)\)\'")
+        self.context_validator_class = ContextValidator
         
         # self.group_by = False
         if self.vendor in self.__class__.aggregate_functions:
@@ -311,12 +360,12 @@ class DjangoQuery(ast.NodeVisitor):
         if relation and not len(attribute_list):
             # attr is the terminal attribute
             field = relation.model._meta.get_field(attr)
-            return "{}.{}".format(relation.model._meta.db_table, field.column)
+            return '"{}"."{}"'.format(relation.model._meta.db_table, field.column)
         elif not relation and not len(attribute_list):
             # attr is a stand-alone name
             model = self.relations[-1].model
             field = model._meta.get_field(attr)
-            return "{}.{}".format(model._meta.db_table, field.column)
+            return '"{}"."{}"'.format(model._meta.db_table, field.column)
         elif not relation and len(attribute_list):
             # this happens when we have something like 'Book.name'
             # therefore attr must be a model name or alias
@@ -325,10 +374,6 @@ class DjangoQuery(ast.NodeVisitor):
                 model = find_model_class(attr)
                 relation = self.add_relation(model=model)
             return self.push_attribute_relations(attribute_list, relation)
-
-        # print("*"*66)
-        # print(attribute_list)
-        # input("press key 33333")
 
         # if relation and attributes in list
         # this means attr is a foreign key
@@ -389,6 +434,8 @@ class DjangoQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_Expr(self, node):
+        logger.debug("*****************")
+        logger.debug(node_string(node))
         # Do not emit any parens yet
         # because the relation might not have been created yet
         # self.emit("(")
@@ -432,9 +479,9 @@ class DjangoQuery(ast.NodeVisitor):
                 sql, sql_params = obj.query()
                 self.parameters.extend(sql_params)
             elif isinstance(obj, list):
-                # TODO: not really safe
+                # TODO: not safe
                 # not even type checking is good here since strings
-                # can be query expressions
+                # can be sql expressions
                 sql = str(tuple(obj)).strip('(').strip(')')
             elif isinstance(obj, QuerySet):
                 sql, sql_params = self.queryset_source(obj)
@@ -543,6 +590,16 @@ class DjangoQuery(ast.NodeVisitor):
         ast.NodeVisitor.visit(self, node.right)
         self.emit(")")
 
+    def visit_NameConstant(self, node):
+        if node.value is True:
+            self.emit('TRUE')
+        elif node.value is False:
+            self.emit('FALSE')
+        elif node.value is None:
+            self.emit('NULL')
+        else:
+            raise Exception("Unknown value: {}".format(node.value))
+        
     def visit_Div(self, node):
         self.emit(" / ")
         ast.NodeVisitor.generic_visit(self, node)
@@ -552,7 +609,6 @@ class DjangoQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_BoolOp(self, node):
-        # parseprint(node)
         self.emit("(")
         v = node.values.pop(0)
         while v:
@@ -560,12 +616,23 @@ class DjangoQuery(ast.NodeVisitor):
             v = node.values.pop(0) if len(node.values) else None
             if v:
                 ast.NodeVisitor.visit(self, node.op)
+            # check if we have a named parameter
+            # if yes, but no context data, drop the condition
+            
         self.emit(")")
+        # look back to see if we have
+        # print("****************")
+        # for m in finditer(self.placeholder_pattern, self.relations[self.relation_index].where[l:]):
+        #     if m:
+        #         pass
+        # print(self.relations[self.relation_index].where[l:])
         
     def visit_And(self, node):
+        self.where_marker = len(self.relations[self.relation_index].where)
         self.emit(" AND ")
 
     def visit_Or(self, node):
+        self.where_marker = len(self.relations[self.relation_index].where)        
         self.emit(" OR ")        
 
     def visit_Tuple(self, node):
@@ -590,7 +657,7 @@ class DjangoQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_Attribute(self, node):
-
+        logger.debug(node_string(node))
         self.stack.append(node.attr)
         for child in ast.iter_child_nodes(node):
             if isinstance(child, ast.Attribute):
@@ -646,7 +713,9 @@ class DjangoQuery(ast.NodeVisitor):
         """Get select string.
         Return string once parens are balanced.
         First character needs to be an opening parens.
+        
         """
+        s = s.strip()
         i = 0
         in_parens = 0
         select = ''
@@ -735,7 +804,6 @@ class DjangoQuery(ast.NodeVisitor):
             # print("Parsing relation: {}".format(relation_source))
             index, join_type, relation_source = self.get_join_type(relation_source)            
             index, select_src, relation_source = self.get_select(relation_source)
-            # print(relation_source)
             m = re.match(pattern, relation_source.strip())
             if m:
                 model_name = m.group(1)
@@ -757,7 +825,7 @@ class DjangoQuery(ast.NodeVisitor):
                 order_by_direction = None
                 alias = None
             else:
-                raise Exception("Invalid source")
+                raise Exception("Invalid source: ---{}---".format(relation_source))
 
             if self.verbosity > 1:
                 print(
@@ -893,35 +961,12 @@ class DjangoQuery(ast.NodeVisitor):
             self._context.update(context)
         return self
     
+    def validator(self, validator_class):
+        """Set validator_class that 
+        will check and mutate context variables."""
+        self.context_validator_class = validator_class
+        return self
         
-    def pg_cursor(self, using=None):
-        """
-
-        'dbname=test user=postgres password=secret'
-
-        dbname – the database name (database is a deprecated alias)
-        user – user name used to authenticate
-        password – password used to authenticate
-        host – database host address (defaults to UNIX socket if not provided)
-        port – connection port number (defaults to 5432 if not provided)
-        """
-
-        using = using if using else self.using
-
-        data = {}
-        data['name'] = settings.DATABASES[using]['NAME']
-        data['user'] = settings.DATABASES[using]['USER']
-        if 'PASSWORD' in settings.DATABASES[using]:
-            data['password'] = settings.DATABASES[using]['PASSWORD']
-        dsn = "dbname={name} user={user} password={password}".format(**data)
-        dsn = "dbname={name} user={user}".format(**data)
-        conn = psycopg2.connect(dsn)
-        cursor_name = uuid.uuid4().hex
-        cursor = conn.cursor(cursor_name)
-        cursor.itersize = 100
-        return cursor
-
-    
     def execute(self, context=None, count=False):
         """Create a cursor and execute the sql."""
 
@@ -932,15 +977,10 @@ class DjangoQuery(ast.NodeVisitor):
         # sql = sql.replace("'%s'", "%s")
 
         # now replace variables placeholders to be valid dict placeholders
-        p = re.compile(r"\'\$\(([\w]*)\)\'")
-        sql = re.sub(p, lambda x: "%({})s".format(x.group(1)), sql)
+        sql = re.sub(self.placeholder_pattern, lambda x: "%({})s".format(x.group(1)), sql)
 
-        # print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
-        # print(sql)
         conn = connections[self.using]
         cursor = conn.cursor()
-        # print(cursor.mogrify(sql, self._context))
-        # print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 
         self.cursor = self.connection.cursor()
 
@@ -948,12 +988,15 @@ class DjangoQuery(ast.NodeVisitor):
             if count:
                 sql = "SELECT COUNT(*) FROM ({}) c".format(sql)
             if len(self._context):
+                context = self.context_validator_class(self, self._context).context()
+                logger.debug(cursor.mogrify(sql, context))
                 if self.verbosity:
-                    print("sql={}, params={}".format(sql, self._context))
-                self.cursor.execute(sql, self._context)
+                    print("sql={}, params={}".format(sql, context))
+                self.cursor.execute(sql, context)
             else: 
                 if self.verbosity:
                     print("sql={}".format(sql))
+                logger.debug(sql)                    
                 self.cursor.execute(sql)
         except django.db.utils.ProgrammingError as dbe:
             print(dbe)
@@ -998,9 +1041,23 @@ class DjangoQuery(ast.NodeVisitor):
             yield json.dumps(d, cls=encoder)
 
     def objs(self, data=None):
-        for d in self.dicts(data):
-            yield DQResult(d, xquery=self)
+        if not self.cursor:
+            self.execute(data)
 
+        while True:
+            row = self.cursor.fetchone()
+            if row is None:
+                break
+            row_dict = dict(zip(self.column_headers, row))
+            yield DQResult(row_dict, dq=self)
+
+    def next(self, data=None):
+        if not self.cursor:
+            self.execute(data)
+        row = self.cursor.fetchone()
+        row_dict = dict(zip(self.column_headers, row))
+        return DQResult(row_dict, dq=self)
+        
     def csv(self, data=None):
         if not self.cursor:
             self.execute(data)

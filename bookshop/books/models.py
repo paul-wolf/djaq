@@ -21,7 +21,8 @@ class Book(models.Model):
     authors = models.ManyToManyField(Author)
     publisher = models.ForeignKey(Publisher, on_delete=models.CASCADE)
     pubdate = models.DateField()
-
+    in_print = models.BooleanField(default=True)
+    
     def __str__(self):
         return self.name
 

@@ -145,6 +145,12 @@ LOGGING = {
             'filename': os.path.join(BASE_DIR, 'log/main.log'),
             'formatter': 'verbose',
         },
+        'parser': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'log/parser.log'),
+            'formatter': 'verbose',
+        },
     },
     'loggers': {
         'django': {
@@ -154,6 +160,11 @@ LOGGING = {
         },
         'db': {
             'handlers': ['main'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'djaq.query': {
+            'handlers': ['parser'],
             'level': 'DEBUG',
             'propagate': True,
         },

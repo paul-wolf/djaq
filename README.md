@@ -3,7 +3,7 @@ Djaq: Django Queries
 
 Copyright (c) Paul Wolf
 
-Djaq provides an alternative query language to QuerySets guided by a different set of targeted behaviours intended to force the developer to be explicit about what she wants to do and provide the fastest possible retrieval methods using the clearest possible expression. Here's an example:
+Djaq (pronounced "jack") provides an alternative query language to QuerySets guided by a different set of targeted behaviours intended to force the developer to be explicit about what she wants to do and provide the fastest possible retrieval methods using the clearest possible expression. Here's an example:
 
     DQ("""(b.name,
            b.price as price,
@@ -23,7 +23,7 @@ The Django ORM is a great tool for database access. But it is driven by a specif
 
 Some important notes before you try it: 
 
-* Djaq sits on top of Django Models. It is an alternative to the Django Queryset class and it only works with Django Models at this time. 
+* Djaq sits on top of Django Models. It is an alternative to the Django Queryset class and it only works with Django Models. 
 * It is entirely compatible with QuerySets being used in the same application.
 * Djaq only enables queries. It does not provide data update features, like creating new objects or modifying existing ones. 
 * It's a work-in-progress. It is not refined or tested enough to use in a production environment. 
@@ -378,6 +378,43 @@ To get all books starting with 'Bar'. Or:
     DQ("(b.name) Book{like(upper(b.name), upper('$(name_search)'))} b").context(request.POST)
 
 Provided that `request.POST` has a `name_search` key/value. 
+
+
+You can provide a validation class that will return context variables. The default class used is called `ContextValidator()`. You can override this to provide a validator that raises exceptions if data is not valid or mutates the context data, like coercing types from `str` to `int`: 
+
+```
+class MyContextValidator(ContextValidator):
+    def get(self, key, value):
+        if key == 'order_no':
+            return int(value)
+        return value
+        
+    def context(self):
+        if not 'order_no' in self.data:
+            raise Exception("Need order no")
+        self.super().context()
+```
+
+Then add the validator:
+
+```
+order_no = "12345"
+DQ("(o.order_no, o.customer) Orders{o.order_no == '%(order_no)')} b")
+    .validator(MyContextValidator)
+    .context(locals())
+    .tuples()
+	```
+
+Here's an example providing a callable:
+
+```
+def concat(funcname, args):
+    """Return args spliced by sql concat operator."""
+    return " || ".join(args)
+
+DjangoQuery.functions['CONCAT'] = concat
+```
+
 
 Column expressions
 ------------------

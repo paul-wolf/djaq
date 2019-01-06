@@ -20,7 +20,7 @@ class DQResult(dict):
     def __init__(self, obj, dq):
         super().__init__(obj)
         self.dq = dq
-
+        
     def __dir__(self):
         return tuple(self)
 
@@ -41,6 +41,22 @@ class DQResult(dict):
     def __delattr__(self, name):
         del self[name]
 
+    def model_instance(self):
+        """Return model instance.
+        
+        Causes at least one query to be sent to db.
+
+        Requires the pk to be part of results.
+
+        """
+        pk = self.dq.relations[0].model._meta.pk.name
+        if pk in self:
+            return self.dq.relations[0].model.objects.get(pk=self[pk])
+        raise Exception('Primary key not in results: {}'.format(pk))
+        
+    def cursor_descriptor(self):
+        return self.dq.cursor.description
+    
     #------------------------
     # "copy constructors"
 

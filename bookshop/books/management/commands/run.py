@@ -17,10 +17,10 @@ class Command(BaseCommand):
                             dest='funcname',
                             type=str)
 
-        parser.add_argument('--verbose',
-                            default=0, 
+        parser.add_argument('--v',
                             action='store',
-                            dest='verbosity',
+                            dest='verbose',
+                            default=0,                             
                             type=int)
         
         parser.add_argument('--sql',
@@ -30,4 +30,5 @@ class Command(BaseCommand):
 
 
     def handle(self, *args, **options):
+
         run(options)
