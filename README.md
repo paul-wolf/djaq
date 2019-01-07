@@ -415,7 +415,7 @@ DQ("(o.order_no, o.customer) Orders{o.order_no == '%(order_no)')} b")
     .validator(MyContextValidator)
     .context(locals())
     .tuples()
-	```
+```
 
 
 Column expressions
