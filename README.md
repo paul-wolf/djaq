@@ -498,7 +498,8 @@ Datetimes
 
 Datetimes are provided as strings in the iso format that your backend expects, like '2019-01-01 18:00:00'. 
 
-##Constants
+Constants
+---------
 
 `None`, `True`, `False` are replaced in SQL with `NULL`, `TRUE`, `FALSE`. All of the following work: 
 
@@ -551,15 +552,17 @@ Now find all book names starting with 'B':
 
 Notice, we always want to use upper case for the function name when defining the function. Usage of a function is then case-insensitive. You may wish to make sure you are not over-writing existing functions. "REGEX" already exists, for instance. 
 
-You can also provide a `callable` to DjangoQuery.functions. The callable needs to take two arguments: the function name and a list of positional parameters and it must return SQL as a string that can either represent a column expression or some value expression from the underlying backend. 
+You can also provide a `callable` to `DjangoQuery.functions`. The callable needs to take two arguments: the function name and a list of positional parameters and it must return SQL as a string that can either represent a column expression or some value expression from the underlying backend. 
 
-#DB Portability
+DB Portability
+--------------
 
 The intent is to provide broad portability comparable to QuerySets. Various steps need to be taken to make Djaq more portable (it will be most compatible at the start with Postgresql). For instance, the ability to access db functions directly could lead to dependence on a particular DB's SQL. But this can be largely mitigated by providing custom functions for all the fuctions that you wish to use. 
 
 We need to make the custom function feature provide different sets of functions per backend, a planned development. But ultimately the choice to use proprietary functions is something I think should be left to the user. Even with Django QuerySets there are various ways to use proprietary features of a db backend. 
 
-##Future
+Future
+------
 
 Selective todo list:
 
