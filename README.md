@@ -114,7 +114,7 @@ There are several generators to choose from to iterate records:
     DjangoQuery.json()  # return json objects
     DjangoQuery.dicts() # dicts
     DjangoQuery.tuples() # tuples of values
-    DjangoQuery.objs()  # We return for each record, an instance of XQueryInstance
+    DjangoQuery.objs()  # We return for each record, an instance of DQResult
 
 The DQResult is a namespace for results:
 
@@ -224,7 +224,7 @@ Or use an iterator:
 
 The reason for Djaq is to target a different set of concerns about data retrieval rather than try to be better than the QuerySet class. There are pros and cons to both. Very few queries in Djaq cannot be produced in QuerySets although mostly the Djaq syntax is more straightforward. The Djaq syntax is more unified whereas QuerySets require a somewhat sprawling set of techniques like aggregate(), Q() expressions and `F()` expressions to give access to complex column expressions. 
 
-Let's quickly run through a set of examples comparing Djaq XQueries to QuerySets. 
+Let's quickly run through a set of examples comparing Djaq DjangoQueries to QuerySets. 
 
 Get the average price of books:
 
