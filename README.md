@@ -9,7 +9,8 @@ Djaq (pronounced "jack") provides an alternative query language to QuerySets gui
            b.price as price,
 	       0.2 as discount,
 	       b.price*0.2, as discount_price, 
-           b.price - (b.price*0.2) as diff
+           b.price - (b.price*0.2) as diff,
+		   Publisher.name
           ) Book{b.price > 50} b""")
 
 This will return results with name, price, discount, discount_price, diff fields for books that cost more than 50. 
@@ -50,6 +51,8 @@ From PyPi:
     pip install Djaq
 
 This will install it into your Django project, probably into your virtual environment.
+
+Since Djaq is a new project that is evolving rapidly, you might want to use the source version rather than the pip module.
 
 Sample Project
 --------------
@@ -94,7 +97,6 @@ We provide a script to create some sample data:
     ./manage.py build_data --book-count 2000
 
 This creates 2000 books and associated data. 
-
 
 The example app comes with a management command to run
 queries:
@@ -348,6 +350,16 @@ We can simplify further by creating a new function. The IIF function is defined 
         sumif(b.rating >= 5, b.rating, 0) as above_5
         ) Book b""")
 
+Here's an example providing a function:
+
+```
+def concat(funcname, args):
+    """Return args spliced by sql concat operator."""
+    return " || ".join(args)
+
+DjangoQuery.functions['CONCAT'] = concat
+```
+
 Parameters
 ----------
 
@@ -405,30 +417,11 @@ DQ("(o.order_no, o.customer) Orders{o.order_no == '%(order_no)')} b")
     .tuples()
 	```
 
-Here's an example providing a callable:
-
-```
-def concat(funcname, args):
-    """Return args spliced by sql concat operator."""
-    return " || ".join(args)
-
-DjangoQuery.functions['CONCAT'] = concat
-```
-
 
 Column expressions
 ------------------
 
 Doing column arithmetic is much more natural and does not require the voodoo of F expressions: 
-
-    # QuerySet
-    Book.objects.all()
-                .annotate(discount=0.2)
-                        .annotate(price=Sum('price'))
-                        .annotate(discount_price=F('price') * F('discount')
-                        .annotate(diff=F('price') - F('discount_price')) 
-
-
 
     # Djaq
     DQ("""(b.name,
@@ -505,6 +498,17 @@ Datetimes
 
 Datetimes are provided as strings in the iso format that your backend expects, like '2019-01-01 18:00:00'. 
 
+##Constants
+
+`None`, `True`, `False` are replaced in SQL with `NULL`, `TRUE`, `FALSE`. All of the following work: 
+
+```
+DQ("(b.id, b.name) Book{in_print is True} b")
+DQ("(b.id, b.name) Book{in_print is not True} b")
+DQ("(b.id, b.name) Book{in_print is False} b")
+DQ("(b.id, b.name) Book{in_print == True} b")
+```
+
 Slicing
 -------
 
@@ -521,13 +525,13 @@ Rewind cursor
 
 You can rewind the cursor but this is just executing the SQL again: 
 
-    for rec in xq.tuples():
+    for rec in dq.tuples():
         print(rec)
     
-    # now, calling `xq.tuples()` returns nothing
+    # now, calling `dq.tuples()` returns nothing
     
     # get fresh cursor
-    for rec in xq.rewind().tuples():
+    for rec in dq.rewind().tuples():
         print(rec)
 
 If you call `DjangoQuery.context(data)`, that will effectively rewind the cursor since an entirely new query is created and the implementation currently doesn't care if `data` is the same context as previously supplied.
@@ -549,50 +553,20 @@ Notice, we always want to use upper case for the function name when defining the
 
 You can also provide a `callable` to DjangoQuery.functions. The callable needs to take two arguments: the function name and a list of positional parameters and it must return SQL as a string that can either represent a column expression or some value expression from the underlying backend. 
 
-#Compare SQLAlchemy, Django QuerySet, Djaq
-
-https://www.pythoncentral.io/overview-sqlalchemys-expression-language-orm-queries/
-
-"Since the Expression Language provides lower-level Python structures that mimic a backend-neutral SQL, it feels almost identical to writing actual SQL but in a Pythonic way."
-
-Django makes similar claims about data access being "Pythonic". I struggle with both of these assertions. In my opinion, there is nothing especially "Pythonic" about the APIs of SQLAlchemy or Django. They are Python APIs but they are not exemplary in their applicaiton of Python which is what "Pythonic" means. 
-
-In contrast, Djaq is the exact inverse of those ORM APIs. It is a language more than an API. And that language is mostly directly expressed as pseudo Python statements. 
-
 #DB Portability
 
-The intent is to provide broad portability comparable to QuerySets. Various steps need to be taken to make Djaq more portable (it will be most compatible at the start with Postgresql). For instance, the ability to access db functions directly could lead to dependence on a particular DB's SQL. But this can be largely mitigated by providing custom functions for all the fuctions that you wish to use. We need to make the custom function feature provide different sets of functions per backend, a planned development. But ultimately the choice to use proprietary functions is something I think should be left to the user. Even with Django QuerySets there are various ways to use proprietary features of a db backend. 
+The intent is to provide broad portability comparable to QuerySets. Various steps need to be taken to make Djaq more portable (it will be most compatible at the start with Postgresql). For instance, the ability to access db functions directly could lead to dependence on a particular DB's SQL. But this can be largely mitigated by providing custom functions for all the fuctions that you wish to use. 
 
-Djaq comparative weaknesses
----------------------------
+We need to make the custom function feature provide different sets of functions per backend, a planned development. But ultimately the choice to use proprietary functions is something I think should be left to the user. Even with Django QuerySets there are various ways to use proprietary features of a db backend. 
 
-Just as QuerySets exhibit weaknesses as a result of feature priorities, so does Djaq. But aside from incomplete features, the biggest shortcoming is that it will be missing many things present in the Django API, especially for edge cases and those myriad smaller cases that are only exposed through years of experience. 
+##Future
 
-* You might find that Querysets are more "composable". You can programmatically build queries based on conditions more easily. The classic use case is building a query based on form submission for search. You iterate over the Request dict, building the query step-by-step. You can do this with Djaq but you might find it more natural with Querysets. See Future for potential solutions in Djaq.
-
-* The DQResult class does not handle m2m fields in any way at this time. TBD. It also does not handle automagic relationship following (by design) or backwards relations. 
-
-* Currently, Djaq is a proof of concept. It has not undergone the rigorous testing required to give confidence it will work as described. You might think, "it is only for SELECT queries, how damaging can that be?". Well, think if a query were to return wrong or unexpected information, like a filter is broader than you expected. You decide how damaging that could be for your application.
-
-* Djaq only handles SELECT queries. It has no functionality for creating or updating data. 
-
-* Djaq does not fit into the Django ecosystem as well as Querysets. For instance, "Querysets" are really several kinds of class that represent lists and other objects. The Django framework is made to work with QuerySets and therefore may offer more options for some operations. 
-
-* All the above examples have been tested and work with Postgresql and to a lesser extent tested with SQLite3. They might work with MySQL, Oracle, etc. Maybe. Obviously, the Django ORM has been extensively tested with all the databases it claims to support. 
-
-Future
-------
-
-Things that would be interesting going forward:
+Selective todo list:
 
 * Improve SQL generation 
+* Support M2M relations
+* Support reverse relations
 * A new, separate object type for sliceable results access
-* Type coercion and type checking when providing context data, like: `DQ("...").validation_class(myclass).context(data)`
 * Direct support for GraphQL
 * Mutable Djaq queries based on context data. For instance, removing elements of a query where context data is not provided
-
-Summary
-=======
-
-The purpose of Djaq is to provide an *optional* alternative to QuerySets that provides more explicit control over query behaviour and a more natural, Python-based language that is more readable and learnable. Users don't need to choose one or the other. Djaq is just a separate path that might be more beneficial depending on how specific developers wish to work.
 

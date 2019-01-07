@@ -198,6 +198,9 @@ class DjangoQuery(ast.NodeVisitor):
 
         def __str__(self):
             return "Relation: {}".format(model_path(self.model))
+        
+        def __repr__(self):
+            return "<{}>: {}".format(self.__class__.__name__, model_path(self.model))
 
     def find_relation_from_alias(self, alias):
         for relation in self.relations:
@@ -887,9 +890,14 @@ class DjangoQuery(ast.NodeVisitor):
             for r in self.relations:
                 print("Relation        : {}".format(str(r)))
                 r.dump()
+                
+        return self.generate()
 
+
+    def generate(self):
+        """Generate the SQL. Assumes source is parsed."""
+        
         self.relations.reverse()
-
         master_relation = self.relations.pop()
         if self.verbosity > 2:
             master_relation.dump()
@@ -921,6 +929,7 @@ class DjangoQuery(ast.NodeVisitor):
         if self._offset:
             s += " OFFSET {}".format(int(self._offset))
         self.sql = s
+        self.master_relation = master_relation
         return self.sql
 
     def query(self, context=None):
