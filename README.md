@@ -36,7 +36,7 @@ Reasons why Djaq might be a reasonable alternative to Querysets for some use cas
 * Eschew laziness: don't trigger queries on behalf of the user except just once in an explicit and predictable manner
 * Default to cursor semantics rather than sliceable lists of objects for better performance
 
-Having said all that, bear in mind that Djaq is at an early stage of development. It works on the basic level described below in a pretty stable way, but if you push it, get ready to experience unhelpful exceptions, undocument features, unexplainable behaviour, half-baked ideas, etc. 
+Having said all that, bear in mind that Djaq is at an early stage of development. It works on the basic level described below in a pretty stable way, but if you push it, get ready to experience unhelpful exceptions, undocumented features, unexplainable behaviour, half-baked ideas, etc. 
 
 For a more complete statement of the motivation for Djaq, see https://medium.com/@paul.wolf/djaq-a-different-concept-for-django-queries-92667af0fd17.
 
@@ -176,7 +176,7 @@ Let's compare getting all the books and iterating over them:
         
     # get all books with Djaq
     dq = DQ("(b.id, b.name) Book b")
-    for book in xq.tuples():
+    for book in dq.tuples():
         print(book)
 
 Notice, with Djaq we provided explicit fields that we want returned. It might look slightly more complicated but in fact most queries are less verbose in Djaq:
@@ -281,20 +281,13 @@ compared to:
 
     Book.objects.aggregate(Avg('price'), Max('price'), Min('price'))
 
-The DjangoQuery class comes with these generators:
-
-`tuples()`: return tuples
-`json()`: return json representation of each result row
-`dicts()`: return a dict for each result row
-`csv()`: return a csv respresentation of the result row
-
 Just as there is a ModelInstance class in Django, we have a DQResult class:
 
 `objs()`: return a DQResult for each result row, basically a namespace for the object:
 
 ```
 dq = DQ("(b.id, b.name, Publisher.name as publisher) Book b")
-for book in xq.objs():
+for book in dq.objs():
     title = book.name
     publisher = book.publisher
     ...
@@ -463,8 +456,8 @@ You can reference subqueries within a Djaq expression using
 
 You can use an IN clause with the keyword `in` (note lower case). Create one DjangoQuery and reference it with `@queryname`:
 
-    DQ("(b.id) Book{name == 'B*'} b", name='xq_sub')
-    dq = DQ("(b.name, b.price) Book{id in '@xq_sub'} b")
+    DQ("(b.id) Book{name == 'B*'} b", name='dq_sub')
+    dq = DQ("(b.name, b.price) Book{id in '@dq_sub'} b")
 
 Note that you have to pass a name to the DjangoQuery to reference it later. We can also use the `data` parameter to pass a QuerySet to the DjangoQuery: 
 
@@ -490,7 +483,7 @@ The following do pretty much the same thing:
     DQ("(p.id) Publisher p", name='pubs')
     DQ("(b.name) Book{publisher in '@pubs'} b")
 
-Obviously, in both cases, you would be filtering Publisher to make it actually useful, but the effect and verbosity can be extrapolated as roughly the same as above.
+Obviously, in both cases, you would be filtering Publisher to make it actually useful, but the effect and verbosity can be extrapolated from the above.
 
 Order by
 --------
