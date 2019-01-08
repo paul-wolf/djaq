@@ -88,6 +88,8 @@ class TestDjaq(TestCase):
 
     def test_aggregate_funcs(self):
         dq = DQ("(avg(b.price), max(b.price), min(b.price)) Book b")
+        for r in dq.dicts():
+            self.assertTrue(isinstance(r, dict))
 
 
     def test_subquery(self):
@@ -109,7 +111,9 @@ class TestDjaq(TestCase):
 
     def test_expression_grouping(self):
         dq = DQ("(b.id, b.name) Book{(b.id == 1 or b.id == 2) and b.id == 3} b ")
-
+        for t in dq.tuples():
+            pass
+        
     def test_implicit_model(self):
         dq = DQ("(Book.name, Book.id)")
         self.assertEquals(dq.count(), 10)
@@ -126,4 +130,15 @@ class TestDjaq(TestCase):
         pubs = DQ("(p.id) Publisher p", name='pubs')
         books = DQ("(b.name) Book{publisher in '@pubs'} b")
         
+    def test_complex2(self):
+        dq = DQ("""(b.name,
+        b.price as price,
+        0.2 as discount,
+        b.price * 0.2 as discount_price, 
+        b.price - (b.price * 0.2) as diff,
+        Publisher.name as publisher
+        ) Book{b.price > 7} b""")
+        for d in dq.json():
+            json.loads(d)
+            
         

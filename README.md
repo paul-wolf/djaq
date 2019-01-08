@@ -8,7 +8,7 @@ Djaq (pronounced "jack") provides an alternative query language to QuerySets gui
     DQ("""(b.name,
            b.price as price,
 	       0.2 as discount,
-	       b.price*0.2, as discount_price, 
+	       b.price * 0.2 as discount_price, 
            b.price - (b.price*0.2) as diff,
 		   Publisher.name
           ) Book{b.price > 50} b""")
@@ -36,6 +36,10 @@ Reasons why Djaq might be a reasonable alternative to Querysets for some use cas
 * Eschew laziness: don't trigger queries on behalf of the user except just once in an explicit and predictable manner
 * Default to cursor semantics rather than sliceable lists of objects for better performance
 
+Having said all that, bear in mind that Djaq is at an early stage of development. It works on the basic level described below in a pretty stable way, but if you push it, get ready to experience unhelpful exceptions, undocument features, unexplainable behaviour, half-baked ideas, etc. 
+
+For a more complete statement of the motivation for Djaq, see https://medium.com/@paul.wolf/djaq-a-different-concept-for-django-queries-92667af0fd17.
+
 Requirements
 ------------
 
@@ -50,14 +54,14 @@ From PyPi:
 
     pip install Djaq
 
-This will install it into your Django project, probably into your virtual environment.
+This will install it into your Django project, hopefully into your virtual environment.
 
-Since Djaq is a new project that is evolving rapidly, you might want to use the source version rather than the pip module.
+Since Djaq is a new project that is evolving rapidly, you might want to use the source version rather than the pip module. Please get in touch if you want me to push a new PyPi version. 
 
 Sample Project
 --------------
 
-If you want to use Djaq right away in your own test project and you feel confident, crack on. In that case skip the following instructions for using the sample project. There is a sample Django project, `bookshop`. If you want to try this, clone the django repo:
+If you want to use Djaq right away in your own test project and you feel confident, crack on. In that case skip the following instructions for using the sample Bookshop project. If you want to try this, clone the django repo:
 
     git clone git@github.com:paul-wolf/djaq.git
     cd djaq/bookshop
@@ -87,7 +91,8 @@ DATABASES = {
     },
 ```
 	
-So, it assumes peer authentication. Now you can migrate. Make sure the virtualenv is activated! 
+So, it assumes peer authentication. Change to suite your needs. Now
+you can migrate. Make sure the virtualenv is activated!
 
 
     ./manage.py migrate
@@ -102,27 +107,6 @@ The example app comes with a management command to run
 queries:
 
     ./manage.py djaq "(Publisher.name, max(Book.price) - round(avg(Book.price)) as diff) Book b"  --format json
-
-If using in code, you would do this:
-
-    from djaq import DjangoQuery as DQ
-	dq = DQ("(avg(b.price) as average_book_price) Book b"
-	str(dq)
-
-There are several generators to choose from to iterate records:
-
-    DjangoQuery.json()  # return json objects
-    DjangoQuery.dicts() # dicts
-    DjangoQuery.tuples() # tuples of values
-    DjangoQuery.objs()  # We return for each record, an instance of DQResult
-
-The DQResult is a namespace for results:
-
-    for result in DQ('(Book.name, Book.price)').objs():
-        print(result.name)
-        print(result.price)
-
-etc.
 
 Output of the command should look like this:
 
@@ -142,6 +126,20 @@ SELECT books_publisher.name, (max(books_book.price) - round(avg(books_book.price
 ```
 
 Notice the SQL used to retrieve data is printed first. 
+
+There is also a management command to run some comparisons with QuerySets:
+
+    ./manage.py run
+	▶ ./manage.py run
+	===========> q_all_books  475.89 ms
+	===========> q_all_books_queryset  1507.89 ms
+	===========> q_avg_price  24.93 ms
+	===========> q_avg_price_queryset  25.06 ms
+	===========> q_books_avg_min_max  31.37 ms
+	===========> q_books_avg_min_max_queryset  28.08 ms
+	...
+
+You can add your own. It mainly makes sense if you have a large enough sample dataset. 
 
 Here are some examples comparing Djaq to QuerySets. Note that throughout, I will use the exact models provided as examples here: https://docs.djangoproject.com/en/2.1/topics/db/aggregation/. For convenience: 
 
@@ -222,7 +220,20 @@ Or use an iterator:
     for t in DQ("(count(Book.id)) Book").tuples():
         print(t)
 
-The reason for Djaq is to target a different set of concerns about data retrieval rather than try to be better than the QuerySet class. There are pros and cons to both. Very few queries in Djaq cannot be produced in QuerySets although mostly the Djaq syntax is more straightforward. The Djaq syntax is more unified whereas QuerySets require a somewhat sprawling set of techniques like aggregate(), Q() expressions and `F()` expressions to give access to complex column expressions. 
+There are several generators to choose from to iterate records:
+
+    DjangoQuery.json()  # return json objects
+    DjangoQuery.dicts() # dicts
+    DjangoQuery.tuples() # tuples of values
+    DjangoQuery.objs()  # We return for each record, an instance of DQResult
+
+The DQResult is a namespace for results:
+
+    for result in DQ('(Book.name, Book.price)').objs():
+        print(result.name)
+        print(result.price)
+
+etc.
 
 Let's quickly run through a set of examples comparing Djaq DjangoQueries to QuerySets. 
 
@@ -312,7 +323,6 @@ Unsurprisingly, Django provides significant options for adjusting query generati
 * To aggregate with Querysets, you use `aggregate()`, whereas with Djaq aggregate results are natively part of the result set.
 * Model instances with QuerySets exactly represent the corresponding Django model. Djaq has a different concept of a result instance (DQResult) that represents whatever is returned by the query even if it's not a model field. 
 
-Djaq does not try to hide as much about the underlying data structures as Querysets. Djaq does less to hide underlying SQL features. I think there are two types of django developer those who design a data schema and then design Django models to embody that and those who write Django models and let Django take care of the underlying schema. It may be the former type of Django developer will be more drawn to Djaq.
 
 Results vs Model Instances
 --------------------------
@@ -321,6 +331,18 @@ The Djaq generator `.objs()` returns a `DQResult` class instance. Djaq produces 
 
 Functions
 ---------
+
+To understand available functions for column expressions or filters, if a function is not defined by DjangoQuery, then the function name is passed without further intervention to the underlying SQL. A user can define new functions at any time by adding to the custom functions. Here's an example of adding a regex matching function: 
+
+    DjangoQuery.functions["REGEX"] = "{} ~ {}"
+
+Now find all book names starting with 'B':
+
+    DQ("(b.name) Book{regex(b.name, 'B.*')} b")
+
+Notice, we always want to use upper case for the function name when defining the function. Usage of a function is then case-insensitive. You may wish to make sure you are not over-writing existing functions. "REGEX" already exists, for instance. 
+
+You can also provide a `callable` to `DjangoQuery.functions`. The callable needs to take two arguments: the function name and a list of positional parameters and it must return SQL as a string that can either represent a column expression or some value expression from the underlying backend. 
 
 In the following: 
 
@@ -390,7 +412,6 @@ To get all books starting with 'Bar'. Or:
     DQ("(b.name) Book{like(upper(b.name), upper('$(name_search)'))} b").context(request.POST)
 
 Provided that `request.POST` has a `name_search` key/value. 
-
 
 You can provide a validation class that will return context variables. The default class used is called `ContextValidator()`. You can override this to provide a validator that raises exceptions if data is not valid or mutates the context data, like coercing types from `str` to `int`: 
 
@@ -542,17 +563,6 @@ Implementation Notes
 
 The parser for Djaq is kind of a mixed bag. It uses regular expressions, custom character stream processing and mostly Python's Abstract Syntax Tree module. The manner of parsing is not necessarily optimal and I'm no compiler expert by a long shot. But the performance overhead and features seem acceptable at this time. 
 
-To understand available functions for column expressions or filters, if a function is not defined by DjangoQuery, then the function name is passed without further intervention to the underlying SQL. A user can define new functions at any time by adding to the custom functions. Here's an example of adding a regex matching function: 
-
-    DjangoQuery.functions["REGEX"] = "{} ~ {}"
-
-Now find all book names starting with 'B':
-
-    DQ("(b.name) Book{regex(b.name, 'B.*')} b")
-
-Notice, we always want to use upper case for the function name when defining the function. Usage of a function is then case-insensitive. You may wish to make sure you are not over-writing existing functions. "REGEX" already exists, for instance. 
-
-You can also provide a `callable` to `DjangoQuery.functions`. The callable needs to take two arguments: the function name and a list of positional parameters and it must return SQL as a string that can either represent a column expression or some value expression from the underlying backend. 
 
 DB Portability
 --------------
