@@ -1,12 +1,13 @@
 """Result class
 Thanks to http://code.activestate.com/recipes/577887-a-simple-namespace-class/
 """
-
-__all__ = ("Namespace", "as_namespace")
-
 from collections import Mapping, Sequence
 
-class _Dummy: ...
+
+class _Dummy:
+    ...
+
+
 CLASS_ATTRS = dir(_Dummy)
 del _Dummy
 
@@ -20,7 +21,7 @@ class DQResult(dict):
     def __init__(self, obj, dq):
         super().__init__(obj)
         self.dq = dq
-        
+
     def __dir__(self):
         return tuple(self)
 
@@ -41,33 +42,32 @@ class DQResult(dict):
     def __delattr__(self, name):
         del self[name]
 
-        
     def cursor_descriptor(self):
         return self.dq.cursor.description
-    
-    #------------------------
+
+    # ------------------------
     # "copy constructors"
 
     @classmethod
     def from_object(cls, obj, names=None):
         if names is None:
             names = dir(obj)
-        ns = {name:getattr(obj, name) for name in names}
+        ns = {name: getattr(obj, name) for name in names}
         return cls(ns)
 
     @classmethod
     def from_mapping(cls, ns, names=None):
         if names:
-            ns = {name:ns[name] for name in names}
+            ns = {name: ns[name] for name in names}
         return cls(ns)
 
     @classmethod
     def from_sequence(cls, seq, names=None):
         if names:
-            seq = {name:val for name, val in seq if name in names}
+            seq = {name: val for name, val in seq if name in names}
         return cls(seq)
 
-    #------------------------
+    # ------------------------
     # static methods
 
     @staticmethod
@@ -100,11 +100,11 @@ def as_namespace(obj, names=None):
     # special cases
     if isinstance(obj, type):
         names = (name for name in dir(obj) if name not in CLASS_ATTRS)
-        return Namespace.from_object(obj, names)
+        return DQResult.from_object(obj, names)
     if isinstance(obj, Mapping):
-        return Namespace.from_mapping(obj, names)
+        return DQResult.from_mapping(obj, names)
     if isinstance(obj, Sequence):
-        return Namespace.from_sequence(obj, names)
-    
+        return DQResult.from_sequence(obj, names)
+
     # default
-    return Namespace.from_object(obj, names)
+    return DQResult.from_object(obj, names)

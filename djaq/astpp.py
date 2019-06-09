@@ -33,7 +33,7 @@ from __future__ import print_function
 from ast import AST, iter_fields, parse
 
 
-def dump(node, annotate_fields=True, include_attributes=False, indent='  '):
+def dump(node, annotate_fields=True, include_attributes=False, indent="  "):
     """
     Return a formatted dump of the tree in *node*.  This is mainly useful for
     debugging purposes.  The returned string will show the names and the values
@@ -42,49 +42,58 @@ def dump(node, annotate_fields=True, include_attributes=False, indent='  '):
     numbers and column offsets are not dumped by default.  If this is wanted,
     *include_attributes* can be set to True.
     """
+
     def _format(node, level=0):
         if isinstance(node, AST):
             fields = [(a, _format(b, level)) for a, b in iter_fields(node)]
-            rv = '%s(%s' % (node.__class__.__name__, ', '.join(
-                ('%s=%s' % field for field in fields)
-                if annotate_fields else
-                (b for a, b in fields)
-            ))
+            rv = "%s(%s" % (
+                node.__class__.__name__,
+                ", ".join(
+                    ("%s=%s" % field for field in fields)
+                    if annotate_fields
+                    else (b for a, b in fields)
+                ),
+            )
             if include_attributes and node._attributes:
-                rv += fields and ', ' or ' '
-                rv += ', '.join('%s=%s' % (a, _format(getattr(node, a)))
-                                for a in node._attributes)
-            return rv + ')'
+                rv += fields and ", " or " "
+                rv += ", ".join(
+                    "%s=%s" % (a, _format(getattr(node, a))) for a in node._attributes
+                )
+            return rv + ")"
         elif isinstance(node, list):
-            lines = ['[']
-            lines.extend((indent * (level + 2) + _format(x, level + 2) + ','
-                          for x in node))
+            lines = ["["]
+            lines.extend(
+                (indent * (level + 2) + _format(x, level + 2) + "," for x in node)
+            )
             if len(lines) > 1:
-                lines.append(indent * (level + 1) + ']')
+                lines.append(indent * (level + 1) + "]")
             else:
-                lines[-1] += ']'
-            return '\n'.join(lines)
+                lines[-1] += "]"
+            return "\n".join(lines)
         return repr(node)
+
     if not isinstance(node, AST):
-        raise TypeError('expected AST, got %r' % node.__class__.__name__)
+        raise TypeError("expected AST, got %r" % node.__class__.__name__)
     return _format(node)
 
-def parseprint(source, filename='<unknown>', mode="exec", **kwargs):
+
+def parseprint(source, filename="<unknown>", mode="exec", **kwargs):
     """Parse the source and pretty-print the AST."""
     node = parse(source, filename, mode=mode)
     print(dump(node, **kwargs))
 
+
 # Short name: pdp = parse, dump, print
 pdp = parseprint
+
 
 def load_ipython_extension(ip):
     from IPython.core.magic import Magics, magics_class, line_cell_magic
 
     @magics_class
     class AstMagics(Magics):
-
         @line_cell_magic
-        def astpp(self, line='', cell=None):
+        def astpp(self, line="", cell=None):
             """Parse the a python code or expression and pretty-print the AST.
 
             Usage, in line mode:
@@ -109,24 +118,27 @@ def load_ipython_extension(ip):
                   ], level=2),
               ])
             """
-            opts, stmt = self.parse_options(line, '', posix=False, strict=False)
-            if stmt == '' and cell is None:
+            opts, stmt = self.parse_options(line, "", posix=False, strict=False)
+            if stmt == "" and cell is None:
                 return
             transform = self.shell.input_splitter.transform_cell
-            if cell is None:     # called as line magic
+            if cell is None:  # called as line magic
                 ast_stmt = self.shell.compile.ast_parse(transform(stmt))
             else:
                 ast_stmt = self.shell.compile.ast_parse(transform(cell))
-            self.shell.user_ns['_'] = ast_stmt
+            self.shell.user_ns["_"] = ast_stmt
             print(dump(ast_stmt))
+
     ip.register_magics(AstMagics)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
     import sys
+
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('infile', nargs='?', type=argparse.FileType('r'),
-                        default=sys.stdin)
+    parser.add_argument(
+        "infile", nargs="?", type=argparse.FileType("r"), default=sys.stdin
+    )
     args = parser.parse_args()
     parseprint(args.infile.read(), filename=args.infile.name, include_attributes=True)

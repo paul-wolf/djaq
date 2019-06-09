@@ -3,7 +3,7 @@ import io
 import json
 import re
 import ast
-from ast import AST, iter_fields, parse
+from ast import AST, iter_fields
 from collections import defaultdict
 import uuid
 import logging
@@ -14,7 +14,8 @@ from psycopg2.extras import DictCursor
 import django
 from django.db import connections, models
 from django.db.models.query import QuerySet
-# from django.db.models.sql import UpdateQuery
+
+#  from django.db.models.sql import UpdateQuery
 from django.utils.text import slugify
 from django.core.serializers.json import DjangoJSONEncoder
 from django.conf import settings
@@ -25,29 +26,29 @@ from .app_utils import model_field, find_model_class, model_path
 
 logger = logging.getLogger(__name__)
 
+
 class ContextValidator(object):
     """Base class for validating context data.
 
-    We assume context data is set before parsing. 
+    We assume context data is set before parsing.
 
     """
 
     def __init__(self, dq, context):
         self.data = context
         self.dq = dq
-        
+
     def get(self, key, value):
         """Get the value for key.
 
-        Override this method to clean, 
+        Override this method to clean,
         throw exceptions, cast, etc. for a specific value
 
         """
         return value
 
-
     def context(self):
-        """Copy the context data. 
+        """Copy the context data.
 
         Override this to customise context data processing.
 
@@ -61,11 +62,12 @@ class ContextValidator(object):
 def concat(funcname, args):
     """Return args spliced by sql concat operator."""
     return " || ".join(args)
-    
+
+
 class DjangoQuery(ast.NodeVisitor):
 
     # keep a record of named instances
-    
+
     directory = {}
     functions = {
         "IIF": "CASE WHEN {} THEN {} ELSE {} END",
@@ -73,64 +75,41 @@ class DjangoQuery(ast.NodeVisitor):
         "ILIKE": "{} ILIKE {}",
         "REGEX": "{} ~ {}",
         "CONCAT": concat,
+        "TODAY": "CURRENT_DATE",
     }
-    
+
     aggregate_functions = {
-        "unknown": [
-            'avg',
-            'count',
-            'max',
-            'min',
-            'sum',
-        ],
-        "sqlite": [
-            'avg',
-            'count',
-            'group_concat',
-            'max',
-            'min',
-            'sum',
-            'total',
-        ],
-        "postgresql": [
-            'avg',
-            'count',
-            'max',
-            'min',
-            'sum',
-            'stddev',
-            'variance',
-        ],
+        "unknown": ["avg", "count", "max", "min", "sum"],
+        "sqlite": ["avg", "count", "group_concat", "max", "min", "sum", "total"],
+        "postgresql": ["avg", "count", "max", "min", "sum", "stddev", "variance"],
     }
 
     class JoinRelation(object):
-        JOIN_TYPES = {
-            "->": "LEFT JOIN",
-            "<-": "RIGHT JOIN",
-            "<>": "INNER JOIN",
-        }
+        JOIN_TYPES = {"->": "LEFT JOIN", "<-": "RIGHT JOIN", "<>": "INNER JOIN"}
 
-        def __init__(self,
-                     model,
-                     xquery,
-                     fk_relation=None,
-                     fk_field=None,
-                     related_field=None,
-                     join_type='->',
-                     alias=None):
+        def __init__(
+            self,
+            model,
+            xquery,
+            fk_relation=None,
+            fk_field=None,
+            related_field=None,
+            join_type="->",
+            alias=None,
+        ):
             self.model = model
             self.fk_relation = fk_relation
             self.fk_field = fk_field
             self.related_field = related_field
             self.join_type = join_type  # left, right, inner
             self.alias = alias
-            self.select = ''
-            self.expression_str = ''
+            self.select = ""
+            self.expression_str = ""
             self.column_expressions = []
-            self.where = ''
+            self.where = ""
             self.group_by = False
-            self.order_by = ''
-            self.order_by_direction = '+'
+            self.order_by = ""
+            self.order_by_direction = "+"
             self.xquery = xquery
             self.src = None
 
@@ -145,7 +124,7 @@ class DjangoQuery(ast.NodeVisitor):
             print("   order_by     : {}".format(r.order_by))
             print("   order_by_dir : {}".format(r.order_by_direction))
             print("   alias        : {}".format(r.alias))
-            
+
         @property
         def model_table(self):
             return self.model._meta.db_table
@@ -164,27 +143,31 @@ class DjangoQuery(ast.NodeVisitor):
         def join_operator(self):
             if self.join_type:
                 return self.xquery.__class__.JoinRelation.JOIN_TYPES[self.join_type]
-            return 'LEFT JOIN'
+            return "LEFT JOIN"
 
         @property
         def join_condition_expression(self):
-            s = ''
+            s = ""
 
-            # print(self.fk_field.related_fields)
-            if hasattr(self.fk_field, 'related_fields'):
+            #  print(self.fk_field.related_fields)
+            if hasattr(self.fk_field, "related_fields"):
                 for related_fields in self.fk_field.related_fields:
-                    # print("related_fields")
-                    # print(related_fields)
+                    #  print("related_fields")
+                    #  print(related_fields)
                     if s:
                         s += " AND "
                     fk = related_fields[0]
                     f = related_fields[1]
-                    s += '"{}"."{}" = "{}"."{}"'.format(fk.model._meta.db_table, fk.column,
-                                                f.model._meta.db_table, f.column)
+                    s += '"{}"."{}" = "{}"."{}"'.format(
+                        fk.model._meta.db_table,
+                        fk.column,
+                        f.model._meta.db_table,
+                        f.column,
+                    )
             # might be a ManyToManyField
             else:
                 raise Exception("Cannot support complex joins ATM")
-                        
+
             return "({})".format(s)
 
         def group_by_columns(self):
@@ -198,7 +181,7 @@ class DjangoQuery(ast.NodeVisitor):
 
         def __str__(self):
             return "Relation: {}".format(model_path(self.model))
-        
+
         def __repr__(self):
             return "<{}>: {}".format(self.__class__.__name__, model_path(self.model))
 
@@ -208,24 +191,26 @@ class DjangoQuery(ast.NodeVisitor):
                 return relation
 
     def is_aggregate_expression(self, exp):
-        """Return True if exp is an aggregate expression like 
+        """Return True if exp is an aggregate expression like
         `avg(Book.price+Book.price*0.2)`"""
         s = exp.lower().strip("(").split("(")[0]
         return s in self.vendor_aggregate_functions
 
-    def __init__(self,
-                 source,
-                 using='default',
-                 limit=None,
-                 offset=None,
-                 order_by=None,
-                 name=None,
-                 context=None,
-                 names=None,
-                 verbosity=0):
+    def __init__(
+        self,
+        source,
+        using="default",
+        limit=None,
+        offset=None,
+        order_by=None,
+        name=None,
+        context=None,
+        names=None,
+        verbosity=0,
+    ):
 
         self._context = context
-        
+
         if name:
             self.__class__.directory[name] = self
 
@@ -246,27 +231,29 @@ class DjangoQuery(ast.NodeVisitor):
         self.sql = None
         self.cursor = None
         self.col_names = None
-        self.code = ''
+        self.code = ""
         self.stack = []
         self.names = []
         self.column_expressions = []
         self.relations = []
         self.parsed = False
-        self.expression_context = 'select'  # change to 'where' or 'func' later
-        self.function_context = ''
+        self.expression_context = "select"  # change to 'where' or 'func' later
+        self.function_context = ""
         self.fstack = []  # function stack
         self.parameters = []  # query parameters
         self.where_marker = 0
         self.placeholder_pattern = re.compile(r"\'\$\(([\w]*)\)\'")
         self.context_validator_class = ContextValidator
-        
-        # self.group_by = False
+
+        #  self.group_by = False
         if self.vendor in self.__class__.aggregate_functions:
             self.vendor_aggregate_functions = self.__class__.aggregate_functions[
-                self.vendor]
+                self.vendor
+            ]
         else:
             self.vendor_aggregate_functions = self.__class__.aggregate_functions[
-                'unknown']
+                "unknown"
+            ]
         self.column_headers = []
 
     def mogrify(self, sql, parameters):
@@ -275,27 +262,29 @@ class DjangoQuery(ast.NodeVisitor):
         TODO: Only works for Postgresql.
 
         """
-        
+
         conn = connections[self.using]
         cursor = conn.cursor()
         return cursor.mogrify(sql, parameters).decode()
-        
+
     def dump(self):
         for k, v in self.__dict__.items():
-            print("{}={}".format(k,v))
-            
+            print("{}={}".format(k, v))
+
     def aggregate(self):
         """Indicate that the current relation requires aggregation."""
         # print("Setting group by: {}".format(self.relations[self.relation_index]))
         self.relations[self.relation_index].group_by = True
 
-    def add_relation(self,
-                     model,
-                     fk_relation=None,
-                     fk_field=None,
-                     related_field=None,
-                     join_type='->',
-                     alias=None):
+    def add_relation(
+        self,
+        model,
+        fk_relation=None,
+        fk_field=None,
+        related_field=None,
+        join_type="->",
+        alias=None,
+    ):
         """Add relation. Don't add twice unless with different alias.
 
         model: model class
@@ -321,8 +310,9 @@ class DjangoQuery(ast.NodeVisitor):
                         relation.alias = alias
                     return relation
 
-        relation = self.__class__.JoinRelation(model, self, fk_relation, fk_field,
-                                       related_field, join_type, alias)
+        relation = self.__class__.JoinRelation(
+            model, self, fk_relation, fk_field, related_field, join_type, alias
+        )
         self.relations.append(relation)
 
         if len(self.relations) > 1:
@@ -394,7 +384,8 @@ class DjangoQuery(ast.NodeVisitor):
 
     def queryset_source(self, queryset):
         sql, sql_params = queryset.query.get_compiler(
-            connection=self.connection).as_sql()
+            connection=self.connection
+        ).as_sql()
         return sql, sql_params
 
     def emit_select(self, s):
@@ -415,16 +406,16 @@ class DjangoQuery(ast.NodeVisitor):
 
     def emit_func(self, s):
         """Write to current argument on the stack of the current function call."""
-        self.fstack[-1]['args'][-1] += str(s)
+        self.fstack[-1]["args"][-1] += str(s)
 
     def emit(self, s):
-        if self.expression_context == 'select':
+        if self.expression_context == "select":
             self.emit_select(s)
-        elif self.expression_context == 'where':
+        elif self.expression_context == "where":
             self.emit_where(s)
-        elif self.expression_context == 'order_by':
+        elif self.expression_context == "order_by":
             self.emit_order_by(s)
-        elif self.expression_context == 'func':
+        elif self.expression_context == "func":
             self.emit_func(s)
 
     def single_quoted(self, s):
@@ -432,7 +423,7 @@ class DjangoQuery(ast.NodeVisitor):
 
     def generic_visit(self, node):
         if not isinstance(node, ast.Load):
-            # parseprint(node)
+            #  parseprint(node)
             pass
         ast.NodeVisitor.generic_visit(self, node)
 
@@ -440,15 +431,15 @@ class DjangoQuery(ast.NodeVisitor):
         logger.debug("*****************")
         logger.debug(node_string(node))
         # Do not emit any parens yet
-        # because the relation might not have been created yet
-        # self.emit("(")
+        #  because the relation might not have been created yet
+        #  self.emit("(")
         ast.NodeVisitor.generic_visit(self, node)
-        # self.emit(")")
-        
+        #  self.emit(")")
+
     def visit_Name(self, node):
         self.stack.append(node.id)
         column_expression = self.push_attribute_relations(self.stack)
-        if self.expression_context == 'select':
+        if self.expression_context == "select":
             self.names.append(column_expression)
         self.emit(column_expression)
         self.stack = []
@@ -472,7 +463,7 @@ class DjangoQuery(ast.NodeVisitor):
             ast.NodeVisitor.generic_visit(self, node)
             return
 
-        if node.s.strip().startswith('@'):
+        if node.s.strip().startswith("@"):
 
             # A named DjangoQuery, QuerySet, List
             # get source
@@ -485,7 +476,7 @@ class DjangoQuery(ast.NodeVisitor):
                 # TODO: not safe
                 # not even type checking is good here since strings
                 # can be sql expressions
-                sql = str(tuple(obj)).strip('(').strip(')')
+                sql = str(tuple(obj)).strip("(").strip(")")
             elif isinstance(obj, QuerySet):
                 sql, sql_params = self.queryset_source(obj)
                 sql = self.mogrify(sql, sql_params)
@@ -498,11 +489,10 @@ class DjangoQuery(ast.NodeVisitor):
         if "*" in node.s:
             # quite the hack here
             # not recommended
-            if self.relations[self.relation_index].where.endswith(' = '):
+            if self.relations[self.relation_index].where.endswith(" = "):
                 s = s.replace("*", "%")
-                parts = self.relations[self.relation_index].where.rpartition(
-                    ' = ')
-                self.relations[self.relation_index].where = parts[0] + ' LIKE '
+                parts = self.relations[self.relation_index].where.rpartition(" = ")
+                self.relations[self.relation_index].where = parts[0] + " LIKE "
 
         # if node.s preceded by equals
         # replace equals with LIKE (or ilike)
@@ -515,28 +505,27 @@ class DjangoQuery(ast.NodeVisitor):
             self.aggregate()
 
         last_context = self.expression_context
-        self.expression_context = 'func'
-        self.fstack.append({'funcname': node.func.id, 'args': []})
+        self.expression_context = "func"
+        self.fstack.append({"funcname": node.func.id, "args": []})
         for i, arg in enumerate(node.args):
-            self.fstack[-1]['args'].append('')
+            self.fstack[-1]["args"].append("")
             ast.NodeVisitor.visit(self, arg)
         self.expression_context = last_context
         fcall = self.fstack.pop()
-        funcname = fcall['funcname'].upper()
+        funcname = fcall["funcname"].upper()
         if funcname in self.__class__.functions:
             # Fill our custom SQL template with arguments
             t = self.__class__.functions[funcname]
             if isinstance(t, str):
-                self.emit(t.format(*fcall['args']))
+                self.emit(t.format(*fcall["args"]))
             elif callable(t):
-                self.emit(t(funcname, fcall['args']))
+                self.emit(t(funcname, fcall["args"]))
             else:
                 raise Exception("Can't mutate function: {}".format(funcname))
         else:
             # Construct the function call with given arguments
             # and expect the underlying db to support this function in upper case
-            self.emit("{}({})".format(fcall['funcname'],
-                                      ", ".join(fcall['args'])))
+            self.emit("{}({})".format(fcall["funcname"], ", ".join(fcall["args"])))
 
     def visit_Add(self, node):
         self.emit(" + ")
@@ -595,14 +584,14 @@ class DjangoQuery(ast.NodeVisitor):
 
     def visit_NameConstant(self, node):
         if node.value is True:
-            self.emit('TRUE')
+            self.emit("TRUE")
         elif node.value is False:
-            self.emit('FALSE')
+            self.emit("FALSE")
         elif node.value is None:
-            self.emit('NULL')
+            self.emit("NULL")
         else:
             raise Exception("Unknown value: {}".format(node.value))
-        
+
     def visit_Div(self, node):
         self.emit(" / ")
         ast.NodeVisitor.generic_visit(self, node)
@@ -621,42 +610,42 @@ class DjangoQuery(ast.NodeVisitor):
                 ast.NodeVisitor.visit(self, node.op)
             # check if we have a named parameter
             # if yes, but no context data, drop the condition
-            
+
         self.emit(")")
         # look back to see if we have
         # print("****************")
         # for m in finditer(self.placeholder_pattern, self.relations[self.relation_index].where[l:]):
         #     if m:
         #         pass
-        # print(self.relations[self.relation_index].where[l:])
-        
+        #  print(self.relations[self.relation_index].where[l:])
+
     def visit_And(self, node):
         self.where_marker = len(self.relations[self.relation_index].where)
         self.emit(" AND ")
 
     def visit_Or(self, node):
-        self.where_marker = len(self.relations[self.relation_index].where)        
-        self.emit(" OR ")        
+        self.where_marker = len(self.relations[self.relation_index].where)
+        self.emit(" OR ")
 
     def visit_Tuple(self, node):
         for i, el in enumerate(node.elts):
             # print("v"*66)
-            # parseprint(el)
+            #  parseprint(el)
 
             ast.NodeVisitor.visit(self, el)
-            exp = self.relations[self.relation_index].expression_str.strip('(')
-            self.push_column_expression(exp.strip(', '))
-            self.relations[self.relation_index].expression_str = ''
+            exp = self.relations[self.relation_index].expression_str.strip("(")
+            self.push_column_expression(exp.strip(", "))
+            self.relations[self.relation_index].expression_str = ""
 
             if not i == len(node.elts) - 1:
                 self.emit(", ")
 
     def visit_Arguments(self, node):
-        self.emit('|')
+        self.emit("|")
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_args(self, node):
-        self.emit('|')
+        self.emit("|")
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_Attribute(self, node):
@@ -672,7 +661,7 @@ class DjangoQuery(ast.NodeVisitor):
 
         if self.stack:
             column_expression = self.push_attribute_relations(self.stack)
-            if self.expression_context == 'select':
+            if self.expression_context == "select":
                 self.names.append(column_expression)
             self.emit(column_expression)
         self.stack = []
@@ -684,70 +673,69 @@ class DjangoQuery(ast.NodeVisitor):
         search = None
         offset = 0
         while True:
-            # print("SEARCHING: {}, offset={}".format(s, offset))
+            #  print("SEARCHING: {}, offset={}".format(s, offset))
             search = re.search("->|<-|<>", s[offset:])
 
             if search:
-                relation_sources.append(s[:search.start() + offset].strip())
-                # print("FOUND: {}, start={}".format(s[:search.start()+offset], search.start()))
-                s = s[search.start() + offset:]
-                # print("REDUCED: {}".format(s))
+                relation_sources.append(s[: search.start() + offset].strip())
+                #  print("FOUND: {}, start={}".format(s[:search.start()+offset], search.start()))
+                s = s[search.start() + offset :]
+                #  print("REDUCED: {}".format(s))
             else:
                 relation_sources.append(s.strip())
-                # print("LAST: {}".format(s))
+                #  print("LAST: {}".format(s))
                 break
 
             offset = 2
-            # input("Press Enter to continue...")
+            #  input("Press Enter to continue...")
 
         return relation_sources
 
     def get_join_type(self, s):
         if s.startswith("->"):
-            return 1, '->', s[2:]
+            return 1, "->", s[2:]
         elif s.startswith("<-"):
-            return 1, '<-', s[2:]
+            return 1, "<-", s[2:]
         elif s.startswith("<>"):
-            return 1, '<>', s[2:]
+            return 1, "<>", s[2:]
         else:
             return 0, None, s
-        
+
     def get_select(self, s):
         """Get select string.
         Return string once parens are balanced.
         First character needs to be an opening parens.
-        
+
         """
         s = s.strip()
         i = 0
         in_parens = 0
-        select = ''
+        select = ""
         for i, c in enumerate(s):
             select += c
-            if c == '(':
+            if c == "(":
                 in_parens += 1
-            elif c == ')':
+            elif c == ")":
                 in_parens -= 1
             if not in_parens:
-                return i, select, s[i+1:]
-            
-    
+                return i, select, s[i + 1 :]
+
     def get_col(self, s):
-        """Generator for returning column expressions 
+        """Generator for returning column expressions
         potentially with alias decl."""
         i = 0
         in_parens = 0
-        col = ''
+        col = ""
         while True:
             c = s[i]
             col += c
-            if c == '(':
+            if c == "(":
                 in_parens += 1
-            elif c == ')':
+            elif c == ")":
                 in_parens -= 1
             if c == "," and not in_parens:
                 yield col[:-1].strip()
-                col = ''
+                col = ""
             i += 1
             if i >= len(s):
                 break
@@ -756,21 +744,24 @@ class DjangoQuery(ast.NodeVisitor):
         return None
 
     def parse_column_aliases(self, select_src):
-        pattern = "\(.*?\)|(,)"
-        # assume parens, remove them
+
         if select_src[0] == "(":
             s = select_src[1:-1]
         else:
             s = select_src
         aliases = []
-        # print("parse column aliases: {}".format(s))
-        m = True
+        #  print("parse column aliases: {}".format(s))
         for col in self.get_col(s):
             a = col.split(" as ")
             if len(a) == 1:
-                aliases.append((a[0],
-                                slugify(a[0].replace(".", "_").replace(
-                                    " ", "_")).replace("-", "_")))
+                aliases.append(
+                    (
+                        a[0],
+                        slugify(a[0].replace(".", "_").replace(" ", "_")).replace(
+                            "-", "_"
+                        ),
+                    )
+                )
             elif len(a) == 2:
                 aliases.append((a[0], a[1]))
             else:
@@ -788,9 +779,9 @@ class DjangoQuery(ast.NodeVisitor):
 
         pattern = "([\w]+)[\s]*(\{.*\})?\s*([\w]+)?\s*(order_by|order by)?\s*(\+|\-)?(\(.*\))?"
         """
-        We get a relation string like this: 
-        
-        ->(Book.name as title, Book.publisher.name as pub, count()) Book{length(b.name) > 50)} b  
+        We get a relation string like this:
+
+        ->(Book.name as title, Book.publisher.name as pub, count()) Book{length(b.name) > 50)} b
 
         group 1: model
         group 2: filter
@@ -799,13 +790,13 @@ class DjangoQuery(ast.NodeVisitor):
         group 5: order by direction
         group 6: order_by_src
         """
-        self.source = self.source.replace('\n', ' ')
+        self.source = self.source.replace("\n", " ")
         relation_sources = self.split_relations(self.source)
-        # print("relation_sources: {}".format(relation_sources))
+        #  print("relation_sources: {}".format(relation_sources))
 
         for i, relation_source in enumerate(relation_sources):
-            # print("Parsing relation: {}".format(relation_source))
-            index, join_type, relation_source = self.get_join_type(relation_source)            
+            #  print("Parsing relation: {}".format(relation_source))
+            index, join_type, relation_source = self.get_join_type(relation_source)
             index, select_src, relation_source = self.get_select(relation_source)
             m = re.match(pattern, relation_source.strip())
             if m:
@@ -832,9 +823,16 @@ class DjangoQuery(ast.NodeVisitor):
 
             if self.verbosity > 1:
                 print(
-                    "join_type={}, select_src={}, model_name={}, where_src={}, order_by_src={}, order_by_direction={}, alias={}"
-                    .format(join_type, select_src, model_name, where_src,
-                            order_by_src, order_by_direction, alias))
+                    "join_type={}, select_src={}, model_name={}, where_src={}, order_by_src={}, order_by_direction={}, alias={}".format(
+                        join_type,
+                        select_src,
+                        model_name,
+                        where_src,
+                        order_by_src,
+                        order_by_direction,
+                        alias,
+                    )
+                )
 
             # we need to generate column headers and remove
             # aliases. tuples are (exp, alias)
@@ -855,7 +853,7 @@ class DjangoQuery(ast.NodeVisitor):
                 if select_src.upper().startswith("'(SELECT "):
                     relation.src = select_src
                 else:
-                    self.expression_context = 'select'
+                    self.expression_context = "select"
                     self.visit(ast.parse(select_src))
 
             if self.verbosity > 2 or len(self.relations) == 0:
@@ -870,17 +868,16 @@ class DjangoQuery(ast.NodeVisitor):
                 print("\torder_by_src={}".format(order_by_src))
                 self.dump()
 
-
             if not relation:
                 relation = self.relations[-1]
             relation.order_by_direction = order_by_direction
 
             if where_src:
-                self.expression_context = 'where'
+                self.expression_context = "where"
                 self.visit(ast.parse(where_src))
 
             if order_by_src:
-                self.expression_context = 'order_by'
+                self.expression_context = "order_by"
                 self.visit(ast.parse(order_by_src))
 
         if self.verbosity > 2:
@@ -890,30 +887,32 @@ class DjangoQuery(ast.NodeVisitor):
             for r in self.relations:
                 print("Relation        : {}".format(str(r)))
                 r.dump()
-                
-        return self.generate()
 
+        return self.generate()
 
     def generate(self):
         """Generate the SQL. Assumes source is parsed."""
-        
+
         self.relations.reverse()
         master_relation = self.relations.pop()
         if self.verbosity > 2:
             master_relation.dump()
-            
-        s = "SELECT {} FROM {}".format(master_relation.select,
-                                       master_relation.model_table)
+
+        s = "SELECT {} FROM {}".format(
+            master_relation.select, master_relation.model_table
+        )
         for i, relation in enumerate(self.relations):
-            s += " {} {} ON {} ".format(relation.join_operator,
-                                        relation.model_table,
-                                        relation.join_condition_expression)
+            s += " {} {} ON {} ".format(
+                relation.join_operator,
+                relation.model_table,
+                relation.join_condition_expression,
+            )
             if relation.where:
                 s += " WHERE {}".format(relation.where)
             if relation.order_by:
                 s += " ORDER BY {}".format(relation.order_by)
-                if relation.order_by_direction == '-':
-                    s += ' DESC'
+                if relation.order_by_direction == "-":
+                    s += " DESC"
         if master_relation.where:
             s += " WHERE {}".format(master_relation.where)
         if master_relation.group_by:
@@ -922,8 +921,8 @@ class DjangoQuery(ast.NodeVisitor):
                 s += " GROUP BY {}".format(gb)
         if master_relation.order_by:
             s += " ORDER BY {}".format(master_relation.order_by)
-            if master_relation.order_by_direction == '-':
-                s += ' DESC'
+            if master_relation.order_by_direction == "-":
+                s += " DESC"
         if self._limit:
             s += " LIMIT {}".format(int(self._limit))
         if self._offset:
@@ -938,7 +937,7 @@ class DjangoQuery(ast.NodeVisitor):
         """
 
         self.context(context)
-        
+
         sql = self.parse()
         if self.verbosity > 0:
             print(sql)
@@ -956,7 +955,7 @@ class DjangoQuery(ast.NodeVisitor):
     def limit(self, limit):
         self._limit = limit
         return self
-    
+
     def offset(self, offset):
         self._offset = offset
         return self
@@ -966,27 +965,29 @@ class DjangoQuery(ast.NodeVisitor):
         if not self._context:
             self._context = {}
         if context:
-            self.cursor = None # cause the query to be re-evaluated
+            self.cursor = None  # cause the query to be re-evaluated
             self._context.update(context)
         return self
-    
+
     def validator(self, validator_class):
-        """Set validator_class that 
+        """Set validator_class that
         will check and mutate context variables."""
         self.context_validator_class = validator_class
         return self
-        
+
     def execute(self, context=None, count=False):
         """Create a cursor and execute the sql."""
 
         self.context(context)
-            
+
         sql = self.parse()
-        
-        # sql = sql.replace("'%s'", "%s")
+
+        #  sql = sql.replace("'%s'", "%s")
 
         # now replace variables placeholders to be valid dict placeholders
-        sql = re.sub(self.placeholder_pattern, lambda x: "%({})s".format(x.group(1)), sql)
+        sql = re.sub(
+            self.placeholder_pattern, lambda x: "%({})s".format(x.group(1)), sql
+        )
 
         conn = connections[self.using]
         cursor = conn.cursor()
@@ -1002,10 +1003,10 @@ class DjangoQuery(ast.NodeVisitor):
                 if self.verbosity:
                     print("sql={}, params={}".format(sql, context))
                 self.cursor.execute(sql, context)
-            else: 
+            else:
                 if self.verbosity:
                     print("sql={}".format(sql))
-                logger.debug(sql)                    
+                logger.debug(sql)
                 self.cursor.execute(sql)
         except django.db.utils.ProgrammingError as dbe:
             print(dbe)
@@ -1014,9 +1015,8 @@ class DjangoQuery(ast.NodeVisitor):
 
         # we record the column names from the cursor
         # but we have our own aliases in self.column_headers
-        # self.col_names = [desc[0] for desc in self.cursor.description]
+        #  self.col_names = [desc[0] for desc in self.cursor.description]
 
-    
     def dicts(self, data=None):
         if not self.cursor:
             self.execute(data)
@@ -1066,7 +1066,7 @@ class DjangoQuery(ast.NodeVisitor):
         row = self.cursor.fetchone()
         row_dict = dict(zip(self.column_headers, row))
         return DQResult(row_dict, dq=self)
-        
+
     def csv(self, data=None):
         if not self.cursor:
             self.execute(data)
@@ -1086,17 +1086,17 @@ class DjangoQuery(ast.NodeVisitor):
     def count(self, data=None):
         self.execute(data, count=True)
         return self.cursor.fetchone()[0]
-        
+
     def __repr__(self):
         return "{}: {}".format(self.__class__.__name__, self.source)
 
     def __str__(self):
-        l = []
+        my_list = []
         for i, d in enumerate(self.dicts()):
-            l.append(d)
+            my_list.append(d)
             if i == 10:
                 break
-        return str(l)
+        return str(my_list)
 
     def __iter__(self):
         return self.objs()
