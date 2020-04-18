@@ -7,6 +7,7 @@ from books.models import Author, Publisher, Book, Store
 
 fake = Faker()
 
+
 class AuthorFactory(factory.Factory):
     class Meta:
         model = Author
@@ -14,17 +15,19 @@ class AuthorFactory(factory.Factory):
     name = fake.name()
     age = random.choice(range(20, 80))
 
+
 class PublisherFactory(factory.Factory):
     class Meta:
         model = Publisher
 
     name = fake.company()
 
+
 class BookFactory(factory.Factory):
     class Meta:
         model = Book
 
-    name = factory.Faker('sentence', nb_words=4)
+    name = factory.Faker("sentence", nb_words=4)
     # authors = factory.Iterator(Author.objects.all())
 
     pages = random.choice(range(100, 800))
@@ -32,7 +35,7 @@ class BookFactory(factory.Factory):
     rating = random.choice(range(5))
     publisher = factory.Iterator(Publisher.objects.all())
     pubdate = fake.date_this_century(before_today=True, after_today=False)
-    
+
     # @factory.post_generation
     # def authors(self, create, extracted, **kwargs):
     #     if not create:
@@ -42,7 +45,6 @@ class BookFactory(factory.Factory):
     #         # self.authors.add(authors)
 
 
-                
 class StoreFactory(factory.Factory):
     class Meta:
         model = Store
@@ -56,13 +58,13 @@ class StoreFactory(factory.Factory):
     #         for book in books:
     #             self.books.add(book)
 
-                
+
 def build_data(book_count=None):
 
     authors = []
     publishers = []
     books = []
-    
+
     if not book_count:
         book_count = 1000
 
@@ -73,14 +75,15 @@ def build_data(book_count=None):
     cnt = COUNT_AUTHORS - Author.objects.all().count()
     while cnt > 0:
         cnt -= 1
-        author = AuthorFactory.create(name=fake.name(),
-                                      age=random.choice(range(20, 80))).save()
+        author = AuthorFactory.create(
+            name=fake.name(), age=random.choice(range(20, 80))
+        ).save()
         authors.append(author)
     else:
         authors = list(Author.objects.all())
-    
+
     cnt = COUNT_PUBLISHERS - Publisher.objects.all().count()
-    while cnt > 0: 
+    while cnt > 0:
         cnt -= 1
         publishers.append(PublisherFactory.create(name=fake.company()).save())
     else:
@@ -92,30 +95,25 @@ def build_data(book_count=None):
         if not cnt % 1000:
             print(cnt)
         book = BookFactory.create(
-            name = factory.Faker('sentence', nb_words=4),
-            pages = random.choice(range(100, 800)),
-            price = random.choice(range(3, 35)),
-            rating = random.choice(range(5)),
-            publisher = Publisher.objects.all().order_by('?')[0],
-            pubdate = fake.date_this_century(before_today=True, after_today=False)
+            name=factory.Faker("sentence", nb_words=4),
+            pages=random.choice(range(100, 800)),
+            price=random.choice(range(3, 35)),
+            rating=random.choice(range(5)),
+            publisher=Publisher.objects.all().order_by("?")[0],
+            pubdate=fake.date_this_century(before_today=True, after_today=False),
         )
         book.save()
-        authors = Author.objects.all().order_by('?')[:3]
+        authors = Author.objects.all().order_by("?")[:3]
         for author in authors:
             book.authors.add(author)
     else:
         books = list(Book.objects.all())
 
     cnt = COUNT_STORES - Store.objects.all().count()
-    while cnt > 0: 
+    while cnt > 0:
         cnt -= 1
         store = StoreFactory.create(name=fake.company())
         store.save()
-        books = Book.objects.all().order_by('?')[:150]
+        books = Book.objects.all().order_by("?")[:150]
         for book in books:
             store.books.add(book)
-            
-            
-    
-
-        

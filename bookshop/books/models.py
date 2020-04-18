@@ -1,17 +1,26 @@
 from django.db import models
 
+
 class Author(models.Model):
     name = models.CharField(max_length=100)
     age = models.IntegerField()
 
     def __str__(self):
         return self.name
-    
+
+
+class Consortium(models.Model):
+    name = models.CharField(max_length=30)
+    marketcap = models.IntegerField(default=9999999)
+
+
 class Publisher(models.Model):
     name = models.CharField(max_length=300)
+    owner = models.ForeignKey(Consortium, on_delete=models.CASCADE, null=True)
 
     def __str__(self):
         return self.name
+
 
 class Book(models.Model):
     name = models.CharField(max_length=300)
@@ -22,14 +31,14 @@ class Book(models.Model):
     publisher = models.ForeignKey(Publisher, on_delete=models.CASCADE)
     pubdate = models.DateField()
     in_print = models.BooleanField(default=True)
-    
+
     def __str__(self):
         return self.name
+
 
 class Store(models.Model):
     name = models.CharField(max_length=300)
     books = models.ManyToManyField(Book)
-    
+
     def __str__(self):
         return self.name
- 

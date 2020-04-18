@@ -148,12 +148,14 @@ class DjangoQuery(ast.NodeVisitor):
         @property
         def join_condition_expression(self):
             s = ""
+            # print(f"op:      {self.join_operator}")
+            # print(f"model:   {self.model_table}")
+            # print(f"fk_field:{self.fk_field}")
+            #  input("Press Enter to continue...")
 
-            #  print(self.fk_field.related_fields)
             if hasattr(self.fk_field, "related_fields"):
                 for related_fields in self.fk_field.related_fields:
-                    #  print("related_fields")
-                    #  print(related_fields)
+
                     if s:
                         s += " AND "
                     fk = related_fields[0]
@@ -895,6 +897,8 @@ class DjangoQuery(ast.NodeVisitor):
 
         self.relations.reverse()
         master_relation = self.relations.pop()
+        self.relations.reverse()
+
         if self.verbosity > 2:
             master_relation.dump()
 
@@ -945,9 +949,9 @@ class DjangoQuery(ast.NodeVisitor):
         return sql, self.parameters
 
     def rewind(self):
-        """Rewind cursor.
-
-        Full re-execution of query!
+        """Rewind cursor by setting to None.
+        The next time a generator method is called,
+        the query will be executed again.
         """
         self.cursor = None
         return self

@@ -3,7 +3,7 @@ import traceback
 
 from django.core.management.base import BaseCommand, CommandError
 
-from djaq.query import DjangoQuery as Q
+from djaq.query import DjangoQuery as DQ
 
 
 class Command(BaseCommand):
@@ -13,7 +13,7 @@ class Command(BaseCommand):
         parser.add_argument("src", type=str)
         parser.add_argument(
             "--format",
-            default="objs",  # dicts, tuples, json, csv
+            default="dicts",  # dicts, tuples, json, csv
             action="store",
             dest="format",
             type=str,
@@ -28,12 +28,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        xq = Q(
-            options.get("src"), limit=options.get("limit"), offset=options.get("offset")
+        q = DQ(
+            options.get("src"),
+            limit=options.get("limit"),
+            offset=options.get("offset"),
+            verbosity=3,
         )
-        try:
-            for rec in getattr(xq, options.get("format"))():
-                print(rec)
-        except Exception as e:
-            traceback.print_exc(file=sys.stdout)
-            print(e)
+        for rec in getattr(q, options.get("format"))():
+            print(rec)
