@@ -1,5 +1,5 @@
 Django
-psycopg2-2.7.6.1
+psycopg2-binary
 Faker
 factory_boy
 
