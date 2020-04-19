@@ -168,7 +168,13 @@ class DjangoQuery(ast.NodeVisitor):
                     )
             # might be a ManyToManyField
             else:
-                raise Exception("Cannot support complex joins ATM")
+                m = f"""
+                op:          {self.join_operator}
+                model:       {self.model_table}
+                fk_field:    {self.fk_field}
+                fk_relation: {self.fk_relation}
+                """
+                raise Exception(f"Cannot support complex joins ATM {m}")
 
             return f"({s})"
 

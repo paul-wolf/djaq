@@ -29,6 +29,9 @@ class Book(models.Model):
     rating = models.FloatField()
     authors = models.ManyToManyField(Author)
     publisher = models.ForeignKey(Publisher, on_delete=models.CASCADE)
+    alt_publisher = models.ForeignKey(
+        Publisher, related_name="alt_publisher", on_delete=models.CASCADE, null=True
+    )
     pubdate = models.DateField()
     in_print = models.BooleanField(default=True)
 
