@@ -115,7 +115,7 @@ class TestDjaq(TestCase):
         for t in dq.tuples():
             pass
 
-    def test_implicit_model(self):
+    def xtest_implicit_model(self):
         dq = DQ("(Book.name, Book.id)")
         self.assertEquals(dq.count(), 10)
 

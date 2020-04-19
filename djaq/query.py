@@ -204,6 +204,7 @@ class DjangoQuery(ast.NodeVisitor):
         s = exp.lower().strip("(").split("(")[0]
         return s in self.vendor_aggregate_functions
 
+    # the DjangoQuery init()
     def __init__(
         self,
         source,
@@ -292,6 +293,7 @@ class DjangoQuery(ast.NodeVisitor):
         related_field=None,
         join_type="->",
         alias=None,
+        field_name=None,
     ):
         """Add relation. Don't add twice unless with different alias.
 
@@ -328,6 +330,10 @@ class DjangoQuery(ast.NodeVisitor):
             for i, rel in enumerate(self.relations):
                 for f in rel.model._meta.get_fields():
                     if f.related_model == relation.model:
+                        # there can be more than one field related to this model
+                        # pick the one that caused us to come here
+                        if field_name and not f.name == field_name:
+                            continue
                         relation.fk_relation = rel
                         relation.fk_field = f
                         break
@@ -346,27 +352,26 @@ class DjangoQuery(ast.NodeVisitor):
 
         """
 
-        # print("attribute list: {}".format(attribute_list))
-        # print("relation      : {}".format(relation))
-        # input("press key 11111")
-
         # last element must be a field name
         attr = attribute_list.pop()
-
-        # print("attr          : {}".format(attr))
-        # print("attribute list: {}".format(attribute_list))
-        # print("relation      : {}".format(relation))
-        # input("press key 22222")
+        # print("--------------------------------------")
+        # print(f"attr          : {attr}")
+        # print(f"attribute list: {attribute_list}")
+        # print(f"relation      : {relation}")
 
         if relation and not len(attribute_list):
             # attr is the terminal attribute
             field = relation.model._meta.get_field(attr)
-            return '"{}"."{}"'.format(relation.model._meta.db_table, field.column)
+            a = f'"{relation.model._meta.db_table}"."{field.column}"'
+            #  print(f"terminal attribute: {a}")
+            return a
         elif not relation and not len(attribute_list):
             # attr is a stand-alone name
             model = self.relations[-1].model
             field = model._meta.get_field(attr)
-            return '"{}"."{}"'.format(model._meta.db_table, field.column)
+            a = f'"{model._meta.db_table}"."{field.column}"'
+            #  print(f"attr is stand-alone name: {a}")
+            return a
         elif not relation and len(attribute_list):
             # this happens when we have something like 'Book.name'
             # therefore attr must be a model name or alias
@@ -374,13 +379,15 @@ class DjangoQuery(ast.NodeVisitor):
             if not relation:
                 model = find_model_class(attr)
                 relation = self.add_relation(model=model)
+            #  print(f"model name or alias: {attr}")
             return self.push_attribute_relations(attribute_list, relation)
 
         # if relation and attributes in list
         # this means attr is a foreign key
-        model = relation.model._meta.get_field(attr).related_model
-        relation = self.add_relation(model)
-        return self.push_attribute_relations(attribute_list, relation)
+        related_model = relation.model._meta.get_field(attr).related_model
+        new_relation = self.add_relation(related_model, field_name=attr)
+        #  print(f"pushing relation: related_model={related_model}, relation={new_relation}, fk_relation={new_relation.fk_relation}, fk_field={new_relation.fk_field}")
+        return self.push_attribute_relations(attribute_list, new_relation)
 
     def resolve_name(self, name):
         if name in self.__class__.directory:
