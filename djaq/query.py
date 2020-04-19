@@ -170,7 +170,7 @@ class DjangoQuery(ast.NodeVisitor):
             else:
                 raise Exception("Cannot support complex joins ATM")
 
-            return "({})".format(s)
+            return f"({s})"
 
         def group_by_columns(self):
             """Return str of GROUP BY columns."""
@@ -772,7 +772,7 @@ class DjangoQuery(ast.NodeVisitor):
         return aliases
 
     def parse(self):
-        """Parse source.
+        """Return sql after building query.
 
         """
 
@@ -986,8 +986,6 @@ class DjangoQuery(ast.NodeVisitor):
 
         sql = self.parse()
 
-        #  sql = sql.replace("'%s'", "%s")
-
         # now replace variables placeholders to be valid dict placeholders
         sql = re.sub(
             self.placeholder_pattern, lambda x: "%({})s".format(x.group(1)), sql
@@ -1000,16 +998,16 @@ class DjangoQuery(ast.NodeVisitor):
 
         try:
             if count:
-                sql = "SELECT COUNT(*) FROM ({}) c".format(sql)
+                sql = f"SELECT COUNT(*) FROM ({sql}) c"
             if len(self._context):
                 context = self.context_validator_class(self, self._context).context()
                 logger.debug(cursor.mogrify(sql, context))
                 if self.verbosity:
-                    print("sql={}, params={}".format(sql, context))
+                    print(f"sql={sql}, params={context}")
                 self.cursor.execute(sql, context)
             else:
                 if self.verbosity:
-                    print("sql={}".format(sql))
+                    print(f"sql={sql}")
                 logger.debug(sql)
                 self.cursor.execute(sql)
         except django.db.utils.ProgrammingError as dbe:
@@ -1034,6 +1032,7 @@ class DjangoQuery(ast.NodeVisitor):
         return
 
     def tuples(self, data=None):
+        row = None
         if not self.cursor:
             self.execute(data)
         while True:

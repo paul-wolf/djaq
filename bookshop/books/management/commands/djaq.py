@@ -26,13 +26,16 @@ class Command(BaseCommand):
         parser.add_argument(
             "--offset", default=0, action="store", dest="offset", type=int
         )
+        # parser.add_argument(
+        #     "--verbosity", default=0, action="store", dest="verbosity", type=int
+        # )
 
     def handle(self, *args, **options):
         q = DQ(
             options.get("src"),
             limit=options.get("limit"),
             offset=options.get("offset"),
-            verbosity=3,
+            verbosity=options.get("verbosity"),
         )
         for rec in getattr(q, options.get("format"))():
             print(rec)

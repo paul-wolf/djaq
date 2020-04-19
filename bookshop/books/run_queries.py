@@ -211,10 +211,11 @@ def q_implicit_model(**kwargs):
 
 @timeit
 def q_ilike(**kwargs):
+    name_pattern = "C%"  # noqa: F841
     list(DQ("(b.name) Book{ilike(b.name, '$(name_pattern)')} b ").tuples())
     #  print(str(dq.context({"name_pattern": "C%"})))
 
-    #  name_pattern = "C%"
+    #
     #  print(str(dq.rewind().context(locals())))
 
 
