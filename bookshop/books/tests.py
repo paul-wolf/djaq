@@ -94,7 +94,7 @@ class TestDjaq(TestCase):
         list(DQ("(b.name, b.price) Book{id in '@dq_sub'} b").tuples())
 
     def test_queryset_subquery(self):
-        qs = Book.objects.filter(name__startswith="B").only("id")
+        qs = Book.objects.filter(name__istartswith="B").only("id")
         ids = [rec.id for rec in qs]
         list(
             DQ(
@@ -107,15 +107,17 @@ class TestDjaq(TestCase):
             """(b.id, b.name) Book{b.id == 1 or
         regex(b.name, '$(mynamepattern)')} b """
         )
-        for t in dq.context({"mynamepattern": "B.*"}).tuples():
-            pass
+        list(dq.context({"mynamepattern": "B.*"}).tuples())
 
     def test_expression_grouping(self):
-        dq = DQ("(b.id, b.name) Book{(b.id == 1 or b.id == 2) and b.id == 3} b ")
-        for t in dq.tuples():
-            pass
+        list(
+            DQ(
+                "(b.id, b.name) Book{(b.id == 1 or b.id == 2) and b.id == 3} b "
+            ).tuples()
+        )
 
     def xtest_implicit_model(self):
+        """TODO: we don't support implicit model."""
         dq = DQ("(Book.name, Book.id)")
         self.assertEquals(dq.count(), 10)
 
@@ -126,8 +128,7 @@ class TestDjaq(TestCase):
         sum(iif(b.rating > 3, b.rating, 0)) as above_3) Book b
         """
         )
-        for t in dq.tuples():
-            pass
+        list(dq.tuples())
 
     def test_subquery_2(self):
         pubs = DQ("(p.id) Publisher p", name="pubs")  # noqa: F841
