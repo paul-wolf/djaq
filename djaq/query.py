@@ -163,10 +163,11 @@ class DjangoQuery(ast.NodeVisitor):
                     f = related_fields[1]
                     s += f'"{fk.model._meta.db_table}"."{fk.column}" = "{f.model._meta.db_table}"."{f.column}"'
             elif isinstance(self.fk_field, ManyToOneRel):
-                for f_from, f_to in self.fk.get_joining_columns():
+                fk = self.fk_field
+                for f_from, f_to in fk.get_joining_columns():
                     if s:
                         s += " AND "
-                    s += f'"{self.fk.model._meta.db_table}"."{f_from}" = "{self.fk.related_model._meta.db_table}"."{f_to}"'
+                    s += f'"{fk.model._meta.db_table}"."{f_from}" = "{fk.related_model._meta.db_table}"."{f_to}"'
             else:  # might be a ManyToManyField
                 m = f"""
                 op:          {self.join_operator}
