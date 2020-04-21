@@ -19,6 +19,7 @@ from django.db.models.query import QuerySet
 from django.utils.text import slugify
 from django.core.serializers.json import DjangoJSONEncoder
 from django.conf import settings
+from django.db.models.fields.related import ManyToOneRel
 
 from .result import DQResult
 from .astpp import parseprint, dump as node_string
@@ -160,21 +161,22 @@ class DjangoQuery(ast.NodeVisitor):
                         s += " AND "
                     fk = related_fields[0]
                     f = related_fields[1]
-                    s += '"{}"."{}" = "{}"."{}"'.format(
-                        fk.model._meta.db_table,
-                        fk.column,
-                        f.model._meta.db_table,
-                        f.column,
-                    )
-            # might be a ManyToManyField
-            else:
+                    s += f'"{fk.model._meta.db_table}"."{fk.column}" = "{f.model._meta.db_table}"."{f.column}"'
+            elif isinstance(self.fk_field, ManyToOneRel):
+                for f_from, f_to in fk.get_joining_columns():
+                    if s:
+                        s += " AND "
+                    s += f'"{fk.model._meta.db_table}"."{f_from}" = "{fk.related_model._meta.db_table}"."{f_to}"'
+            else:  # might be a ManyToManyField
                 m = f"""
                 op:          {self.join_operator}
                 model:       {self.model_table}
                 fk_field:    {self.fk_field}
                 fk_relation: {self.fk_relation}
                 """
-                raise Exception(f"Cannot support complex joins ATM {m}")
+                raise Exception(
+                    f"Could not find 'related_fields' in 'self.fk_field':  {m}"
+                )
 
             return f"({s})"
 
