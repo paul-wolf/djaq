@@ -809,7 +809,6 @@ class DjangoQuery(ast.NodeVisitor):
         """
         self.source = self.source.replace("\n", " ")
         relation_sources = self.split_relations(self.source)
-        print(f"relation_sources: {relation_sources}")
 
         for i, relation_source in enumerate(relation_sources):
             #  import pdb; pdb.set_trace()

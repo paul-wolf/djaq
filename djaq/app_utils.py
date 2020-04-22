@@ -33,11 +33,25 @@ def get_db_type(field, connection):
 
 
 def find_model_class(name):
-    """Return model class for name, like 'Book'."""
+    """Return model class for name, like 'Book'.
+
+    if name has dots, then everything before the last segment
+    is an app specifier
+
+    """
+    if "." in name:
+        class_name = name.split(".")[-1]
+        app_name = ".".join(name.split(".")[:-1])
+    else:
+        class_name = name
+        app_name = None
+
     list_of_apps = list(apps.get_app_configs())
     for a in list_of_apps:
+        if app_name and not app_name == a.name:
+            continue
         for model_name, model_class in a.models.items():
-            if name == model_class.__name__:
+            if class_name == model_class.__name__:
                 return model_class
 
     raise Exception(f"Could not find model: {name}")

@@ -3,12 +3,14 @@ import random
 from decimal import Decimal
 
 from django.test import TestCase
+from django.db.models import Q, Avg, Count, Min, Max, Sum, FloatField, F
+
 import factory
 from faker import Faker
 
 from djaq import DjangoQuery as DQ, DQResult
+from djaq.api.views import queries, updates, creates, deletes
 
-from django.db.models import Q, Avg, Count, Min, Max, Sum, FloatField, F
 from books.models import Author, Publisher, Book, Store
 
 fake = Faker()
@@ -94,7 +96,7 @@ class TestDjaq(TestCase):
         list(DQ("(b.name, b.price) Book{id in '@dq_sub'} b").tuples())
 
     def test_queryset_subquery(self):
-        qs = Book.objects.filter(name__istartswith="B").only("id")
+        qs = Book.objects.all().only("id")
         ids = [rec.id for rec in qs]
         list(
             DQ(
@@ -146,3 +148,36 @@ class TestDjaq(TestCase):
         )
         for d in dq.json():
             json.loads(d)
+
+    def test_updates(self):
+        SPECIAL_PRICE = 12345.01
+        results = queries([{"q": "(Book.id, Book.name, Book.price)", "limit": 1}])
+        book = results[0][0]
+        book_id = book["book_id"]
+        book_price = float(book["book_price"])
+        results = updates(
+            [{"_model": "books.Book", "_pk": book_id, "price": SPECIAL_PRICE}]
+        )
+        self.assertEqual(results[0], 1)
+        c = {"special_price": SPECIAL_PRICE, "book_id": book_id}
+        results = queries(
+            [
+                {
+                    "q": "(Book.id, Book.name, Book.price) Book{id=='$(book_id)'}",
+                    "limit": 1,
+                    "context": c,
+                }
+            ]
+        )
+        book = results[0][0]
+        book_price = book["book_price"]
+        self.assertEqual(float(book_price), SPECIAL_PRICE)
+
+    def test_deletes(self):
+        #  import ipdb; ipdb.set_trace()
+        book_count = DQ("(count(Book.id)) Book").value()
+        book_id = DQ("(Book.id)").limit(10).value()
+        data = {"_model": "books.Book", "_pk": book_id}
+        deletes([data])
+        book_count_new = DQ("(count(Book.id)) Book").value()
+        self.assertEqual(book_count, book_count_new + 1)
