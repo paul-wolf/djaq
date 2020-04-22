@@ -691,17 +691,16 @@ class DjangoQuery(ast.NodeVisitor):
         search = None
         offset = 0
         while True:
-            #  print("SEARCHING: {}, offset={}".format(s, offset))
+            #  print(f"SEARCHING: {s}, offset={offset}")
             search = re.search("->|<-|<>", s[offset:])
-
             if search:
                 relation_sources.append(s[: search.start() + offset].strip())
-                #  print("FOUND: {}, start={}".format(s[:search.start()+offset], search.start()))
+                #  print(f"FOUND: {s[:search.start()+offset]}, start={search.start()}")
                 s = s[search.start() + offset :]
-                #  print("REDUCED: {}".format(s))
+                #  print(f"REDUCED: {s}")
             else:
                 relation_sources.append(s.strip())
-                #  print("LAST: {}".format(s))
+                #  print(f"LAST: {s}")
                 break
 
             offset = 2
@@ -768,7 +767,7 @@ class DjangoQuery(ast.NodeVisitor):
         else:
             s = select_src
         aliases = []
-        #  print("parse column aliases: {}".format(s))
+        #  print(f"parse column aliases: {s}")
         for col in self.get_col(s):
             a = col.split(" as ")
             if len(a) == 1:
@@ -810,10 +809,10 @@ class DjangoQuery(ast.NodeVisitor):
         """
         self.source = self.source.replace("\n", " ")
         relation_sources = self.split_relations(self.source)
-        #  print("relation_sources: {}".format(relation_sources))
+        print(f"relation_sources: {relation_sources}")
 
         for i, relation_source in enumerate(relation_sources):
-            #  print("Parsing relation: {}".format(relation_source))
+            #  import pdb; pdb.set_trace()
             index, join_type, relation_source = self.get_join_type(relation_source)
             index, select_src, relation_source = self.get_select(relation_source)
             m = re.match(pattern, relation_source.strip())
@@ -826,7 +825,7 @@ class DjangoQuery(ast.NodeVisitor):
 
             elif re.match("^(\(.*\))$", self.source):
                 join_type = None
-                # strip whitespace
+
                 src = self.source.strip()
                 if src[0] == "(":
                     src = src[1:-1]
@@ -837,7 +836,7 @@ class DjangoQuery(ast.NodeVisitor):
                 order_by_direction = None
                 alias = None
             else:
-                raise Exception("Invalid source: ---{}---".format(relation_source))
+                raise Exception(f"Invalid source: ---{relation_source}---")
 
             if self.verbosity > 1:
                 print(
@@ -851,12 +850,22 @@ class DjangoQuery(ast.NodeVisitor):
                         alias,
                     )
                 )
-
+            #  import pdb; pdb.set_trace()
             # we need to generate column headers and remove
             # aliases. tuples are (exp, alias)
             column_tuples = self.parse_column_aliases(select_src)
             self.column_headers = [c[1] for c in column_tuples]
             select_src = ", ".join([c[0] for c in column_tuples])
+
+            # when there is no defined relation, we need to figure it output
+            # without a model_name or alias, we can do nothing
+            # just take the first model name if there is one
+            if not model_name and not alias:
+                try:
+                    model_name = column_tuples[0][0].split(".")[0]
+                except Exception:
+                    raise Exception(f"Could not find model for {column_tuples}")
+
             relation = self.find_relation_from_alias(alias)
             model = find_model_class(model_name)
             if model and not relation:
