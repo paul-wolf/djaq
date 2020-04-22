@@ -176,7 +176,7 @@ class TestDjaq(TestCase):
     def test_deletes(self):
         #  import ipdb; ipdb.set_trace()
         book_count = DQ("(count(Book.id)) Book").value()
-        book_id = DQ("(Book.id)").limit(10).value()
+        book_id = DQ("(Book.id)").limit(1).value()
         data = {"_model": "books.Book", "_pk": book_id}
         deletes([data])
         book_count_new = DQ("(count(Book.id)) Book").value()

@@ -116,15 +116,15 @@ class DjangoQuery(ast.NodeVisitor):
 
         def dump(self):
             r = self
-            print("   join         : {}".format(r.join_type))
-            print("   fk_relation  : {}".format(r.fk_relation))
-            print("   fk_field     : {}".format(r.fk_field))
-            print("   related_field: {}".format(r.related_field))
-            print("   select       : {}".format(r.select))
-            print("   where        : {}".format(r.where))
-            print("   order_by     : {}".format(r.order_by))
-            print("   order_by_dir : {}".format(r.order_by_direction))
-            print("   alias        : {}".format(r.alias))
+            print(f"   join         : {r.join_type}")
+            print(f"   fk_relation  : {r.fk_relation}")
+            print(f"   fk_field     : {r.fk_field}")
+            print(f"   related_field: {r.related_field}")
+            print(f"   select       : {r.select}")
+            print(f"   where        : {r.where}")
+            print(f"   order_by     : {r.order_by}")
+            print(f"   order_by_dir : {r.order_by_direction}")
+            print(f"   alias        : {r.alias}")
 
         @property
         def model_table(self):
@@ -281,7 +281,7 @@ class DjangoQuery(ast.NodeVisitor):
 
     def dump(self):
         for k, v in self.__dict__.items():
-            print("{}={}".format(k, v))
+            print(f"{k}={v}")
 
     def aggregate(self):
         """Indicate that the current relation requires aggregation."""
@@ -354,26 +354,20 @@ class DjangoQuery(ast.NodeVisitor):
             ['name', 'publisher', 'Book']
 
         """
-
+        #  import ipdb; ipdb.set_trace()
         # last element must be a field name
         attr = attribute_list.pop()
-        # print("--------------------------------------")
-        # print(f"attr          : {attr}")
-        # print(f"attribute list: {attribute_list}")
-        # print(f"relation      : {relation}")
-
         if relation and not len(attribute_list):
             # attr is the terminal attribute
             field = relation.model._meta.get_field(attr)
             a = f'"{relation.model._meta.db_table}"."{field.column}"'
-            #  print(f"terminal attribute: {a}")
+
             return a
         elif not relation and not len(attribute_list):
             # attr is a stand-alone name
             model = self.relations[-1].model
             field = model._meta.get_field(attr)
             a = f'"{model._meta.db_table}"."{field.column}"'
-            #  print(f"attr is stand-alone name: {a}")
             return a
         elif not relation and len(attribute_list):
             # this happens when we have something like 'Book.name'
@@ -382,14 +376,13 @@ class DjangoQuery(ast.NodeVisitor):
             if not relation:
                 model = find_model_class(attr)
                 relation = self.add_relation(model=model)
-            #  print(f"model name or alias: {attr}")
             return self.push_attribute_relations(attribute_list, relation)
 
         # if relation and attributes in list
         # this means attr is a foreign key
         related_model = relation.model._meta.get_field(attr).related_model
         new_relation = self.add_relation(related_model, field_name=attr)
-        #  print(f"pushing relation: related_model={related_model}, relation={new_relation}, fk_relation={new_relation.fk_relation}, fk_field={new_relation.fk_field}")
+
         return self.push_attribute_relations(attribute_list, new_relation)
 
     def resolve_name(self, name):
@@ -446,8 +439,6 @@ class DjangoQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_Expr(self, node):
-        logger.debug("*****************")
-        logger.debug(node_string(node))
         # Do not emit any parens yet
         #  because the relation might not have been created yet
         #  self.emit("(")
@@ -461,7 +452,6 @@ class DjangoQuery(ast.NodeVisitor):
             self.names.append(column_expression)
         self.emit(column_expression)
         self.stack = []
-
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_Int(self, node):
@@ -501,7 +491,7 @@ class DjangoQuery(ast.NodeVisitor):
             else:
                 raise Exception("Name not found: {}".format(name))
 
-            self.emit("({})".format(sql))
+            self.emit(f"({sql})")
             return
 
         if "*" in node.s:
@@ -686,26 +676,20 @@ class DjangoQuery(ast.NodeVisitor):
 
     def split_relations(self, s):
         """Split string by join operators returning a list."""
+        #  import ipdb; ipdb.set_trace()
 
         relation_sources = []
         search = None
         offset = 0
         while True:
-            #  print(f"SEARCHING: {s}, offset={offset}")
             search = re.search("->|<-|<>", s[offset:])
             if search:
                 relation_sources.append(s[: search.start() + offset].strip())
-                #  print(f"FOUND: {s[:search.start()+offset]}, start={search.start()}")
                 s = s[search.start() + offset :]
-                #  print(f"REDUCED: {s}")
             else:
                 relation_sources.append(s.strip())
-                #  print(f"LAST: {s}")
                 break
-
             offset = 2
-            #  input("Press Enter to continue...")
-
         return relation_sources
 
     def get_join_type(self, s):
@@ -719,12 +703,16 @@ class DjangoQuery(ast.NodeVisitor):
             return 0, None, s
 
     def get_select(self, s):
-        """Get select string.
+        """Return select string and then everything else.
+
         Return string once parens are balanced.
         First character needs to be an opening parens.
 
         """
         s = s.strip()
+        if not s.startswith("("):
+            # there is no select columns expression list
+            return 0, None, s
         i = 0
         in_parens = 0
         select = ""
@@ -811,7 +799,7 @@ class DjangoQuery(ast.NodeVisitor):
         relation_sources = self.split_relations(self.source)
 
         for i, relation_source in enumerate(relation_sources):
-            #  import pdb; pdb.set_trace()
+            #  import ipdb; ipdb.set_trace()
             index, join_type, relation_source = self.get_join_type(relation_source)
             index, select_src, relation_source = self.get_select(relation_source)
             m = re.match(pattern, relation_source.strip())
@@ -853,10 +841,12 @@ class DjangoQuery(ast.NodeVisitor):
             #  import pdb; pdb.set_trace()
             # we need to generate column headers and remove
             # aliases. tuples are (exp, alias)
-            column_tuples = self.parse_column_aliases(select_src)
-            self.column_headers = [c[1] for c in column_tuples]
-            select_src = ", ".join([c[0] for c in column_tuples])
-
+            if select_src:
+                column_tuples = self.parse_column_aliases(select_src)
+                self.column_headers.extend([c[1] for c in column_tuples])
+                select_src = ", ".join([c[0] for c in column_tuples])
+            else:
+                select_src = ""
             # when there is no defined relation, we need to figure it output
             # without a model_name or alias, we can do nothing
             # just take the first model name if there is one
@@ -869,11 +859,12 @@ class DjangoQuery(ast.NodeVisitor):
             relation = self.find_relation_from_alias(alias)
             model = find_model_class(model_name)
             if model and not relation:
-                relation = self.add_relation(model=model, alias=alias)
-                # print("Created JoinRelation: {}".format(relation))
+                relation = self.add_relation(
+                    model=model, alias=alias, join_type=join_type
+                )
             else:
                 if self.verbosity > 2:
-                    print("Relation already existed: {}".format(relation))
+                    print(f"Relation already existed: {relation}")
             self.relation_index = i
 
             if select_src:
@@ -927,9 +918,14 @@ class DjangoQuery(ast.NodeVisitor):
         if self.verbosity > 2:
             master_relation.dump()
 
-        s = "SELECT {} FROM {}".format(
-            master_relation.select, master_relation.model_table
-        )
+        select = master_relation.select
+        #  import ipdb; ipdb.set_trace()
+        for r in self.relations:
+            if r.select:
+                select = f"{select}, {r.select}"
+
+        s = f"SELECT {select} FROM {master_relation.model_table}"
+
         for i, relation in enumerate(self.relations):
             s += " {} {} ON {} ".format(
                 relation.join_operator,
@@ -1116,7 +1112,7 @@ class DjangoQuery(ast.NodeVisitor):
         return self.cursor.fetchone()[0]
 
     def __repr__(self):
-        return "{}: {}".format(self.__class__.__name__, self.source)
+        return f"{self.__class__.__name__}: {self.source}"
 
     def __str__(self):
         my_list = []
@@ -1130,11 +1126,9 @@ class DjangoQuery(ast.NodeVisitor):
         return self.objs()
 
     def __enter__(self):
-
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-
         if exc_type:
             pass
         else:
