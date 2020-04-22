@@ -927,31 +927,27 @@ class DjangoQuery(ast.NodeVisitor):
         s = f"SELECT {select} FROM {master_relation.model_table}"
 
         for i, relation in enumerate(self.relations):
-            s += " {} {} ON {} ".format(
-                relation.join_operator,
-                relation.model_table,
-                relation.join_condition_expression,
-            )
+            s += f" {relation.join_operator} {relation.model_table} ON {relation.join_condition_expression} "
             if relation.where:
-                s += " WHERE {}".format(relation.where)
+                s += f" WHERE {relation.where}"
             if relation.order_by:
-                s += " ORDER BY {}".format(relation.order_by)
+                s += f" ORDER BY {relation.order_by}"
                 if relation.order_by_direction == "-":
                     s += " DESC"
         if master_relation.where:
-            s += " WHERE {}".format(master_relation.where)
+            s += f" WHERE {master_relation.where}"
         if master_relation.group_by:
             gb = master_relation.group_by_columns()
             if gb:
-                s += " GROUP BY {}".format(gb)
+                s += f" GROUP BY {gb}"
         if master_relation.order_by:
-            s += " ORDER BY {}".format(master_relation.order_by)
+            s += f" ORDER BY {master_relation.order_by}"
             if master_relation.order_by_direction == "-":
                 s += " DESC"
         if self._limit:
-            s += " LIMIT {}".format(int(self._limit))
+            s += f" LIMIT {int(self._limit)}"
         if self._offset:
-            s += " OFFSET {}".format(int(self._offset))
+            s += f" OFFSET {int(self._offset)}"
         self.sql = s
         self.master_relation = master_relation
         return self.sql
