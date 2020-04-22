@@ -840,16 +840,17 @@ class DjangoQuery(ast.NodeVisitor):
 
             if self.verbosity > 1:
                 print(
-                    "join_type={}, select_src={}, model_name={}, where_src={}, order_by_src={}, order_by_direction={}, alias={}".format(
-                        join_type,
-                        select_src,
-                        model_name,
-                        where_src,
-                        order_by_src,
-                        order_by_direction,
-                        alias,
-                    )
+                    f"""
+                    join_type={join_type},
+                    select_src={select_src},
+                    model_name={model_name},
+                    where_src={where_src},
+                    order_by_src={order_by_src},
+                    order_by_direction={order_by_direction},
+                    alias={alias}
+                    """
                 )
+
             #  import pdb; pdb.set_trace()
             # we need to generate column headers and remove
             # aliases. tuples are (exp, alias)
@@ -884,15 +885,15 @@ class DjangoQuery(ast.NodeVisitor):
                     self.visit(ast.parse(select_src))
 
             if self.verbosity > 2 or len(self.relations) == 0:
-                print("relation index {}:".format(i))
-                print("\trelation_source={}".format(relation_source))
-                print("\tjoin_type={}".format(join_type))
-                print("\tselect_src={}".format(select_src))
-                print("\tmodel_name={}".format(model_name))
-                print("\twhere_src={}".format(where_src))
-                print("\talias={}".format(alias))
-                print("\torder_by_direction={}".format(order_by_direction))
-                print("\torder_by_src={}".format(order_by_src))
+                print(f"relation index {i}:")
+                print(f"\trelation_source={relation_source}")
+                print(f"\tjoin_type={join_type}")
+                print(f"\tselect_src={select_src}")
+                print(f"\tmodel_name={model_name}")
+                print(f"\twhere_src={where_src}")
+                print(f"\talias={alias}")
+                print(f"\torder_by_direction={order_by_direction}")
+                print(f"\torder_by_src={order_by_src}")
                 self.dump()
 
             if not relation:
