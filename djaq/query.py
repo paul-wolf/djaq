@@ -782,7 +782,7 @@ class DjangoQuery(ast.NodeVisitor):
         if self.sql:
             return self.sql
 
-        pattern = "([\w]+)[\s]*(\{.*\})?\s*([\w]+)?\s*(order_by|order by)?\s*(\+|\-)?(\(.*\))?"
+        pattern = "([\w.]+)[\s]*(\{.*\})?\s*([\w]+)?\s*(order_by|order by)?\s*(\+|\-)?(\(.*\))?"
         """
         We get a relation string like this:
 
