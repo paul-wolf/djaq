@@ -26,8 +26,9 @@ def djaq_view(request):
                .dicts()
            )
         }
-    )
-	```
+		)
+
+```
 
 This would provide an endpoint for all models. You probably need a couple more things if you want to expose this to a browser which we discuss below. But this gives an idea of what you can do. The caller now has access to any authorised model resource. Serialisation is all taken care of. Djaq comes already with a view similar to the above. You can just start calling and retrieving any data you wish. It's an instant API to your application. It is ideal for:
 
