@@ -838,7 +838,7 @@ class DjangoQuery(ast.NodeVisitor):
                     """
                 )
 
-            #  import pdb; pdb.set_trace()
+            #  import ipdb; ipdb.set_trace()
             # we need to generate column headers and remove
             # aliases. tuples are (exp, alias)
             if select_src:
@@ -847,7 +847,7 @@ class DjangoQuery(ast.NodeVisitor):
                 select_src = ", ".join([c[0] for c in column_tuples])
             else:
                 select_src = ""
-            # when there is no defined relation, we need to figure it output
+            # when there is no defined relation, we need to figure it out
             # without a model_name or alias, we can do nothing
             # just take the first model name if there is one
             if not model_name and not alias:
@@ -899,11 +899,11 @@ class DjangoQuery(ast.NodeVisitor):
                 self.visit(ast.parse(order_by_src))
 
         if self.verbosity > 2:
-            print("Database vendor: {}".format(self.vendor))
+            print(f"Database vendor: {self.vendor}")
 
         if self.verbosity > 1:
             for r in self.relations:
-                print("Relation        : {}".format(str(r)))
+                print(f"Relation        : {r}")
                 r.dump()
 
         return self.generate()
@@ -918,36 +918,58 @@ class DjangoQuery(ast.NodeVisitor):
         if self.verbosity > 2:
             master_relation.dump()
 
+        ## SELECT EXPRESSIONS
         select = master_relation.select
-        #  import ipdb; ipdb.set_trace()
+
         for r in self.relations:
             if r.select:
                 select = f"{select}, {r.select}"
 
         s = f"SELECT {select} FROM {master_relation.model_table}"
 
-        for i, relation in enumerate(self.relations):
+        ## FROM JOINS
+        for relation in self.relations:
             s += f" {relation.join_operator} {relation.model_table} ON {relation.join_condition_expression} "
-            if relation.where:
-                s += f" WHERE {relation.where}"
-            if relation.order_by:
-                s += f" ORDER BY {relation.order_by}"
-                if relation.order_by_direction == "-":
-                    s += " DESC"
+
+        #  import ipdb; ipdb.set_trace()
+        ## WHERE
+        where = ""
         if master_relation.where:
-            s += f" WHERE {master_relation.where}"
+            where += f" WHERE {master_relation.where}"
+        for relation in self.relations:
+            if relation.where:
+                if where:
+                    where += " AND "
+                else:
+                    where += "WHERE "
+                where += relation.where
+        s += where
+
+        ## GROUP BY
         if master_relation.group_by:
             gb = master_relation.group_by_columns()
             if gb:
                 s += f" GROUP BY {gb}"
+
+        ## ORDER BY
+        order = ""
         if master_relation.order_by:
-            s += f" ORDER BY {master_relation.order_by}"
-            if master_relation.order_by_direction == "-":
-                s += " DESC"
+            order += f" ORDER BY {master_relation.order_by}"
+        for relation in self.relations:
+            if relation.order_by:
+                if not order:
+                    order = " ORDER BY "
+                order += relation.order_by
+                if relation.order_by_direction:
+                    order += " DESC " if relation.order_by_direction == "-" else " ASC "
+        s += order
+
         if self._limit:
             s += f" LIMIT {int(self._limit)}"
+
         if self._offset:
             s += f" OFFSET {int(self._offset)}"
+
         self.sql = s
         self.master_relation = master_relation
         return self.sql
