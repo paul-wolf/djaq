@@ -118,8 +118,7 @@ class TestDjaq(TestCase):
             ).tuples()
         )
 
-    def xtest_implicit_model(self):
-        """TODO: we don't support implicit model."""
+    def test_implicit_model(self):
         dq = DQ("(Book.name, Book.id)")
         self.assertEquals(dq.count(), 10)
 

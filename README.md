@@ -1,65 +1,699 @@
-Djaq: Django Queries
-====================
+Djaq provides a query language for Django. In contrast to Querysets, Djaq queries are strings. A query string might look like this:
 
-Copyright (c) Paul Wolf
+    (b.name as title, b.publisher.name as publisher) Book b
 
-Djaq (pronounced "jack") provides an alternative query language to QuerySets guided by a different set of targeted behaviours. Djaq forces the developer to be explicit about what she wants to do and provide the fastest possible retrieval methods using the clearest possible expression. Here's an example:
+Get a list of book titles with book publisher.
 
-    DQ("""(b.name,
+The reason for this alternative is to provide a way to query Django models outside a context where you can use Querysets directly. For instance, if you want to send a remote request for data from a system that doesn't have access to the application's Django datamodel. You might want to get data from the browser or from another microservice in your network or provide a fast API.
+
+Of course, there is a common way to do this already by using some REST framework like Django REST Framework (DRF) or one of the alternatives, Django views, etc. The advantage of Djaq is you can immediately provide access without writing serializers, views, etc. Here is what a view function for your data layer might look like with Djaq:
+
+```
+@login_required
+def djaq_view(request):
+    data = json.loads(request.body.decode("utf-8"))
+    query_string = data.get("q")
+    offset = int(data.get("offset", 0))
+    limit = int(data.get("limit", 0))
+    context = data.get("context", {})
+	return JsonResponse(
+	    {
+           "result": list(
+               DQ(query_string)
+               .context(context)
+               .limit(limit)
+               .offset(offset)
+               .dicts()
+           )
+        }
+    )
+	```
+
+This would provide an endpoint for all models. You probably need a couple more things if you want to expose this to a browser which we discuss below. But this gives an idea of what you can do. The caller now has access to any authorised model resource. Serialisation is all taken care of. Djaq comes already with a view similar to the above. You can just start calling and retrieving any data you wish. It's an instant API to your application. It is ideal for:
+
+* Microservice communication where some services don't have access to the Django ORM or are not implemented with Python.
+* Fast local UI development
+* Fast development of Proof of Concepts
+
+Djaq sits on top of the Django ORM. It can happily be used alongside of Querysets and sometimes calling a Djaq query even localling might be preferable to constructing a Queryset. Although, Djaq is not a replacement for Querysets.
+
+Features you might appreciate:
+
+* Djaq has a column expression and filtering syntax that lets you write using Python-like code.
+* Very fast cursor semantics and explicit retrieval. That means it only gets data you asked for.
+* Obvious performance behaviour. It will trigger a query in one obvious way through one of the generator methods: `.dict()`, `.tuples()`, `.json()`.
+
+Djaq provides whitelisting of apps and models you want to expose. It also lets you hook requests and filter to ensure only data you want to expose is accessible.
+
+## Quickstart
+
+Install:
+
+    pip install Djaq
+
+Use:
+
+```
+from djaq.query import DjangoQuery as DQ
+
+print(list(DQ("(b.name as title, b.publisher.name as publisher) Book b").dicts()))
+
+[{'title': 'Name grow along.', 'publisher': 'Long, Lewis and Wright'}, {'title': 'We pay single record.', 'publisher': 'Long, Lewis and Wright'}, {'title': 'Natural develop available manager.', 'publisher': 'Long, Lewis and Wright'}, {'title': 'Fight task international.', 'publisher': 'Long, Lewis and Wright'}, {'title': 'Discover floor phone.', 'publisher': 'Long, Lewis and Wright'}]
+```
+
+## Basic usage
+
+Throughout, we use models somewhat like those from Django's bookshop example:
+
+```
+from django.db import models
+
+class Author(models.Model):
+    name = models.CharField(max_length=100)
+    age = models.IntegerField()
+
+class Publisher(models.Model):
+    name = models.CharField(max_length=300)
+
+class Book(models.Model):
+    name = models.CharField(max_length=300)
+    pages = models.IntegerField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    rating = models.FloatField()
+    authors = models.ManyToManyField(Author)
+    publisher = models.ForeignKey(Publisher, on_delete=models.CASCADE)
+    pubdate = models.DateField()
+
+class Store(models.Model):
+    name = models.CharField(max_length=300)
+    books = models.ManyToManyField(Book)
+```
+
+These examples use auto-generated titles and names and we have a slightly more complicated set of models than shown above.
+
+Let's get book title (name), price, discounted price, amount of discount and publisher name wherever the price is over 50.
+
+    result = \
+      list(DQ("""(b.name,
            b.price as price,
 	       0.2 as discount,
 	       b.price * 0.2 as discount_price,
            b.price - (b.price*0.2) as diff,
 		   Publisher.name
-          ) Book{b.price > 50} b""")
+          ) Book{b.price > 50} b""").dicts())
 
-This will return results with name, price, discount, discount_price, diff fields for books that cost more than 50.
+`result` now contains a list of dicts each of which is a row in the result set. One example:
 
-The Django ORM is a great tool for database access. But it is driven by a specific set of choices about how to use the ORM. The main thrust of Querysets is automagic access to related data. It's easy to perform many operations with little code and no knowledge of SQL. For these goals, it is excellent. But committing to a set of target behaviours entails tradeoffs:
+```
+[{'b_name': 'Address such conference.',
+  'price': Decimal('99.01'),
+  'discount': Decimal('0.2'),
+  'discount_price': Decimal('19.802'),
+  'diff': Decimal('79.208'),
+  'publisher_name': 'Arnold Inc'}]
+```
 
-* Unnatural query formulation: The notation for QuerySets, like filtering can appear obscure and verbose.
-* Inefficient queries: the default sql generated by simple Querysets is not always the most efficient.
-* Inadvertently inefficent database usage: Because QuerySets do such a great job hiding complexity, they often hide important consequences of patterns that can produce massively slow code. Mainly this exhibits when iterating the result of a queryset when the developer does not notice that an operation on a Model instance is causing a new query for every iteration.
-* Obscure access to features like complex column expressions, subqueries, etc. F expressions, Outterefs, and other features are powerful but they can seem arcane and hard to understand.
+Here is the structure of the syntax:
 
-Some important notes before you try it:
+    (<field_exp1>, ...) <ModelName>{<filter_expression>} <alias> order by (<field_exp1>, ...)
 
-* Djaq sits on top of Django Models. It is an alternative to the Django Queryset class and it only works with Django Models.
-* It is entirely compatible with QuerySets being used in the same application.
-* Djaq only enables queries. It does not provide data update features, like creating new objects or modifying existing ones.
-* It's a work-in-progress. It is not refined or tested enough to use in a production environment.
+Whitespace does not matter too much. You could put things on separate lines:
 
-Reasons why Djaq might be a reasonable alternative to Querysets for some use cases:
+```
+(b.name, b.price, Publisher.name)
+Book{p.price > 50} b
+```
 
-* More natural query formulation using a Python-like syntax
-* More fine-grained control of result sets
-* Eschew laziness: don't trigger queries on behalf of the user except just once in an explicit and predictable manner
-* Default to cursor semantics rather than sliceable lists of objects for better performance
+Always start with column expressions you want to return in parens:
 
-Having said all that, bear in mind that Djaq is at an early stage of development. It works on the basic level described below in a pretty stable way, but if you push it, get ready to experience unhelpful exceptions, undocumented features, unexplainable behaviour, half-baked ideas, etc.
+    (b.name, b.price, Publisher.name)
 
-For a more complete statement of the motivation for Djaq, see <https://medium.com/@paul.wolf/djaq-a-different-concept-for-django-queries-92667af0fd17>.
+These expressions can be Django Model fields or arithmetic expressions. Column results are automatically given names. But you can give them your own name:
 
-Requirements
-------------
+    (b.name as title, b.price as price, Publisher.name as publisher)
 
-* Python 3.5 or higher
+Next is the model alias declaration:
+
+    Book b
+
+or if we want to filter and get only books over 50 in price:
+
+    Book{b.price > 50} b
+
+`Book` is the Django Model name. `b` is an alias we can use as an abbreviation in the filter or returned column expressions. We put the filter in curly braces, `{}` between the model name and alias. Use Python syntax to express the filter. Also use Python syntax to express the data to return. You don't have access to the Python Standard Library. This is basically the intersection of SQL and Python:
+
+The following filter:
+
+    {b.price > 50 and ilike(Publisher.name, 'A%')}
+
+will be translated to SQL:
+
+    b.price > 50 AND publisher.name ILIKE 'A%'
+
+The expressions are fully parsed so they are not subject to SQL injection. Trying to do so will cause an exception.
+
+You might notice in the above examples, Publisher does not use an alias. If you wanted an alias for Publisher, you could use a more complicated syntax:
+
+```
+(b.name, b.price) Book b
+-> (p.name) Publisher.name p
+```
+
+Notice, we use the `->` symbol to add another aliased relationship. This is one of three options: `->`, `<-`, `<>` that indicate you want to explicitly join via an SQL LEFT, RIGHT or INNER join respectively. But you don't need to do this. LEFT joins will always be implicit. We did not even need to refer to the Publisher model directly. Would could have done this:
+
+```
+(b.name, b.price, b.publisher.name as publisher)
+Book{p.price > 50} b
+```
+
+In fact, our example model also has an owner model called "Consortium" that is the owner of the publisher:
+
+```
+In [16]: print(list(DQ("(b.name, b.price, b.publisher.name, b.publisher.owner.name) Book b").limit(1).dicts()))
+Out[16]: [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'b_publisher_name': 'Wright, Taylor and Fitzpatrick', 'b_publisher_owner_name': 'Publishers Group'}]
+```
+
+So, it takes the expression `b.publisher.owner.name` and builds all the required relationships for you.
+
+To recap, there a three separate patterns to follow to get the publisher name in the result set:
+
+```
+In [13]: print(list(DQ("(b.name, b.price) Book b -> (p.name)Publisher p").limit(1).dicts()))
+[{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'p_name': 'Wright, Taylor and Fitzpatrick'}]
+
+In [14]: print(list(DQ("(b.name, b.price, Publisher.name) Book b").limit(1).dicts()))
+[{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'publisher_name': 'Wright, Taylor and Fitzpatrick'}]
+
+In [15]: print(list(DQ("(b.name, b.price, b.publisher.name) Book b").limit(1).dicts()))
+[{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'b_publisher_name': 'Wright, Taylor and Fitzpatrick'}]
+```
+
+Signal that you want to group by using an aggregate function:
+
+```
+(b.publisher.name as publisher, count(b.id) as book_count) Book b
+
+[
+    {
+        "publisher": "Martinez, Clark and Banks",
+        "book_count": 6
+    },
+    {
+        "publisher": "Fischer-Casey",
+        "book_count": 9
+    },
+	etc.
+]
+```
+
+Order by name:
+
+```
+(b.name, b.price, b.publisher.name as publisher)
+Book{p.price > 50} b
+order by b.name
+```
+
+Get average, minimum and maximum prices:
+
+```
+(avg(b.price) as average, min(b.price) as minimum, max(b.price) as maximum) Book b
+[
+   {
+      "average": "18.5287169247794985",
+      "minimum": "3.00",
+      "maximum": "99.01"
+   }
+]
+```
+
+Count all books:
+
+```
+(count(b.id)) Book b
+
+[
+    {
+        "countb_id": 149999
+    }
+]
+```
+
+You can qualify model names with the app name or registered app path:
+
+    (b.name, b.publisher.name) books.Book b
+
+You'll need this if you have models from different apps with the same name.
+
+To pass parameters, use variables in your query, like `'$(myvar)'`:
+
+```
+In [30]: oldest = '2018-12-20'
+    ...: list(DQ("(b.name, b.pubdate) Book{b.pubdate >= '$(oldest)'} b").context({"oldest": oldest}).limit(5).tuples())
+Out[30]:
+[('Available exactly blood.', datetime.date(2018, 12, 20)),
+ ('Indicate Congress none always.', datetime.date(2018, 12, 24)),
+ ('Old beautiful three program.', datetime.date(2018, 12, 25)),
+ ('Oil onto mission.', datetime.date(2018, 12, 21)),
+ ('Key same effect me.', datetime.date(2018, 12, 23))]
+ ```
+
+Notice that the variable holder, `$()`, *must* be in single quotes.
+
+## Requirements
+
+* Python 3.6 or higher
+
 * Django 2.1 or higher
-* Postgresql
 
-Installation
-------------
+* Postgresql is the only db where extensive testing is done but you might have luck on others that are not too far away from PG
 
-From PyPi:
+## Installation
 
-    pip install Djaq
+pip install Djaq
 
-This will install it into your Django project, hopefully into your virtual environment.
+pip install https://github.com/django/django/archive/master.zip
 
-Since Djaq is a new project that is evolving rapidly, you might want to use the source version rather than the pip module. Please get in touch if you want me to push a new PyPi version.
+Functions
+---------
 
-Sample Project
---------------
+To understand available functions for column expressions or filters, if a function is not defined by DjangoQuery, then the function name is passed without further intervention to the underlying SQL. A user can define new functions at any time by adding to the custom functions. Here's an example of adding a regex matching function:
+
+    DjangoQuery.functions["REGEX"] = "{} ~ {}"
+
+Now find all book names starting with 'B':
+
+    DQ("(b.name) Book{regex(b.name, 'B.*')} b")
+
+Notice, we always want to use upper case for the function name when defining the function. Usage of a function is then case-insensitive. You may wish to make sure you are not over-writing existing functions. "REGEX" already exists, for instance.
+
+You can also provide a `callable` to `DjangoQuery.functions`. The callable needs to take two arguments: the function name and a list of positional parameters and it must return SQL as a string that can either represent a column expression or some value expression from the underlying backend.
+
+In the following:
+
+    DQ("(b.name) Book{like(upper(b.name), upper('$(name_search)'))} b")
+
+`like()` is a Djaq-defined function that is converted to `field LIKE string`. Whereas `upper()` is sent to the underlying database because it's a common SQL function. Any function can be created or existing functions mutated by updating the `DjangoQuery.functions` dict where the key is the upper case function name and the value is a template string with `{}` placeholders. Arguments are positionally interpolated.
+
+Above, we provided this example:
+
+    DQ("""(
+       sum(iif(b.rating < 5, b.rating, 0)) as below_5,
+       sum(iif(b.rating >= 5, b.rating, 0)) as above_5
+    ) Book b""")
+
+We can simplify further by creating a new function. The IIF function is defined like this:
+
+    "CASE WHEN {} THEN {} ELSE {} END"
+
+ We can create a `SUMIF` function like this:
+
+    DjangoQuery.functions['SUMIF'] = "SUM(CASE WHEN {} THEN {} ELSE {} END)"
+
+ Now we can rewrite the above like this:
+
+    DQ("""(
+        sumif(b.rating < 5, b.rating, 0) as below_5,
+        sumif(b.rating >= 5, b.rating, 0) as above_5
+        ) Book b""")
+
+Here's an example providing a function:
+
+```
+def concat(funcname, args):
+    """Return args spliced by sql concat operator."""
+    return " || ".join(args)
+
+DjangoQuery.functions['CONCAT'] = concat
+```
+
+Parameters
+----------
+
+We call the Django connection cursor approximately like this:
+
+    from django.db import connections
+    cursor = connections['default']
+    cursor.execute(sql, context_dict)
+
+When we execute the resulting SQL query, named parameters are used. You *must* name your parameters. Positional parameters are not passed:
+
+    oldest = '2000-01-01'
+    DQ("(b.id) Book{b.pub_date >= '$(oldest)'} b").context({"oldest": oldest}).tuples()
+
+Notice that any parameterised value must be represented in the query expression in single quotes:
+
+    '$(myparam)'
+
+Therefore, when you add subqueries, their parameters have to be supplied at the same time.
+
+Note what is happening here:
+
+    name_search = 'Bar.*'
+    DQ("(b.id) Book{regex(b.name, '%(name_search)')} b").context(locals()).tuples()
+
+To get all books starting with 'Bar'. Or:
+
+    DQ("(b.name) Book{like(upper(b.name), upper('$(name_search)'))} b").context(request.POST)
+
+Provided that `request.POST` has a `name_search` key/value.
+
+You can provide a validation class that will return context variables. The default class used is called `ContextValidator()`. You can override this to provide a validator that raises exceptions if data is not valid or mutates the context data, like coercing types from `str` to `int`:
+
+```
+class MyContextValidator(ContextValidator):
+    def get(self, key, value):
+        if key == 'order_no':
+            return int(value)
+        return value
+
+    def context(self):
+        if not 'order_no' in self.data:
+            raise Exception("Need order no")
+        self.super().context()
+```
+
+Then add the validator:
+
+```
+order_no = "12345"
+DQ("(o.order_no, o.customer) Orders{o.order_no == '%(order_no)')} b")
+    .validator(MyContextValidator)
+    .context(locals())
+    .tuples()
+```
+
+
+Column expressions
+------------------
+
+Doing column arithmetic is supported directly in the query syntax:
+
+    # Djaq
+    DQ("""(b.name,
+        b.price as price,
+        0.2 as discount,
+        b.price*0.2 as discount_price,
+        b.price - (b.price*0.2) as diff
+        ) Book b""")
+
+You can use constants:
+
+```
+In [60]: list(DQ("(b.name, 'great read') Book b").limit(1).tuples())
+Out[60]: [('Range total author impact.', 'great read')]
+```
+
+You can use the common operators and functions of your underlying storage system.
+
+The usual arithmetic:
+
+```
+In [36]: list(DQ("(b.name, 1+1) Book b").limit(1).tuples())
+Out[36]: [('Range total author impact.', 2)]
+In [38]: list(DQ("(b.name, 2.0/4) Book b").limit(1).tuples())
+Out[38]: [('Range total author impact.', Decimal('0.50000000000000000000'))]
+In [44]: list(DQ("(2*3) Book b").limit(1).tuples())
+Out[44]: [(6,)]
+```
+
+Modulo:
+
+```
+In [55]: list(DQ("(mod(4.0,3)) Book b").limit(1).tuples())
+Out[55]: [(Decimal('1.0'),)]
+```
+
+Square root:
+
+```
+In [45]: list(DQ("(2 > 3) Book b").limit(1).tuples())
+Out[45]: [(False,)]
+```
+
+While the syntax has a superficial resemblance to Python, you do not
+have access to any functions of the Python Standard Libary.
+
+
+
+Subqueries and IN clause
+------------------------
+
+You can reference subqueries within a Djaq expression using
+
+* Another DjangoQuery
+* A Queryset
+* A list
+
+You can use an IN clause with the keyword `in` (note lower case). Create one DjangoQuery and reference it with `@queryname`:
+
+    DQ("(b.id) Book{name == 'B*'} b", name='dq_sub')
+    dq = DQ("(b.name, b.price) Book{id in '@dq_sub'} b")
+
+Note that you have to pass a name to the DjangoQuery to reference it later. We can also use the `data` parameter to pass a QuerySet to the DjangoQuery:
+
+    qs = Book.objects.filter(name__startswith="B").only('id')
+    dq = DQ("(b.name, b.price) Book{id in '@qs_sub'} b", names={"qs_sub": qs})
+
+    qs = Book.objects.filter(name__startswith="B").only('id')
+    ids = [rec.id for rec in qs]
+    dq = DQ("(b.name, b.price) Book{id in '@qs_sub'} b", names={"qs_sub": ids})
+
+As with QuerySets it is nearly always faster to generate a sub query than use an itemised list.
+
+Django Subquery and OuterRef
+----------------------------
+
+The following do pretty much the same thing:
+
+    # QuerySet
+    pubs = Publisher.objects.filter(pk=OuterRef('publisher')).only('pk')
+    Book.objects.filter(publisher__in=Subquery(pubs))
+
+    # Djaq
+    DQ("(p.id) Publisher p", name='pubs')
+    DQ("(b.name) Book{publisher in '@pubs'} b")
+
+Obviously, in both cases, you would be filtering Publisher to make it actually useful, but the effect and verbosity can be extrapolated from the above.
+
+Order by
+--------
+
+You can order_by like this:
+
+    DQ("(b.id) Book{b.price > 20} b order by (b.name)")
+
+Descending order:
+
+    DQ("(b.id) Book{b.price > 20} b order by -(b.name)")
+
+You can use either `+` or `-` for ASC or DESC.
+
+Count
+-----
+
+There are a couple ways to count results. These both return the exact same thing:
+
+    DQ("(Book.id)").count()
+
+    DQ("(count(Book.id)) Book").value()
+
+Datetimes
+---------
+
+Datetimes are provided as strings in the iso format that your backend expects, like '2019-01-01 18:00:00'.
+
+Constants
+---------
+
+`None`, `True`, `False` are replaced in SQL with `NULL`, `TRUE`, `FALSE`. All of the following work:
+
+```
+DQ("(b.id, b.name) Book{in_print is True} b")
+DQ("(b.id, b.name) Book{in_print is not True} b")
+DQ("(b.id, b.name) Book{in_print is False} b")
+DQ("(b.id, b.name) Book{in_print == True} b")
+```
+
+Slicing
+-------
+
+You cannot slice a DjangoQuery because this would frustrate a design goal of Djaq to provide the performance advantages of cursor-like behaviour.
+
+You can use `limit()` and `offset()`:
+
+    DjangoQuery("...").offset(1000).limit(100).tuples()
+
+Which will provide you with the first hundred results starting from the 1000th record.
+
+Rewind cursor
+-------------
+
+You can rewind the cursor but this is just executing the SQL again:
+
+    list(dq.tuples())
+
+    # now, calling `dq.tuples()` returns nothing
+
+    list(dq.tuples())
+
+    # you will again see results
+
+If you call `DjangoQuery.context(data)`, that will effectively rewind the cursor since an entirely new query is created and the implementation currently doesn't care if `data` is the same context as previously supplied.
+
+## Column expressions
+
+###Expression grouping
+
+## Filtering
+
+## Parameters to filter expressions
+
+## Counting
+
+## Grouping
+
+## Ordering
+
+## Limit and offset
+
+## Aggregate and custom functions
+
+##Remote CRUD: creating, reading, updating, deleting
+
+## Output
+
+json
+tuples
+dicts
+Objects
+
+
+## ContextValidator
+
+## Comparing Quersets with DjaqQuery
+
+## Schema
+
+
+## Comparing to Django Quersets
+
+Djaq queries can be sent over the wire as a string. That is the main
+difference with Quersets. Even then, Djaq is not a replacement for
+Querysets. Querysets are highly integrated with Django and have been
+developed over 15 years by many developers. It is a very well thought
+out framework that ultimately is the best choice working within a service based on Django's ORM.
+
+Unsurprisingly, Django provides significant options for adjusting
+query generation to fit a use case, `only()`, `select_related()`,
+`prefetch_related()` are all highly useful for different cases. Here's
+a point-by-point comparison with Djaq:
+
+* `only()`: Djaq always works in "only" mode. Only explicitly requested fields are returned.
+
+* `select_related()`: The select clause only returns those columns
+  explicitly defined. This feature makes loading of related fields
+  non-lazy. In contrast, queries are always non-lazy in Djaq.
+
+* `prefetch_related()`: this is not really a job for Djaq. Currently,
+  there is no support for m2m fields but when this is implemented, it
+  will be part of the instance manager.
+
+* F expressions: These are workarounds for not being able to write
+  expressions in the query for things like column value arithmetic and
+  other expressions you want to have the db calculate. Djaq lets you
+  write these directly and naturally as part of it's syntax.
+
+* To aggregate with Querysets, you use `aggregate()`, whereas Djaq
+  aggregates results whenever an aggregate function appears in the column
+  expressions.
+
+* Model instances with QuerySets exactly represent the corresponding
+  Django model. Djaq has a different concept of a result instance
+  (DQResult) that represents whatever is returned by the query even if
+  it's not a model field.
+
+
+This section is simply meant to show you how to do the same things
+with Djaq that you'd do wtih Querysets to help someone who is already
+familiar with Querysets.
+
+Get the average price of books:
+
+    DQ("(avg(b.price)) Book b")
+
+compared to:
+
+    Book.objects.all().aggregate(Avg('price'))
+
+Get the difference off the maximum price:
+
+    DQ("(Publisher.name, max(Book.price) - avg(Book.price) as price_diff) Book b")
+
+compared to:
+
+    Book.objects.aggregate(price_diff=Max('price', output_field=FloatField()) - Avg('price'))
+
+Count books per publisher:
+
+    DQ("(Publisher.name, count(Book.id) as num_books) Book b")
+
+compared to:
+
+    Publisher.objects.annotate(num_books=Count("book"))
+
+Count books with ratings up to and over 5:
+
+    DQ("""(sum(iif(b.rating < 5, b.rating, 0)) as below_5,
+        sum(iif(b.rating >= 5, b.rating, 0)) as above_5)
+        Book b""")
+
+compared to:
+
+    above_5 = Count('book', filter=Q(book__rating__gt=5))
+    below_5 = Count('book', filter=Q(book__rating__lte=5))
+    Publisher.objects.annotate(below_5=below_5).annotate(above_5=above_5)
+
+Get average, maximum, minimum price of books:
+
+    DQ("(avg(b.price), max(b.price), min(b.price)) Book b")
+
+compared to:
+
+    Book.objects.aggregate(Avg('price'), Max('price'), Min('price'))
+
+Just as there is a ModelInstance class in Django, we have a DQResult class:
+
+`objs()`: return a DQResult for each result row, basically a namespace for the object:
+
+```
+dq = DQ("(b.id, b.name, Publisher.name as publisher) Book b")
+for book in dq.objs():
+    title = book.name
+    publisher = book.publisher
+    ...
+```
+
+Note that by default, you iterate using a generator. You cannot slice a generator.
+
+Some other features:
+
+`DjangoQuery.value()`: when you know the result is a single row with a single value, you can immediately access it without further iterations:
+
+    DQ("(count(b.id)) Book b").value()
+
+will return a single integer value representing the count of books.
+
+
+Results vs Model Instances
+--------------------------
+
+The Djaq generator `.objs()` returns a `DQResult` class instance. Djaq produces 'results' in contrast to model instances. Depending on what methods you use on QuerySets you may get Django Model instances or a list or a dict, etc. Djaq never returns a model instance. But you can easily get a model instance via the DQResult.
+
+## Limitations
+
+
+##Sample Project
 
 If you want to use Djaq right away in your own test project and you feel confident, crack on. In that case skip the following instructions for using the sample Bookshop project. If you want to try this, clone the django repo:
 
@@ -167,412 +801,4 @@ class Store(models.Model):
     books = models.ManyToManyField(Book)
 ```
 
-Let's compare getting all the books and iterating over them:
-
-    # get all books with a QuerySet
-    qs = Book.objects.all()
-    for book in qs:
-        print(book)
-
-    # get all books with Djaq
-    dq = DQ("(b.id, b.name) Book b")
-    for book in dq.tuples():
-        print(book)
-
-Notice, with Djaq we provided explicit fields that we want returned. It might look slightly more complicated but in fact most queries are less verbose in Djaq:
-
-    # Get average price of books
-    from django.db.models import Avg
-    Book.objects.all().aggregate(Avg('price'))
-
-    {'price__avg': 18.466780449193628}
-
-    # average price using Djaq
-    DQ("(avg(b.price)) Book b").value()
-
-    Decimal('18.4667804491936282')
-
-
-The full syntax for Djaq queries:
-
-
-    (<field_exp1>, ...) <ModelName>{<filter_expression>} <alias> order by (<field_exp1>, ...)
-
-This expression is a string passed as the first argument when creating a DjangoQuery object. In our examples we import under the alias `DQ`:
-
-    from djaq import DjangoQuery as DQ
-
-For QuerySet examples, we assume imports like this:
-
-    from django.db.models import Q, Avg, Count, Min, Max, Sum, FloatField, Subquery, OuterRef
-    from books.models import Author, Publisher, Book, Store
-
-With Djaq, you don't need to import Count, Sum, Min, etc. or the Model classes. Count books:
-
-    dq = DQ("(count(Book.id)) Book")
-
-We can get the result in numerous ways:
-
-    DQ("(count(Book.id)) Book").value()
-
-Or use an iterator:
-
-    for t in DQ("(count(Book.id)) Book").tuples():
-        print(t)
-
-There are several generators to choose from to iterate records:
-
-    DjangoQuery.json()  # return json objects
-    DjangoQuery.dicts() # dicts
-    DjangoQuery.tuples() # tuples of values
-    DjangoQuery.objs()  # We return for each record, an instance of DQResult
-
-The DQResult is a namespace for results:
-
-    for result in DQ('(Book.name, Book.price)').objs():
-        print(result.name)
-        print(result.price)
-
-etc.
-
-Let's quickly run through a set of examples comparing Djaq DjangoQueries to QuerySets.
-
-Get the average price of books:
-
-    DQ("(avg(b.price)) Book b")
-
-compared to:
-
-    Book.objects.all().aggregate(Avg('price'))
-
-Get the difference off the maximum price:
-
-    DQ("(Publisher.name, max(Book.price) - avg(Book.price) as price_diff) Book b")
-
-compared to:
-
-    Book.objects.aggregate(price_diff=Max('price', output_field=FloatField()) - Avg('price'))
-
-Count books per publisher:
-
-    DQ("(Publisher.name, count(Book.id) as num_books) Book b")
-
-compared to:
-
-    Publisher.objects.annotate(num_books=Count("book"))
-
-Count books with ratings up to and over 5:
-
-    DQ("""(sum(iif(b.rating < 5, b.rating, 0)) as below_5,
-        sum(iif(b.rating >= 5, b.rating, 0)) as above_5)
-        Book b""")
-
-compared to:
-
-    above_5 = Count('book', filter=Q(book__rating__gt=5))
-    below_5 = Count('book', filter=Q(book__rating__lte=5))
-    Publisher.objects.annotate(below_5=below_5).annotate(above_5=above_5)
-
-Get average, maximum, minimum price of books:
-
-    DQ("(avg(b.price), max(b.price), min(b.price)) Book b")
-
-compared to:
-
-    Book.objects.aggregate(Avg('price'), Max('price'), Min('price'))
-
-Just as there is a ModelInstance class in Django, we have a DQResult class:
-
-`objs()`: return a DQResult for each result row, basically a namespace for the object:
-
-```
-dq = DQ("(b.id, b.name, Publisher.name as publisher) Book b")
-for book in dq.objs():
-    title = book.name
-    publisher = book.publisher
-    ...
-```
-
-Note that by default, you iterate using a generator. You cannot slice a generator.
-
-Some other features:
-
-`DjangoQuery.value()`: when you know the result is a single row with a single value, you can immediately access it without further iterations:
-
-    DQ("(count(Book.id)) Book{}").value()
-
-will return a single integer value representing the count of books.
-
-Comparing features
-------------------
-
-Unsurprisingly, Django provides significant options for adjusting query generation to fit a use case, `only()`, `select_related()`, `prefetch_related()` are all highly useful for different cases. Here's a point-by-point comparison with Djaq:
-
-* only(): Djaq always works in "only" mode. Only explicitly requested fields are returned.
-* select_related: The select clause only returns those columns explicitly defined. This feature makes loading of related fields non-lazy. But all queries are non-lazy in Djaq.
-* prefetch_related: this is not really a job for Djaq. Currently, there is no support for m2m fields but when this is implemented, it will be part of the instance manager.
-* F expressions: These are workarounds for not being able to write expressions in the query for things like column value arithmetic and other expressions you want to have the db calculate. Djaq let's you write these directly and naturally as part of it's syntax.
-* Subquery and Outteref: Djaq does not require extra imports or syntactic sugar to express subqueries.
-* To aggregate with Querysets, you use `aggregate()`, whereas with Djaq aggregate results are natively part of the result set.
-* Model instances with QuerySets exactly represent the corresponding Django model. Djaq has a different concept of a result instance (DQResult) that represents whatever is returned by the query even if it's not a model field.
-
-
-Results vs Model Instances
---------------------------
-
-The Djaq generator `.objs()` returns a `DQResult` class instance. Djaq produces 'results' in contrast to model instances. Depending on what methods you use on QuerySets you may get Django Model instances or a list or a dict, etc. Djaq never returns a model instance. But you can easily get a model instance via the DQResult.
-
-Functions
----------
-
-To understand available functions for column expressions or filters, if a function is not defined by DjangoQuery, then the function name is passed without further intervention to the underlying SQL. A user can define new functions at any time by adding to the custom functions. Here's an example of adding a regex matching function:
-
-    DjangoQuery.functions["REGEX"] = "{} ~ {}"
-
-Now find all book names starting with 'B':
-
-    DQ("(b.name) Book{regex(b.name, 'B.*')} b")
-
-Notice, we always want to use upper case for the function name when defining the function. Usage of a function is then case-insensitive. You may wish to make sure you are not over-writing existing functions. "REGEX" already exists, for instance.
-
-You can also provide a `callable` to `DjangoQuery.functions`. The callable needs to take two arguments: the function name and a list of positional parameters and it must return SQL as a string that can either represent a column expression or some value expression from the underlying backend.
-
-In the following:
-
-    DQ("(b.name) Book{like(upper(b.name), upper('$(name_search)'))} b")
-
-`like()` is a Djaq-defined function that is converted to `field LIKE string`. Whereas `upper()` is sent to the underlying database because it's a common SQL function. Any function can be created or existing functions mutated by updating the `DjangoQuery.functions` dict where the key is the upper case function name and the value is a template string with `{}` placeholders. Arguments are positionally interpolated.
-
-Above, we provided this example:
-
-   DQ("""(
-    sum(iif(b.rating < 5, b.rating, 0)) as below_5,
-    sum(iif(b.rating >= 5, b.rating, 0)) as above_5
-    ) Book b""")
-
-We can simplify further by creating a new function. The IIF function is defined like this:
-
-    "CASE WHEN {} THEN {} ELSE {} END"
-
- We can create a `SUMIF` function like this:
-
-    DjangoQuery.functions['SUMIF'] = "SUM(CASE WHEN {} THEN {} ELSE {} END)"
-
- Now we can rewrite the above like this:
-
-    DQ("""(
-        sumif(b.rating < 5, b.rating, 0) as below_5,
-        sumif(b.rating >= 5, b.rating, 0) as above_5
-        ) Book b""")
-
-Here's an example providing a function:
-
-```
-def concat(funcname, args):
-    """Return args spliced by sql concat operator."""
-    return " || ".join(args)
-
-DjangoQuery.functions['CONCAT'] = concat
-```
-
-Parameters
-----------
-
-We call the Django connection cursor approximately like this:
-
-    from django.db import connections
-    cursor = connections['default']
-    cursor.execute(sql, context_dict)
-
-When we execute the resulting SQL query, named parameters are used. You *must* name your parameters. Positional parameters are not passed:
-
-    oldest = '2000-01-01'
-    DQ("(b.id) Book{b.pub_date >= '$(oldest)'} b").context({"oldest": oldest}).tuples()
-
-Notice that any parameterised value must be represented in the query expression in single quotes:
-
-    '$(myparam)'
-
-Therefore, when you add subqueries, their parameters have to be supplied at the same time.
-
-Note what is happening here:
-
-    name_search = 'Bar.*'
-    DQ("(b.id) Book{regex(b.name, '%(name_search)')} b").context(locals()).tuples()
-
-To get all books starting with 'Bar'. Or:
-
-    DQ("(b.name) Book{like(upper(b.name), upper('$(name_search)'))} b").context(request.POST)
-
-Provided that `request.POST` has a `name_search` key/value.
-
-You can provide a validation class that will return context variables. The default class used is called `ContextValidator()`. You can override this to provide a validator that raises exceptions if data is not valid or mutates the context data, like coercing types from `str` to `int`:
-
-```
-class MyContextValidator(ContextValidator):
-    def get(self, key, value):
-        if key == 'order_no':
-            return int(value)
-        return value
-
-    def context(self):
-        if not 'order_no' in self.data:
-            raise Exception("Need order no")
-        self.super().context()
-```
-
-Then add the validator:
-
-```
-order_no = "12345"
-DQ("(o.order_no, o.customer) Orders{o.order_no == '%(order_no)')} b")
-    .validator(MyContextValidator)
-    .context(locals())
-    .tuples()
-```
-
-
-Column expressions
-------------------
-
-Doing column arithmetic is much more natural and does not require the voodoo of F expressions:
-
-    # Djaq
-    DQ("""(b.name,
-        b.price as price,
-        0.2 as discount,
-        b.price*0.2 as discount_price,
-        b.price - (b.price*0.2) as diff
-        ) Book b""")
-
-Subqueries and IN clause
-------------------------
-
-You can reference subqueries within a Djaq expression using
-
-* Another DjangoQuery
-* A Queryset
-* A list
-
-You can use an IN clause with the keyword `in` (note lower case). Create one DjangoQuery and reference it with `@queryname`:
-
-    DQ("(b.id) Book{name == 'B*'} b", name='dq_sub')
-    dq = DQ("(b.name, b.price) Book{id in '@dq_sub'} b")
-
-Note that you have to pass a name to the DjangoQuery to reference it later. We can also use the `data` parameter to pass a QuerySet to the DjangoQuery:
-
-    qs = Book.objects.filter(name__startswith="B").only('id')
-    dq = DQ("(b.name, b.price) Book{id in '@qs_sub'} b", names={"qs_sub": qs})
-
-    qs = Book.objects.filter(name__startswith="B").only('id')
-    ids = [rec.id for rec in qs]
-    dq = DQ("(b.name, b.price) Book{id in '@qs_sub'} b", names={"qs_sub": ids})
-
-As with QuerySets it is nearly always faster to generate a sub query than use an itemised list.
-
-Django Subquery and OuterRef
-----------------------------
-
-The following do pretty much the same thing:
-
-    # QuerySet
-    pubs = Publisher.objects.filter(pk=OuterRef('publisher')).only('pk')
-    Book.objects.filter(publisher__in=Subquery(pubs))
-
-    # Djaq
-    DQ("(p.id) Publisher p", name='pubs')
-    DQ("(b.name) Book{publisher in '@pubs'} b")
-
-Obviously, in both cases, you would be filtering Publisher to make it actually useful, but the effect and verbosity can be extrapolated from the above.
-
-Order by
---------
-
-You can order_by like this:
-
-    DQ("(b.id) Book{b.price > 20} b order by (b.name)")
-
-Descending order:
-
-    DQ("(b.id) Book{b.price > 20} b order by -(b.name)")
-
-You can use either `+` or `-` for ASC or DESC.
-
-Count
------
-
-There are a couple ways to count results. These both return the same thing:
-
-    DQ("(Book.id)").count()
-
-    DQ("(count(Book.id)) Book").value()
-
-Datetimes
----------
-
-Datetimes are provided as strings in the iso format that your backend expects, like '2019-01-01 18:00:00'.
-
-Constants
----------
-
-`None`, `True`, `False` are replaced in SQL with `NULL`, `TRUE`, `FALSE`. All of the following work:
-
-```
-DQ("(b.id, b.name) Book{in_print is True} b")
-DQ("(b.id, b.name) Book{in_print is not True} b")
-DQ("(b.id, b.name) Book{in_print is False} b")
-DQ("(b.id, b.name) Book{in_print == True} b")
-```
-
-Slicing
--------
-
-You cannot slice a DjangoQuery at this time because this would frustrate a design goal of Djaq to provide the performance advantages of cursor-like behaviour.
-
-We will probably provide a separate class to provide slice behaviour in the future. But you can already do this:
-
-    DjangoQuery("...").offset(1000).limit(100).tuples()
-
-Which will provide you with the first hundred results starting from the 1000th record.
-
-Rewind cursor
--------------
-
-You can rewind the cursor but this is just executing the SQL again:
-
-    for rec in dq.tuples():
-        print(rec)
-
-    # now, calling `dq.tuples()` returns nothing
-
-    # get fresh cursor
-    for rec in dq.rewind().tuples():
-        print(rec)
-
-If you call `DjangoQuery.context(data)`, that will effectively rewind the cursor since an entirely new query is created and the implementation currently doesn't care if `data` is the same context as previously supplied.
-
-Implementation Notes
---------------------
-
-The parser for Djaq is kind of a mixed bag. It uses regular expressions, custom character stream processing and mostly Python's Abstract Syntax Tree module. The manner of parsing is not necessarily optimal and I'm no compiler expert by a long shot. But the performance overhead and features seem acceptable at this time.
-
-
-DB Portability
---------------
-
-The intent is to provide broad portability comparable to QuerySets. Various steps need to be taken to make Djaq more portable (it will be most compatible at the start with Postgresql). For instance, the ability to access db functions directly could lead to dependence on a particular DB's SQL. But this can be largely mitigated by providing custom functions for all the fuctions that you wish to use.
-
-We need to make the custom function feature provide different sets of functions per backend, a planned development. But ultimately the choice to use proprietary functions is something I think should be left to the user. Even with Django QuerySets there are various ways to use proprietary features of a db backend.
-
-Future
-------
-
-Selective todo list:
-
-* Improve SQL generation
-* Support M2M relations
-* Support reverse relations
-* A new, separate object type for sliceable results access
-* Direct support for GraphQL
-* Mutable Djaq queries based on context data. For instance, removing elements of a query where context data is not provided
-
+# Djaq compared to

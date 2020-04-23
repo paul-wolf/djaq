@@ -1,7 +1,9 @@
 import sys
+import json
 import traceback
 
 from django.core.management.base import BaseCommand, CommandError
+from django.core.serializers.json import DjangoJSONEncoder
 
 from djaq.query import DjangoQuery as DQ
 
@@ -37,5 +39,8 @@ class Command(BaseCommand):
             offset=options.get("offset"),
             verbosity=options.get("verbosity"),
         )
-        for rec in getattr(q, options.get("format"))():
-            print(rec)
+        if options.get("format") == "dicts":
+            print(json.dumps(list(q.dicts()), cls=DjangoJSONEncoder, indent=4))
+        else:
+            for rec in getattr(q, options.get("format"))():
+                print(rec)
