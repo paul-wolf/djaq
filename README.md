@@ -8,7 +8,7 @@ The reason for this alternative is to provide a way to query Django models outsi
 
 Of course, there is a common way to do this already by using some REST framework like Django REST Framework (DRF) or one of the alternatives, Django views, etc. The advantage of Djaq is you can immediately provide access without writing serializers, views, etc. Here is what a view function for your data layer might look like with Djaq:
 
-```
+```python
 @login_required
 def djaq_view(request):
     data = json.loads(request.body.decode("utf-8"))
