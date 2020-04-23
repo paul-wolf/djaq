@@ -54,7 +54,7 @@ Install:
 
 Use:
 
-```
+```python
 from djaq.query import DjangoQuery as DQ
 
 print(list(DQ("(b.name as title, b.publisher.name as publisher) Book b").dicts()))
@@ -66,7 +66,7 @@ print(list(DQ("(b.name as title, b.publisher.name as publisher) Book b").dicts()
 
 Throughout, we use models somewhat like those from Django's bookshop example:
 
-```
+```python
 from django.db import models
 
 class Author(models.Model):
@@ -94,18 +94,19 @@ These examples use auto-generated titles and names and we have a slightly more c
 
 Let's get book title (name), price, discounted price, amount of discount and publisher name wherever the price is over 50.
 
-    result = \
-      list(DQ("""(b.name,
-           b.price as price,
-	       0.2 as discount,
-	       b.price * 0.2 as discount_price,
-           b.price - (b.price*0.2) as diff,
-		   Publisher.name
-          ) Book{b.price > 50} b""").dicts())
-
+```python
+result = \
+  list(DQ("""(b.name,
+	   b.price as price,
+	   0.2 as discount,
+	   b.price * 0.2 as discount_price,
+	   b.price - (b.price*0.2) as diff,
+	   Publisher.name
+      ) Book{b.price > 50} b""").dicts())
+```
 `result` now contains a list of dicts each of which is a row in the result set. One example:
 
-```
+```python
 [{'b_name': 'Address such conference.',
   'price': Decimal('99.01'),
   'discount': Decimal('0.2'),
@@ -120,7 +121,7 @@ Here is the structure of the syntax:
 
 Whitespace does not matter too much. You could put things on separate lines:
 
-```
+```python
 (b.name, b.price, Publisher.name)
 Book{p.price > 50} b
 ```
@@ -169,7 +170,7 @@ Book{p.price > 50} b
 
 In fact, our example model also has an owner model called "Consortium" that is the owner of the publisher:
 
-```
+```python
 In [16]: print(list(DQ("(b.name, b.price, b.publisher.name, b.publisher.owner.name) Book b").limit(1).dicts()))
 Out[16]: [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'b_publisher_name': 'Wright, Taylor and Fitzpatrick', 'b_publisher_owner_name': 'Publishers Group'}]
 ```
@@ -178,7 +179,7 @@ So, it takes the expression `b.publisher.owner.name` and builds all the required
 
 To recap, there a three separate patterns to follow to get the publisher name in the result set:
 
-```
+```python
 In [13]: print(list(DQ("(b.name, b.price) Book b -> (p.name)Publisher p").limit(1).dicts()))
 [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'p_name': 'Wright, Taylor and Fitzpatrick'}]
 
@@ -217,7 +218,7 @@ order by b.name
 
 Get average, minimum and maximum prices:
 
-```
+```python
 (avg(b.price) as average, min(b.price) as minimum, max(b.price) as maximum) Book b
 [
    {
@@ -230,7 +231,7 @@ Get average, minimum and maximum prices:
 
 Count all books:
 
-```
+```python
 (count(b.id)) Book b
 
 [
@@ -248,7 +249,7 @@ You'll need this if you have models from different apps with the same name.
 
 To pass parameters, use variables in your query, like `'$(myvar)'`:
 
-```
+```python
 In [30]: oldest = '2018-12-20'
     ...: list(DQ("(b.name, b.pubdate) Book{b.pubdate >= '$(oldest)'} b").context({"oldest": oldest}).limit(5).tuples())
 Out[30]:
@@ -271,20 +272,27 @@ Notice that the variable holder, `$()`, *must* be in single quotes.
 
 ## Installation
 
-pip install Djaq
+Install from PyPi:
 
-pip install https://github.com/django/django/archive/master.zip
+    pip install Djaq
+
+Install latest HEAD from github:
+
+    pip install https://github.com/django/django/archive/master.zip
 
 Functions
 ---------
 
 To understand available functions for column expressions or filters, if a function is not defined by DjangoQuery, then the function name is passed without further intervention to the underlying SQL. A user can define new functions at any time by adding to the custom functions. Here's an example of adding a regex matching function:
 
-    DjangoQuery.functions["REGEX"] = "{} ~ {}"
-
+```python
+DjangoQuery.functions["REGEX"] = "{} ~ {}"
+```
 Now find all book names starting with 'B':
 
-    DQ("(b.name) Book{regex(b.name, 'B.*')} b")
+```python
+DQ("(b.name) Book{regex(b.name, 'B.*')} b")
+```
 
 Notice, we always want to use upper case for the function name when defining the function. Usage of a function is then case-insensitive. You may wish to make sure you are not over-writing existing functions. "REGEX" already exists, for instance.
 
@@ -292,16 +300,20 @@ You can also provide a `callable` to `DjangoQuery.functions`. The callable needs
 
 In the following:
 
-    DQ("(b.name) Book{like(upper(b.name), upper('$(name_search)'))} b")
+```python
+DQ("(b.name) Book{like(upper(b.name), upper('$(name_search)'))} b")
+```
 
 `like()` is a Djaq-defined function that is converted to `field LIKE string`. Whereas `upper()` is sent to the underlying database because it's a common SQL function. Any function can be created or existing functions mutated by updating the `DjangoQuery.functions` dict where the key is the upper case function name and the value is a template string with `{}` placeholders. Arguments are positionally interpolated.
 
 Above, we provided this example:
 
-    DQ("""(
-       sum(iif(b.rating < 5, b.rating, 0)) as below_5,
-       sum(iif(b.rating >= 5, b.rating, 0)) as above_5
-    ) Book b""")
+```python
+DQ("""(
+   sum(iif(b.rating < 5, b.rating, 0)) as below_5,
+   sum(iif(b.rating >= 5, b.rating, 0)) as above_5
+) Book b""")
+```
 
 We can simplify further by creating a new function. The IIF function is defined like this:
 
@@ -313,14 +325,16 @@ We can simplify further by creating a new function. The IIF function is defined 
 
  Now we can rewrite the above like this:
 
-    DQ("""(
-        sumif(b.rating < 5, b.rating, 0) as below_5,
-        sumif(b.rating >= 5, b.rating, 0) as above_5
-        ) Book b""")
+```python
+DQ("""(
+	sumif(b.rating < 5, b.rating, 0) as below_5,
+	sumif(b.rating >= 5, b.rating, 0) as above_5
+	) Book b""")
+```
 
 Here's an example providing a function:
 
-```
+```python
 def concat(funcname, args):
     """Return args spliced by sql concat operator."""
     return " || ".join(args)
@@ -333,14 +347,19 @@ Parameters
 
 We call the Django connection cursor approximately like this:
 
-    from django.db import connections
-    cursor = connections['default']
-    cursor.execute(sql, context_dict)
+```python
+from django.db import connections
+cursor = connections['default']
+cursor.execute(sql, context_dict)
+```
 
 When we execute the resulting SQL query, named parameters are used. You *must* name your parameters. Positional parameters are not passed:
 
-    oldest = '2000-01-01'
-    DQ("(b.id) Book{b.pub_date >= '$(oldest)'} b").context({"oldest": oldest}).tuples()
+
+```python
+oldest = '2000-01-01'
+DQ("(b.id) Book{b.pub_date >= '$(oldest)'} b").context({"oldest": oldest}).tuples()
+```
 
 Notice that any parameterised value must be represented in the query expression in single quotes:
 
@@ -361,7 +380,7 @@ Provided that `request.POST` has a `name_search` key/value.
 
 You can provide a validation class that will return context variables. The default class used is called `ContextValidator()`. You can override this to provide a validator that raises exceptions if data is not valid or mutates the context data, like coercing types from `str` to `int`:
 
-```
+```python
 class MyContextValidator(ContextValidator):
     def get(self, key, value):
         if key == 'order_no':
@@ -376,7 +395,7 @@ class MyContextValidator(ContextValidator):
 
 Then add the validator:
 
-```
+```python
 order_no = "12345"
 DQ("(o.order_no, o.customer) Orders{o.order_no == '%(order_no)')} b")
     .validator(MyContextValidator)
@@ -390,17 +409,19 @@ Column expressions
 
 Doing column arithmetic is supported directly in the query syntax:
 
-    # Djaq
-    DQ("""(b.name,
-        b.price as price,
-        0.2 as discount,
-        b.price*0.2 as discount_price,
-        b.price - (b.price*0.2) as diff
-        ) Book b""")
+```python
+DQ("""(b.name,
+	b.price as price,
+	0.2 as discount,
+	b.price*0.2 as discount_price,
+	b.price - (b.price*0.2) as diff
+	) Book b""")
+
+```
 
 You can use constants:
 
-```
+```python
 In [60]: list(DQ("(b.name, 'great read') Book b").limit(1).tuples())
 Out[60]: [('Range total author impact.', 'great read')]
 ```
@@ -409,7 +430,7 @@ You can use the common operators and functions of your underlying storage system
 
 The usual arithmetic:
 
-```
+```python
 In [36]: list(DQ("(b.name, 1+1) Book b").limit(1).tuples())
 Out[36]: [('Range total author impact.', 2)]
 In [38]: list(DQ("(b.name, 2.0/4) Book b").limit(1).tuples())
@@ -420,14 +441,14 @@ Out[44]: [(6,)]
 
 Modulo:
 
-```
+```python
 In [55]: list(DQ("(mod(4.0,3)) Book b").limit(1).tuples())
 Out[55]: [(Decimal('1.0'),)]
 ```
 
-Square root:
+Comparison as a boolean expression:
 
-```
+```python
 In [45]: list(DQ("(2 > 3) Book b").limit(1).tuples())
 Out[45]: [(False,)]
 ```
