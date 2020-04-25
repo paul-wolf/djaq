@@ -749,6 +749,7 @@ class DjangoQuery(ast.NodeVisitor):
         return None
 
     def parse_column_aliases(self, select_src):
+        """Return a list of column aliases."""
 
         if select_src[0] == "(":
             s = select_src[1:-1]
@@ -909,7 +910,11 @@ class DjangoQuery(ast.NodeVisitor):
         return self.generate()
 
     def generate(self):
-        """Generate the SQL. Assumes source is parsed."""
+        """Generate the SQL. Assumes source is parsed.
+
+        No model lookups are done here.
+
+        """
 
         self.relations.reverse()
         master_relation = self.relations.pop()
@@ -970,8 +975,12 @@ class DjangoQuery(ast.NodeVisitor):
         if self._offset:
             s += f" OFFSET {int(self._offset)}"
 
+        # replace variables placeholders to be valid dict placeholders
+        s = re.sub(self.placeholder_pattern, lambda x: f"%({x.group(1)})s", s)
+
         self.sql = s
         self.master_relation = master_relation
+
         return self.sql
 
     def query(self, context=None):
@@ -1023,12 +1032,8 @@ class DjangoQuery(ast.NodeVisitor):
 
         self.context(context)
 
+        # parse() returns sql from self.sql if parsing was done
         sql = self.parse()
-
-        # now replace variables placeholders to be valid dict placeholders
-        sql = re.sub(
-            self.placeholder_pattern, lambda x: "%({})s".format(x.group(1)), sql
-        )
 
         conn = connections[self.using]
         cursor = conn.cursor()

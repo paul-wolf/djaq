@@ -33,10 +33,10 @@ replacement for Querysets.
 
 Features you might appreciate:
 
-* Djaq has a column expression and filtering syntax that lets you
-  compose queries using Python-like code.
+* Djaq uses a syntax that lets you compose queries using Python-like
+  code.
 
-* Very fast cursor semantics and explicit retrieval. It
+* Fast cursor semantics and explicit retrieval. It
   only gets data you asked for.
 
 * Obvious performance behaviour. It will trigger a query in one
@@ -46,6 +46,8 @@ Features you might appreciate:
 Djaq provides whitelisting of apps and models you want to expose. It
 also lets you hook requests and filter to ensure only data you want to
 expose is accessible.
+
+> Note that Djaq is still in an early phase of development. No warranties about reliability, security, that it will work exactly as described. And it only supports Postgresql at this time.
 
 ## Quickstart
 
@@ -139,6 +141,38 @@ now has access to any authorised model resource. Serialisation is all
 taken care of. Djaq comes already with a view similar to the
 above. You can just start calling and retrieving any data you
 wish. It's an instant API to your application.
+
+## Performance
+
+Once the query is parsed, it is about the same overhead as calling this:
+
+```
+conn = connections['default']
+cursor = conn.cursor()
+self.cursor = self.connection.cursor()
+self.cursor.execute(sql)
+```
+
+Parsing is pretty fast:
+
+```
+In [12]: %timeit list(DQ("(b.name) Book{ilike(b.name, 'A%')} b").parse())
+314 µs ± 4.1 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
+```
+
+and is a negligible factor if you are parsing during a remote call as part of a view function.
+
+But if you want to iterate over, say, a dictionary of variables locally, you'll want to parse once:
+
+```
+dq = DQ("(b.name) Book{ilike(b.name, '$(namestart)')} b")
+dq.parse()
+for vars in var_list:
+    results = list(dq.context(vars).tuples())
+    <do something with results>
+```
+
+Note that each call of `context()` causes the cursor to execute again when `tuples()` is iterated.
 
 
 ## Query usage guide
@@ -812,6 +846,8 @@ list or a dict, etc. Djaq never returns a model instance. But you can
 easily get a model instance via the DQResult.
 
 ## Limitations
+
+Most importantly, Djaq only supports Postgresql at this time.
 
 There is an upper limit to the complexity of queries you can achieve
 with Djaq. Mostly, the generated SQL has a series of joins, by default

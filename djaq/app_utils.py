@@ -2,20 +2,6 @@ from django.apps import apps
 from django.db import models, connections
 
 
-"""
-https://docs.djangoproject.com/en/2.1/ref/models/relations/
-
-In [12]: Book._meta.get_field('publisher').related_model
-Out[12]: books.models.Publisher
-
-In [13]: Book._meta.get_field('publisher').related_fields
-Out[13]:
-[(<django.db.models.fields.related.ForeignKey: publisher>,
-  <django.db.models.fields.AutoField: id>)]
-
-"""
-
-
 def model_path(model):
     """Return the dot path of a model."""
     return f"{model.__module__}.{model._meta.object_name}"
@@ -89,11 +75,13 @@ def field_ref(ref):
 def get_field_details(f, connection):
     d = {}
     d["name"] = f.name
+    d["name"] = f.name
     d["unique"] = f.unique
     d["primary_key"] = f.primary_key
     d["max_length"] = f.max_length
     d["generic_type"] = str(f.description)
     d["db_type"] = str(f.db_type(connection=connection))
+    #  d["db_column"] = str(f.db_column(connection=connection))
     d["default"] = str(f.default)
     d["related_model"] = str(f.related_model)
     d["help_text"] = f.help_text
@@ -122,10 +110,14 @@ def get_model_classes(whitelist=None):
     """
     list_of_apps = list(apps.get_app_configs())
     models = {}
+    #  import ipdb; ipdb.set_trace()
     for a in list_of_apps:
         if whitelist and a.name not in whitelist:
             continue
         for model_name, model_class in a.models.items():
+            if whitelist and a.name in whitelist:
+                if whitelist[a.name] and model_class.__name__ not in whitelist[a.name]:
+                    continue
             models[f"{a.name}.{model_class.__name__}"] = model_class
     return models
 

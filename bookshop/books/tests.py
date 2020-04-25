@@ -4,12 +4,25 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.db.models import Q, Avg, Count, Min, Max, Sum, FloatField, F
+from django.db import connections
 
 import factory
 from faker import Faker
 
 from djaq import DjangoQuery as DQ, DQResult
 from djaq.api.views import queries, updates, creates, deletes
+from djaq.app_utils import (
+    model_path,
+    get_db_type,
+    find_model_class,
+    fieldclass_from_model,
+    model_field,
+    field_ref,
+    get_field_details,
+    get_model_details,
+    get_schema,
+    get_model_classes,
+)
 
 from books.models import Author, Publisher, Book, Store
 
@@ -38,7 +51,7 @@ class TestDjaq(TestCase):
             book.authors.add(Author.objects.all().order_by("?")[0])
             book.save()
 
-        for i in range(3):
+        for _ in range(3):
             store = Store.objects.create(name=fake.company())
             books = Book.objects.all().order_by("?")[:4]
             for book in books:
@@ -47,6 +60,62 @@ class TestDjaq(TestCase):
 
     def tearDown(self):
         pass
+
+    def test_model_path(self):
+        self.assertEqual(model_path(Book), "books.models.Book")
+
+    def test_get_db_type(self):
+        f = fieldclass_from_model("name", Book)
+        t = get_db_type(f, connections["default"])
+        self.assertEqual(t, "varchar(300)")
+
+    def test_find_model_class(self):
+        self.assertEqual(find_model_class("Book"), Book)
+
+    def test_fieldclass_from_model(self):
+        f = fieldclass_from_model("name", Book)
+        self.assertEqual(f.name, "name")
+
+    def test_model_field(self):
+        m, f = model_field("Book", "name")
+        self.assertEqual(f.name, "name")
+
+    def test_field_ref(self):
+        m, f = field_ref("Book.name")
+        self.assertEqual(f.name, "name")
+
+    def test_field_details(self):
+        m, f = field_ref("Book.name")
+        d = get_field_details(f, connections["default"])
+        self.assertEqual(d["name"], "name")
+
+    def test_get_model_details(self):
+        m, f = field_ref("Book.name")
+        d = get_model_details(m, connections["default"])
+        self.assertEqual(d["object_name"], "Book")
+
+    def test_get_model_classes(self):
+        classes = get_model_classes()
+        self.assertTrue("books.Book" in classes)
+
+    def test_get_schema(self):
+        schema = get_schema(connections["default"])
+        self.assertTrue("books.Book" in schema)
+
+    def test_whitelist(self):
+
+        # make sure it lets us in
+        wl = {"books": ["Book"]}
+        schema = get_schema(connections["default"], whitelist=wl)
+        self.assertIn("books.Book", schema)
+        self.assertEqual(len(schema.keys()), 1)
+
+        # make sure it keeps us out
+        wl = {"django.contrib.auth": ["User"]}
+        schema = get_schema(connections["default"], whitelist=wl)
+        self.assertIn("auth.User", schema)
+        self.assertNotIn("books.Book", schema)
+        self.assertEqual(len(schema.keys()), 1)
 
     def test_count(self):
         dq = DQ("(b.id, b.name) Book b")
