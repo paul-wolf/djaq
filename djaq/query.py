@@ -19,11 +19,17 @@ from django.db.models.query import QuerySet
 from django.utils.text import slugify
 from django.core.serializers.json import DjangoJSONEncoder
 from django.conf import settings
-from django.db.models.fields.related import ManyToOneRel
+from django.db.models.fields.related import ManyToOneRel, ManyToManyField
 
 from .result import DQResult
 from .astpp import parseprint, dump as node_string
-from .app_utils import model_field, find_model_class, model_path
+from .app_utils import (
+    model_field,
+    find_model_class,
+    model_path,
+    get_model_from_table,
+    get_field_from_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -148,12 +154,10 @@ class DjangoQuery(ast.NodeVisitor):
 
         @property
         def join_condition_expression(self):
+            """Return a str that is the join expression.
+            """
             s = ""
-            # print(f"op:      {self.join_operator}")
-            # print(f"model:   {self.model_table}")
-            # print(f"fk_field:{self.fk_field}")
-            #  input("Press Enter to continue...")
-
+            #  import ipdb; ipdb.set_trace()
             if hasattr(self.fk_field, "related_fields"):
                 for related_fields in self.fk_field.related_fields:
 
@@ -168,7 +172,14 @@ class DjangoQuery(ast.NodeVisitor):
                     if s:
                         s += " AND "
                     s += f'"{fk.model._meta.db_table}"."{f_from}" = "{fk.related_model._meta.db_table}"."{f_to}"'
-            else:  # might be a ManyToManyField
+            elif isinstance(self.fk_field, ManyToManyField):
+                import ipdb
+
+                ipdb.set_trace()
+                print("*********************************")
+                print("implement m2m")
+                print("*********************************")
+            else:
                 m = f"""
                 op:          {self.join_operator}
                 model:       {self.model_table}
@@ -329,11 +340,13 @@ class DjangoQuery(ast.NodeVisitor):
         )
         self.relations.append(relation)
 
-        if len(self.relations) > 1:
+        #  import ipdb; ipdb.set_trace()
+        if len(self.relations) > 1 and not relation.fk_field:
             # we need to find out how we are related to existing relations
-            for i, rel in enumerate(self.relations):
+            for _, rel in enumerate(self.relations):
                 for f in rel.model._meta.get_fields():
                     if f.related_model == relation.model:
+
                         # there can be more than one field related to this model
                         # pick the one that caused us to come here
                         if field_name and not f.name == field_name:
@@ -355,14 +368,13 @@ class DjangoQuery(ast.NodeVisitor):
             ['name', 'publisher', 'Book']
 
         """
-        #  import ipdb; ipdb.set_trace()
+
         # last element must be a field name
         attr = attribute_list.pop()
         if relation and not len(attribute_list):
             # attr is the terminal attribute
             field = relation.model._meta.get_field(attr)
             a = f'"{relation.model._meta.db_table}"."{field.column}"'
-
             return a
         elif not relation and not len(attribute_list):
             # attr is a stand-alone name
@@ -380,9 +392,24 @@ class DjangoQuery(ast.NodeVisitor):
             return self.push_attribute_relations(attribute_list, relation)
 
         # if relation and attributes in list
-        # this means attr is a foreign key
-        related_model = relation.model._meta.get_field(attr).related_model
-        new_relation = self.add_relation(related_model, field_name=attr)
+        field = relation.model._meta.get_field(attr)
+
+        if isinstance(field, ManyToManyField):
+            link_model = get_model_from_table(field.m2m_db_table())
+            fk_field = get_field_from_model(link_model, field.m2m_field_name())
+            self.add_relation(model=link_model, fk_relation=relation, fk_field=fk_field)
+            fk_field = get_field_from_model(link_model, field.m2m_reverse_field_name())
+            attr = attribute_list.pop()
+            new_relation = self.add_relation(
+                model=field.related_model, fk_field=fk_field
+            )
+            related_field = get_field_from_model(field.related_model, attr)
+            a = f'"{field.related_model._meta.db_table}"."{related_field.column}"'
+            return a
+        else:
+            # this means attr is a foreign key
+            related_model = field.related_model
+            new_relation = self.add_relation(related_model, field_name=attr)
 
         return self.push_attribute_relations(attribute_list, new_relation)
 

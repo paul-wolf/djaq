@@ -127,6 +127,11 @@ class TestDjaq(TestCase):
         dq = DQ("(b.id, b.name) Book b")
         self.assertEqual(dq.count(), 10)
 
+    def test_m2m(self):
+        results = list(DQ("(b.name, b.authors.name) Book b").dicts())
+        self.assertTrue("b_name" in results[0])
+        self.assertTrue("b_authors_name" in results[0])
+
     def test_group_by(self):
         dq = DQ("(avg(b.price)) Book b")
         self.assertEqual(len([t for t in dq.tuples()]), 1)

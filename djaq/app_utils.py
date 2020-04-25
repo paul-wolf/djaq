@@ -51,9 +51,24 @@ def find_model_class(name, whitelist=None):
     raise ModelNotFoundException(f"Could not find model: {name}")
 
 
+def get_model_from_table(table_name):
+    list_of_apps = list(apps.get_app_configs())
+    for a in list_of_apps:
+        for model_name, model_class in a.models.items():
+            if model_class._meta.db_table == table_name:
+                return model_class
+    raise ModelNotFoundException(f"Could not find model for table: {table_name}")
+
+
 def fieldclass_from_model(field_name, model):
     """Return a field class named field_name."""
     return model._meta.get_field(field_name)
+
+
+def get_field_from_model(model, fieldname):
+    for f in model._meta.get_fields():
+        if f.name == fieldname:
+            return f
 
 
 def model_field(model_name, field_name):
