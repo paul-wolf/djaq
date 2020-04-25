@@ -23,6 +23,7 @@ from djaq.app_utils import (
     get_schema,
     get_model_classes,
 )
+from djaq.exceptions import ModelNotFoundException
 
 from books.models import Author, Publisher, Book, Store
 
@@ -109,6 +110,7 @@ class TestDjaq(TestCase):
         schema = get_schema(connections["default"], whitelist=wl)
         self.assertIn("books.Book", schema)
         self.assertEqual(len(schema.keys()), 1)
+        DQ("(b.name) Book{ilike(b.name, 'A%')} b", whitelist=wl).parse()
 
         # make sure it keeps us out
         wl = {"django.contrib.auth": ["User"]}
@@ -116,6 +118,10 @@ class TestDjaq(TestCase):
         self.assertIn("auth.User", schema)
         self.assertNotIn("books.Book", schema)
         self.assertEqual(len(schema.keys()), 1)
+
+        wl = {"django.contrib.auth": ["User"]}
+        with self.assertRaises(ModelNotFoundException):
+            DQ("(b.name) Book{ilike(b.name, 'A%')} b", whitelist=wl).parse()
 
     def test_count(self):
         dq = DQ("(b.id, b.name) Book b")

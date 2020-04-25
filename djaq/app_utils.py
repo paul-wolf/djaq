@@ -1,6 +1,8 @@
 from django.apps import apps
 from django.db import models, connections
 
+from .exceptions import ModelNotFoundException
+
 
 def model_path(model):
     """Return the dot path of a model."""
@@ -18,7 +20,7 @@ def get_db_type(field, connection):
     return field.db_type(connection)
 
 
-def find_model_class(name):
+def find_model_class(name, whitelist=None):
     """Return model class for name, like 'Book'.
 
     if name has dots, then everything before the last segment
@@ -34,13 +36,19 @@ def find_model_class(name):
 
     list_of_apps = list(apps.get_app_configs())
     for a in list_of_apps:
+        if whitelist and a.name not in whitelist:
+            continue
+
         if app_name and not app_name == a.name:
             continue
         for model_name, model_class in a.models.items():
+            if whitelist and a.name in whitelist:
+                if whitelist[a.name] and model_class.__name__ not in whitelist[a.name]:
+                    continue
             if class_name == model_class.__name__:
                 return model_class
 
-    raise Exception(f"Could not find model: {name}")
+    raise ModelNotFoundException(f"Could not find model: {name}")
 
 
 def fieldclass_from_model(field_name, model):

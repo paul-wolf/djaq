@@ -219,6 +219,7 @@ class DjangoQuery(ast.NodeVisitor):
         context=None,
         names=None,
         verbosity=0,
+        whitelist=None,
     ):
 
         self._context = context
@@ -233,7 +234,7 @@ class DjangoQuery(ast.NodeVisitor):
         self.using = using
         self.connection = connections[using]
         self.vendor = self.connection.vendor
-
+        self.whitelist = whitelist
         self.verbosity = verbosity
         self.relation_index = 0  # this is the relation being parsed currently
         self.source = source
@@ -374,7 +375,7 @@ class DjangoQuery(ast.NodeVisitor):
             # therefore attr must be a model name or alias
             relation = self.find_relation_from_alias(attr)
             if not relation:
-                model = find_model_class(attr)
+                model = find_model_class(attr, whitelist=self.whitelist)
                 relation = self.add_relation(model=model)
             return self.push_attribute_relations(attribute_list, relation)
 
@@ -858,7 +859,7 @@ class DjangoQuery(ast.NodeVisitor):
                     raise Exception(f"Could not find model for {column_tuples}")
 
             relation = self.find_relation_from_alias(alias)
-            model = find_model_class(model_name)
+            model = find_model_class(model_name, whitelist=self.whitelist)
             if model and not relation:
                 relation = self.add_relation(
                     model=model, alias=alias, join_type=join_type
