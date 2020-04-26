@@ -173,12 +173,8 @@ class DjangoQuery(ast.NodeVisitor):
                         s += " AND "
                     s += f'"{fk.model._meta.db_table}"."{f_from}" = "{fk.related_model._meta.db_table}"."{f_to}"'
             elif isinstance(self.fk_field, ManyToManyField):
-                import ipdb
-
-                ipdb.set_trace()
-                print("*********************************")
-                print("implement m2m")
-                print("*********************************")
+                #  import ipdb; ipdb.set_trace()
+                pass
             else:
                 m = f"""
                 op:          {self.join_operator}
@@ -202,10 +198,10 @@ class DjangoQuery(ast.NodeVisitor):
             return ", ".join(set(grouping))
 
         def __str__(self):
-            return "Relation: {}".format(model_path(self.model))
+            return f"Relation: {model_path(self.model)}"
 
         def __repr__(self):
-            return "<{}>: {}".format(self.__class__.__name__, model_path(self.model))
+            return f"<{self.__class__.__name__}>: {model_path(self.model)}"
 
     def find_relation_from_alias(self, alias):
         for relation in self.relations:
@@ -214,7 +210,8 @@ class DjangoQuery(ast.NodeVisitor):
 
     def is_aggregate_expression(self, exp):
         """Return True if exp is an aggregate expression like
-        `avg(Book.price+Book.price*0.2)`"""
+        `avg(Book.price+Book.price*0.2)`
+        """
         s = exp.lower().strip("(").split("(")[0]
         return s in self.vendor_aggregate_functions
 
@@ -231,6 +228,7 @@ class DjangoQuery(ast.NodeVisitor):
         names=None,
         verbosity=0,
         whitelist=None,
+        local=False,
     ):
 
         self._context = context
@@ -268,8 +266,8 @@ class DjangoQuery(ast.NodeVisitor):
         self.where_marker = 0
         self.placeholder_pattern = re.compile(r"\'\$\(([\w]*)\)\'")
         self.context_validator_class = ContextValidator
+        self.local = local
 
-        #  self.group_by = False
         if self.vendor in self.__class__.aggregate_functions:
             self.vendor_aggregate_functions = self.__class__.aggregate_functions[
                 self.vendor
@@ -495,7 +493,10 @@ class DjangoQuery(ast.NodeVisitor):
 
         if node.s.strip().upper().startswith("SELECT "):
             # this is a literal sql subquery
-            self.emit("({})".format(node.s))
+            # we only allow this if the user says we
+            # are called locally
+            if self.local:
+                self.emit(f"({node.s})")
             ast.NodeVisitor.generic_visit(self, node)
             return
 

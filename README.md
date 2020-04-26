@@ -1,23 +1,18 @@
-Djaq provides a query language for Django. In contrast to the QuerySet class that provides an API,
-Djaq queries are strings. A query string might look like this:
+Djaq provides a query language for Django. In contrast to the QuerySet
+class that provides a Python API, Djaq queries are strings. A query
+string might look like this:
 
     (b.name as title, b.publisher.name as publisher) Book b
 
-Get a list of book titles with book publisher.
-
-The reason for this alternative is to provide a way to query Django
-models outside a context where you can use QuerySets directly. For
-instance, if you want to send a remote request for data from a system
-that doesn't have access to the application's Django data model. You
-might want to get data from the browser or from another microservice
-in your network or provide a fast API.
+This retrieves a list of book titles with book publisher. You can send Djaq
+queries from any language, Java, Javascript, golang, etc. to a Django
+application and get results as JSON.
 
 Of course, there is a common way to do this already by using some REST
-framework like Django REST Framework (DRF) or one of the alternatives,
-Django views, etc. The advantage of Djaq is you can immediately
-provide access without writing serializers, views, etc.
-
-Djaq is a good fit if you want:
+framework like Django REST Framework (DRF), GraphQL, Django views,
+etc. The advantage of Djaq is you can immediately provide access
+without writing service side code except for security as explained
+below. Djaq is a good fit if you want:
 
 * Microservice communication where some services don't have access to
   the Django ORM or are not implemented with Python
@@ -33,8 +28,12 @@ replacement for Querysets.
 
 Features you might appreciate:
 
+* Immediate gratification with zero or minimal server-side code. There
+  is minimal setup. And therefore, there is minimal wasted effort if
+  you later move to another framework, like GraphQL or DRF.
+
 * Djaq uses a syntax that lets you compose queries using Python-like
-  code.
+  code for column and filter expressions.
 
 * Fast cursor semantics and explicit retrieval. It
   only gets data you asked for.
@@ -47,13 +46,38 @@ Djaq provides whitelisting of apps and models you want to expose. It
 also lets you hook requests and filter to ensure only data you want to
 expose is accessible.
 
-> Note that Djaq is still in an early phase of development. No warranties about reliability, security, that it will work exactly as described. And it only supports Postgresql at this time.
+> Note that Djaq is still in an early phase of development. No
+> warranties about reliability, security, that it will work exactly as
+> described. And it only supports Postgresql at this time.
+
+## Limitations
+
+Compared to other frameworks like GraphQL and DRF, you can't transform
+data on the server before returning it (you can parameterise). This
+might be a deal breaker for your application. In that case, you should
+look at one of those solutions or PODVs (Plain Old Django Views).
+
+Most importantly, Djaq only supports Postgresql at this time.
+
+There is an upper limit to the complexity of queries you can achieve
+with Djaq. Mostly, the generated SQL has a series of joins, by default
+LEFT joins linking the related models. It can probably satisfy a large
+number of use cases. But inevitably there may be backend business
+rules that require a heavyweight REST framework like DRF or GraphQL.
+
+Values in the `choices` argument of fields that take only a limited
+ set of values will not be retrieved. These are not accessible to Djaq
+ which only get retrieve what is available via SQL.
 
 ## Quickstart
 
 Install:
 
     pip install Djaq
+
+For now, it will probably be better to get the most recent commit:
+
+    pip install https://github.com/paul-wolf/djaq/archive/master.zip
 
 Use:
 
@@ -108,7 +132,7 @@ You can then send data like this:
 ```
 
 If you have a url conf for this, you can now query any models in your
-entire Django deployment remotely provided the authentication
+entire Django deployment remotely, provided the authentication
 underlying the `login_required` is satisfied. This is a good solution
 if your endpoint is only available to trusted clients who hold a valid
 authentication token or to clients without authentication who are in
@@ -136,11 +160,12 @@ DQ(query_string, whitelist={"books": ["Book", "Publisher",],})
 This restricts access to only the `book` app models, Book and Publish.
 
 You probably need a couple more things if you want to expose this to a
-browser. But this gives an idea of what you can do. The caller
-now has access to any authorised model resource. Serialisation is all
-taken care of. Djaq comes already with a view similar to the
-above. You can just start calling and retrieving any data you
-wish. It's an instant API to your application.
+browser. But this gives an idea of what you can do. The caller now has
+access to any authorised model resource. Serialisation is all taken
+care of. Djaq comes already with a view similar to the above. You can
+just start calling and retrieving any data you wish. It's an instant
+API to your application provided you trust the client or have
+sufficient access control in place.
 
 ## Performance
 
@@ -164,7 +189,7 @@ and is a negligible factor if you are parsing during a remote call as part of a 
 
 But if you want to iterate over, say, a dictionary of variables locally, you'll want to parse once:
 
-```
+```python
 dq = DQ("(b.name) Book{ilike(b.name, '$(namestart)')} b")
 dq.parse()
 for vars in var_list:
@@ -322,7 +347,7 @@ In [15]: print(list(DQ("(b.name, b.price, b.publisher.name) Book b").limit(1).di
 [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'b_publisher_name': 'Wright, Taylor and Fitzpatrick'}]
 ```
 
-Signal that you want to group by using an aggregate function:
+Signal that you want to summarise results using an aggregate function:
 
 ```
 list(DQ("(b.publisher.name as publisher, count(b.id) as book_count) Book b").dicts())
@@ -364,7 +389,7 @@ list(DQ("(avg(b.price) as average, min(b.price) as minimum, max(b.price) as maxi
 Count all books:
 
 ```python
-list(DQ("(count(b.id)) Book b").dicts()).dicts())
+list(DQ("(count(b.id)) Book b").dicts())
 
 [
     {
@@ -408,15 +433,14 @@ Install from PyPi:
 
     pip install Djaq
 
-Install latest HEAD from github:
+But for now, you probably want to install the latest commit from github:
 
     pip install https://github.com/django/django/archive/master.zip
 
 Functions
 ---------
 
-To understand available functions for column expressions or filters,
-if a function is not defined by DjangoQuery, then the function name is
+If a function is not defined by DjangoQuery, then the function name is
 passed without further intervention to the underlying SQL. A user can
 define new functions at any time by adding to the custom
 functions. Here's an example of adding a regex matching function:
@@ -430,7 +454,7 @@ Now find all book names starting with 'B':
 DQ("(b.name) Book{regex(b.name, 'B.*')} b")
 ```
 
-Notice, we always want to use upper case for the function name when
+We always want to use upper case for the function name when
 defining the function. Usage of a function is then
 case-insensitive. You may wish to make sure you are not over-writing
 existing functions. "REGEX" already exists, for instance.
@@ -716,11 +740,22 @@ You can rewind the cursor but this is just executing the SQL again:
 
 If you call `DjangoQuery.context(data)`, that will effectively rewind the cursor since an entirely new query is created and the implementation currently doesn't care if `data` is the same context as previously supplied.
 
-##Remote CRUD: creating, reading, updating, deleting
-
-## ContextValidator
-
 ## Schema
+
+There is a function you can get the schema available to a calling client:
+
+```python
+from djaq.app_utils import get_schema
+print(get_schema())
+```
+
+Pass the same whitelist you use for exposing the query endpoint:
+
+```python
+wl = {"books": []}
+print(get_schema(whitelist=wl))
+```
+
 
 
 ## Comparing to Django Quersets
@@ -729,14 +764,13 @@ Djaq queries can be sent over the wire as a string. That is the main
 difference with Quersets. Even then, Djaq is not a replacement for
 Querysets. Querysets are highly integrated with Django and have been
 developed over 15 years by many developers. It is a very well thought
-out framework that ultimately is the best choice working within a
-service based on Django's ORM. `DjanoQuery` is not better than
-`QuerySet`. It has a different purpose. This section is intended to
-highlight differences for users with high familiarity with the
-`QuerySet` class.
+out framework that is the best choice working within a service based
+on Django's ORM. This section is intended to highlight differences for
+users with high familiarity with the `QuerySet` class for the purpose
+of understanding limitations and capabilities of DjangoQuery.
 
 Unsurprisingly, Django provides significant options for adjusting
-query generation to fit a use case, `only()`, `select_related()`,
+query generation to fit a specific use case, `only()`, `select_related()`,
 `prefetch_related()` are all highly useful for different cases. Here's
 a point-by-point comparison with Djaq:
 
@@ -836,8 +870,7 @@ iterations:
 will return a single integer value representing the count of books.
 
 
-Results vs Model Instances
---------------------------
+## Results vs Model Instances
 
 The Djaq generator `.objs()` returns a `DQResult` class instance. Djaq
 produces 'results' in contrast to model instances. Depending on what
@@ -845,17 +878,7 @@ methods you use on QuerySets you may get Django Model instances or a
 list or a dict, etc. Djaq never returns a model instance. But you can
 easily get a model instance via the DQResult.
 
-## Limitations
-
-Most importantly, Djaq only supports Postgresql at this time.
-
-There is an upper limit to the complexity of queries you can achieve
-with Djaq. Mostly, the generated SQL has a series of joins, by default
-LEFT joins linking the related models. It can probably satisfy a large
-number of use cases. But inevitably there may be backend business
-rules that require a heavyweight REST framework like DRF or GraphQL.
-
-##Sample Project
+## Sample Project
 
 If you want to use Djaq right away in your own test project and you
 feel confident, crack on. In that case skip the following instructions
@@ -925,18 +948,6 @@ SELECT books_publisher.name, (max(books_book.price) - round(avg(books_book.price
 ```
 
 Notice the SQL used to retrieve data is printed first.
-
-There is also a management command to run some comparisons with QuerySets:
-
-    ./manage.py run
-	▶ ./manage.py run
-	===========> q_all_books  475.89 ms
-	===========> q_all_books_queryset  1507.89 ms
-	===========> q_avg_price  24.93 ms
-	===========> q_avg_price_queryset  25.06 ms
-	===========> q_books_avg_min_max  31.37 ms
-	===========> q_books_avg_min_max_queryset  28.08 ms
-	...
 
 
 

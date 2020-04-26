@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.test import TestCase
 from django.db.models import Q, Avg, Count, Min, Max, Sum, FloatField, F
 from django.db import connections
+from django.contrib.auth.models import User
 
 import factory
 from faker import Faker
@@ -25,13 +26,16 @@ from djaq.app_utils import (
 )
 from djaq.exceptions import ModelNotFoundException
 
-from books.models import Author, Publisher, Book, Store
+from books.models import Author, Publisher, Book, Store, Profile
 
 fake = Faker()
 
 
 class TestDjaq(TestCase):
     def setUp(self):
+
+        user = User.objects.create(username="artemis", email="artemis@blah.com")
+        Profile.objects.create(user=user, company="whatever")
 
         Author.objects.create(name="Sally", age=50)
         Author.objects.create(name="Bob", age=24)
@@ -131,6 +135,11 @@ class TestDjaq(TestCase):
         results = list(DQ("(b.name, b.authors.name) Book b").dicts())
         self.assertTrue("b_name" in results[0])
         self.assertTrue("b_authors_name" in results[0])
+
+    def test_onetoone(self):
+        #  import ipdb; ipdb.set_trace()
+        results = list(DQ("(u.username, u.email, u.profile.company) User u").tuples())
+        self.assertTrue(results[0][0] == "artemis")
 
     def test_group_by(self):
         dq = DQ("(avg(b.price)) Book b")
