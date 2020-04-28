@@ -1,7 +1,7 @@
 #!python
 from distutils.core import setup
 
-description = "An alternative Django query language"
+description = "A string-based Django query language"
 
 with open("README.txt") as file:
     long_description = file.read()
@@ -22,9 +22,9 @@ setup(
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
         "Framework :: Django",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
