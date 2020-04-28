@@ -14,7 +14,7 @@ setup(
     author_email="paul.wolf@yewleaf.com",
     version="0.0.0",
     # version = module.__version__,
-    packages=["djaq"],
+    packages=["djaq", "djaq.ui"],
     license="MIT",
     long_description=long_description,
     classifiers=[

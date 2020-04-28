@@ -4,4 +4,3 @@ __license__ = "MIT"
 
 from .query import DjangoQuery
 from .result import DQResult
-from ui import *
