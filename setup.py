@@ -1,5 +1,6 @@
 #!python
 from distutils.core import setup
+from setuptools import find_packages
 
 description = "A string-based Django query language"
 
@@ -12,9 +13,10 @@ setup(
     url="https://github.com/paul-wolf/djaq",
     author="Paul Wolf",
     author_email="paul.wolf@yewleaf.com",
-    version="0.0.0",
-    # version = module.__version__,
-    packages=["djaq", "djaq.djaq_ui", "djaq.djaq_ui.templates"],
+    version="0.1.0",
+    #  version = djaq.__version__,
+    packages=find_packages(exclude=["*~"]),
+    include_package_data=True,
     license="MIT",
     long_description=long_description,
     classifiers=[

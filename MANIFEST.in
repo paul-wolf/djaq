@@ -1,0 +1,6 @@
+exclude djaq/*~
+include djaq/djaq_ui/*
+exclude djaq/djaq_ui/*~
+exclude djaq/djaq_ui/templates/*~
+include djaq/djaq_ui/templates/*.html
+
