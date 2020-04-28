@@ -11,7 +11,7 @@ application and get results as JSON.
 Of course, there is a common way to do this already by using some REST
 framework like Django REST Framework (DRF), GraphQL, Django views,
 etc. The advantage of Djaq is you can immediately provide access
-without writing service side code except for security as explained
+without writing server side code except for security as explained
 below. Djaq is a good fit if you want:
 
 * Microservice communication where some services don't have access to
@@ -33,10 +33,11 @@ Features you might appreciate:
   you later move to another framework, like GraphQL or DRF.
 
 * Djaq uses a syntax that lets you compose queries using Python-like
-  code for column and filter expressions.
+  code for column and filter expressions. The query format and syntax
+  is chosen to be written by hand quickly. Readability is a key goal.
 
-* Fast cursor semantics and explicit retrieval. It
-  only gets data you asked for.
+* Fast cursor semantics and explicit retrieval. It only gets data you
+  asked for.
 
 * Obvious performance behaviour. It will trigger a query in one
   obvious way through one of the generator methods: `.dict()`,
@@ -48,7 +49,9 @@ expose is accessible.
 
 > Note that Djaq is still in an early phase of development. No
 > warranties about reliability, security, that it will work exactly as
-> described. And it only supports Postgresql at this time.
+> described.
+
+
 
 ## Limitations
 
@@ -57,7 +60,7 @@ data on the server before returning it (you can parameterise). This
 might be a deal breaker for your application. In that case, you should
 look at one of those solutions or PODVs (Plain Old Django Views).
 
-Most importantly, Djaq only supports Postgresql at this time.
+Djaq only supports Postgresql at this time.
 
 There is an upper limit to the complexity of queries you can achieve
 with Djaq. Mostly, the generated SQL has a series of joins, by default
@@ -67,7 +70,7 @@ rules that require a heavyweight REST framework like DRF or GraphQL.
 
 Values in the `choices` argument of fields that take only a limited
  set of values will not be retrieved. These are not accessible to Djaq
- which only get retrieve what is available via SQL.
+ which only retrieves what is available via SQL.
 
 ## Quickstart
 
@@ -317,7 +320,7 @@ relationship. This is one of three options: `->`, `<-`, `<>` that
 indicate you want to explicitly join via an SQL LEFT, RIGHT or INNER
 join respectively. But you don't need to do this. LEFT joins will
 always be implicit. We did not even need to refer to the Publisher
-model directly. Would could have done this:
+model directly. We could have done this:
 
 ```
 (b.name, b.price, b.publisher.name as publisher)
@@ -331,8 +334,6 @@ that is the owner of the publisher:
 In [16]: print(list(DQ("(b.name, b.price, b.publisher.name, b.publisher.owner.name) Book b").limit(1).dicts()))
 Out[16]: [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'b_publisher_name': 'Wright, Taylor and Fitzpatrick', 'b_publisher_owner_name': 'Publishers Group'}]
 ```
-
-So, it takes the expression `b.publisher.owner.name` and builds all the required relationships for you.
 
 To recap, there are three alternative patterns to follow to get the publisher name in the result set:
 
@@ -349,7 +350,7 @@ In [15]: print(list(DQ("(b.name, b.price, b.publisher.name) Book b").limit(1).di
 
 Signal that you want to summarise results using an aggregate function:
 
-```
+```python
 list(DQ("(b.publisher.name as publisher, count(b.id) as book_count) Book b").dicts())
 
 [
@@ -425,7 +426,7 @@ Notice that the variable holder, `$()`, *must* be in single quotes.
 
 * Django 2.1 or higher
 
-* Postgresql is the only db where extensive testing is done but you might have luck on others that are not too far away from PG
+* Postgresql only for now. There is some code for future support of SQLite, MySQL, Oracle, but the connections are currently specific to psycopg2 at this time.
 
 ## Installation
 
@@ -437,8 +438,7 @@ But for now, you probably want to install the latest commit from github:
 
     pip install https://github.com/django/django/archive/master.zip
 
-Functions
----------
+## Functions
 
 If a function is not defined by DjangoQuery, then the function name is
 passed without further intervention to the underlying SQL. A user can
@@ -515,8 +515,7 @@ def concat(funcname, args):
 DjangoQuery.functions['CONCAT'] = concat
 ```
 
-Parameters
-----------
+## Parameters
 
 We call the Django connection cursor approximately like this:
 
@@ -549,7 +548,9 @@ Note what is happening here:
 
 To get all books starting with 'Bar'. Or:
 
-    DQ("(b.name) Book{like(upper(b.name), upper('$(name_search)'))} b").context(request.POST)
+```python
+DQ("(b.name) Book{like(upper(b.name), upper('$(name_search)'))} b").context(request.POST)
+```
 
 Provided that `request.POST` has a `name_search` key/value.
 
@@ -582,9 +583,7 @@ DQ("(o.order_no, o.customer) Orders{o.order_no == '%(order_no)')} b")
     .tuples()
 ```
 
-
-Column expressions
-------------------
+## Column expressions
 
 Doing column arithmetic is supported directly in the query syntax:
 
@@ -605,7 +604,7 @@ In [60]: list(DQ("(b.name, 'great read') Book b").limit(1).tuples())
 Out[60]: [('Range total author impact.', 'great read')]
 ```
 
-You can use the common operators and functions of your underlying storage system.
+You can use the common operators and functions of your underlying db.
 
 The usual arithmetic:
 
@@ -734,7 +733,7 @@ You can rewind the cursor but this is just executing the SQL again:
 
     # now, calling `dq.tuples()` returns nothing
 
-    list(dq.tuples())
+    list(dq.rewind().tuples())
 
     # you will again see results
 
@@ -742,7 +741,7 @@ If you call `DjangoQuery.context(data)`, that will effectively rewind the cursor
 
 ## Schema
 
-There is a function you can get the schema available to a calling client:
+There is a function to get the schema available to a calling client:
 
 ```python
 from djaq.app_utils import get_schema
@@ -756,9 +755,7 @@ wl = {"books": []}
 print(get_schema(whitelist=wl))
 ```
 
-
-
-## Comparing to Django Quersets
+## Comparing to Django QuerySets
 
 Djaq queries can be sent over the wire as a string. That is the main
 difference with Quersets. Even then, Djaq is not a replacement for
@@ -769,9 +766,9 @@ on Django's ORM. This section is intended to highlight differences for
 users with high familiarity with the `QuerySet` class for the purpose
 of understanding limitations and capabilities of DjangoQuery.
 
-Unsurprisingly, Django provides significant options for adjusting
-query generation to fit a specific use case, `only()`, `select_related()`,
-`prefetch_related()` are all highly useful for different cases. Here's
+Django provides significant options for adjusting query generation to
+fit a specific use case, `only()`, `select_related()`,
+`prefetch_related()` are all useful for different cases. Here's
 a point-by-point comparison with Djaq:
 
 * `only()`: Djaq always works in "only" mode. Only explicitly requested fields are returned.
@@ -780,24 +777,23 @@ a point-by-point comparison with Djaq:
   explicitly defined. This feature makes loading of related fields
   non-lazy. In contrast, queries are always non-lazy in Djaq.
 
-* `prefetch_related()`: this is not really a job for Djaq. Currently,
-  there is no support for m2m fields but when this is implemented, it
-  will be part of the instance manager.
+* `prefetch_related()`: When you have a m2m field as a column
+  expression, the model hosting that field is repeated in results as
+  many times as necessary. Another way is to use a separate query for
+  the m2m related records. In anycase, this is not required in Djaq.
 
 * F expressions: These are workarounds for not being able to write
   expressions in the query for things like column value arithmetic and
   other expressions you want to have the db calculate. Djaq lets you
-  write these directly and naturally as part of it's syntax.
+  write these directly and naturally as part of its syntax.
 
 * To aggregate with Querysets, you use `aggregate()`, whereas Djaq
   aggregates results whenever an aggregate function appears in the column
   expressions.
 
 * Model instances with QuerySets exactly represent the corresponding
-  Django model. Djaq has a different concept of a result instance
-  (DQResult) that represents whatever is returned by the query even if
-  it's not a model field.
-
+Django model. Djaq's usual return formats, like `dicts()`, `tuples()`,
+etc. are more akin to `QuerySet.value_list()`.
 
 Let's look at some direct query comparisons:
 
@@ -827,19 +823,25 @@ compared to QuerySet:
 
 Count books with ratings up to and over 5:
 
-    DQ("""(sum(iif(b.rating < 5, b.rating, 0)) as below_5,
-        sum(iif(b.rating >= 5, b.rating, 0)) as above_5)
-        Book b""")
+```python
+DQ("""(sum(iif(b.rating < 5, b.rating, 0)) as below_5,
+	sum(iif(b.rating >= 5, b.rating, 0)) as above_5)
+	Book b""")
+```
 
 compared to QuerySet:
 
-    above_5 = Count('book', filter=Q(book__rating__gt=5))
-    below_5 = Count('book', filter=Q(book__rating__lte=5))
-    Publisher.objects.annotate(below_5=below_5).annotate(above_5=above_5)
+```python
+above_5 = Count('book', filter=Q(book__rating__gt=5))
+below_5 = Count('book', filter=Q(book__rating__lte=5))
+Publisher.objects.annotate(below_5=below_5).annotate(above_5=above_5)
+```
 
 Get average, maximum, minimum price of books:
 
-    DQ("(avg(b.price), max(b.price), min(b.price)) Book b")
+```python
+DQ("(avg(b.price), max(b.price), min(b.price)) Book b")
+```
 
 compared to QuerySet:
 
@@ -849,7 +851,7 @@ Just as there is a ModelInstance class in Django, we have a DQResult class:
 
 `objs()`: return a DQResult for each result row, basically a namespace for the object:
 
-```
+```python
 dq = DQ("(b.id, b.name, Publisher.name as publisher) Book b")
 for book in dq.objs():
     title = book.name
@@ -865,7 +867,9 @@ Some other features:
 single value, you can immediately access it without further
 iterations:
 
-    DQ("(count(b.id)) Book b").value()
+```python
+DQ("(count(b.id)) Book b").value()
+```
 
 will return a single integer value representing the count of books.
 
@@ -905,7 +909,7 @@ requirements. To install dependencies for the sample application:
 
 Now make sure there is a Postgresql instance running. The settings are like this:
 
-```
+```python
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
@@ -916,7 +920,6 @@ DATABASES = {
 So, it assumes peer authentication. Change to suite your needs. Now
 you can migrate. Make sure the virtualenv is activated!
 
-
     ./manage.py migrate
 
 We provide a script to create some sample data:
@@ -925,8 +928,7 @@ We provide a script to create some sample data:
 
 This creates 2000 books and associated data.
 
-The example app comes with a management command to run
-queries:
+The example app comes with a management command to run queries:
 
     ./manage.py djaq "(Publisher.name, max(Book.price) - round(avg(Book.price)) as diff) Book b"  --format json
 

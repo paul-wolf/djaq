@@ -104,6 +104,7 @@ class DjangoQuery(ast.NodeVisitor):
             join_type="->",
             alias=None,
         ):
+            #  import ipdb; ipdb.set_trace()
             self.model = model
             self.fk_relation = fk_relation
             self.fk_field = fk_field
@@ -165,13 +166,13 @@ class DjangoQuery(ast.NodeVisitor):
                         s += " AND "
                     fk = related_fields[0]
                     f = related_fields[1]
-                    s += f'"{fk.model._meta.db_table}"."{fk.column}" = "{f.model._meta.db_table}"."{f.column}"'
+                    s += f'"{self.alias or fk.model._meta.db_table}"."{fk.column}" = "{f.model._meta.db_table}"."{f.column}"'
             elif isinstance(self.fk_field, ManyToOneRel):
                 fk = self.fk_field
                 for f_from, f_to in fk.get_joining_columns():
                     if s:
                         s += " AND "
-                    s += f'"{fk.model._meta.db_table}"."{f_from}" = "{fk.related_model._meta.db_table}"."{f_to}"'
+                    s += f'"{self.alias or fk.model._meta.db_table}"."{f_from}" = "{fk.related_model._meta.db_table}"."{f_to}"'
             elif isinstance(self.fk_field, ManyToManyField):
                 #  import ipdb; ipdb.set_trace()
                 pass
@@ -1064,29 +1065,23 @@ class DjangoQuery(ast.NodeVisitor):
         # parse() returns sql from self.sql if parsing was done
         sql = self.parse()
 
-        conn = connections[self.using]
-        cursor = conn.cursor()
-
         self.cursor = self.connection.cursor()
 
-        try:
-            if count:
-                sql = f"SELECT COUNT(*) FROM ({sql}) c"
-            if len(self._context):
-                context = self.context_validator_class(self, self._context).context()
+        if count:
+            sql = f"SELECT COUNT(*) FROM ({sql}) c"
+        if len(self._context):
+            context = self.context_validator_class(self, self._context).context()
+            if self.verbosity:
+                conn = connections[self.using]
+                cursor = conn.cursor()
                 logger.debug(cursor.mogrify(sql, context))
-                if self.verbosity:
-                    print(f"sql={sql}, params={context}")
-                self.cursor.execute(sql, context)
-            else:
-                if self.verbosity:
-                    print(f"sql={sql}")
-                logger.debug(sql)
-                self.cursor.execute(sql)
-        except django.db.utils.ProgrammingError as dbe:
-            print(dbe)
-        except psycopg2.ProgrammingError as pe:
-            print(pe)
+                print(f"sql={sql}, params={context}")
+            self.cursor.execute(sql, context)
+        else:
+            if self.verbosity:
+                print(f"sql={sql}")
+            logger.debug(sql)
+            self.cursor.execute(sql)
 
         # we record the column names from the cursor
         # but we have our own aliases in self.column_headers
