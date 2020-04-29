@@ -119,7 +119,7 @@ class TestDjaq(TestCase):
         # make sure it keeps us out
         wl = {"django.contrib.auth": ["User"]}
         schema = get_schema(connections["default"], whitelist=wl)
-        self.assertIn("auth.User", schema)
+        self.assertIn("django.contrib.auth.User", schema)
         self.assertNotIn("books.Book", schema)
         self.assertEqual(len(schema.keys()), 1)
 

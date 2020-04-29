@@ -27,6 +27,7 @@ def find_model_class(name, whitelist=None):
     is an app specifier
 
     """
+    #  import ipdb; ipdb.set_trace()
     if "." in name:
         class_name = name.split(".")[-1]
         app_name = ".".join(name.split(".")[:-1])
@@ -36,6 +37,7 @@ def find_model_class(name, whitelist=None):
 
     list_of_apps = list(apps.get_app_configs())
     for a in list_of_apps:
+
         if whitelist and a.name not in whitelist:
             continue
 
@@ -133,7 +135,7 @@ def get_model_classes(app_name=None, whitelist=None):
     """
     list_of_apps = list(apps.get_app_configs())
     models = {}
-    #  import ipdb; ipdb.set_trace()
+
     for a in list_of_apps:
         if app_name and not a.name == app_name:
             continue
@@ -150,8 +152,10 @@ def get_model_classes(app_name=None, whitelist=None):
 def get_schema(connection=None, whitelist=None):
     """Return json that represents all whitelisted app models."""
     connection = connection if connection else connections["default"]
-    classes = get_model_classes(whitelist)
+    #  import ipdb; ipdb.set_trace()
+    classes = get_model_classes(whitelist=whitelist)
     model_data = {}
+
     for label, cls in classes.items():
-        model_data[cls._meta.label] = get_model_details(cls, connection)
+        model_data[label] = get_model_details(cls, connection)
     return model_data

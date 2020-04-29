@@ -73,7 +73,7 @@ def get_models(request, appname):
     classes = get_model_classes(app_name=appname)
     model_names = []
     for label, cls in classes.items():
-        model_names.append(cls._meta.label)
+        model_names.append(label)
     return JsonResponse({"models": model_names})
 
 

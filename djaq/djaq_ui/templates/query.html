@@ -6,7 +6,7 @@
   <div style="height:200px;margin-bottom:10px;">
     <textarea id="query" style="width:50%;height:100%;border: 2px solid grey;padding: 5px;display:inline-block;"></textarea>
 
-    <div style="display:inline-block;width:20%;">
+    <div style="display:inline-block;width:25%;">
       <select id="app" onchange="get_models()">
 	<option value="">Choose app</option>
 	{% for app in apps %}
@@ -19,7 +19,7 @@
       </div>
     </div>
 
-    <div id="fields" style="margin-left:10px;width:25%;height:85%;border: 2px solid grey;padding: 5px;display:inline-block;overflow:auto">
+    <div id="fields" style="margin-left:10px;width:20%;height:85%;border: 2px solid grey;padding: 5px;display:inline-block;overflow:auto">
 	<ul id="field_list">
 	</ul>
     </div>
@@ -123,9 +123,32 @@
       });
   }
 
+  function handleEnter(evt) {
+      console.log("handleEnter");
+      if (evt.keyCode == 13 && evt.shiftKey) {
+	  console.log("yes, we have it");
+	  console.log(evt);
+
+	    execute_query(false);
+
+        evt.preventDefault();
+    }
+}
+
 $( document ).ready(function() {
 
+    $(document).on('dblclick', 'ul li', function(){
 
+	var t = $(this).text();
+	console.log($(this).text());
+	var $txt = jQuery("#query");
+        var caretPos = $txt[0].selectionStart;
+        var textAreaTxt = $txt.val();
+        $txt.val(textAreaTxt.substring(0, caretPos) + t + textAreaTxt.substring(caretPos) );
+
+    });
+
+    $("#query").keydown(handleEnter).keypress(handleEnter);
 
 });
 
