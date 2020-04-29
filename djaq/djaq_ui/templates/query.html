@@ -4,46 +4,86 @@
 
   <a href="https://github.com/paul-wolf/djaq">Djaq query</a>
   <div style="height:200px;margin-bottom:10px;">
-    <textarea id="query" style="width:50%;height:100%;border: 2px solid grey;padding: 5px;display:inline-block;"></textarea>
+    <textarea placeholder="Query"
+	      id="query"
+	      style="width:30%;height:100%;border: 2px solid grey;padding: 5px;display:inline-block;"></textarea>
+    <textarea placeholder="Context"
+	      id="context"
+	      style="width:18%;height:100%;border: 2px solid grey;padding: 5px;display:inline-block;"></textarea>
 
     <div style="display:inline-block;width:25%;">
-      <select id="app" onchange="get_models()">
+      app: <select id="app" onchange="get_models()">
 	<option value="">Choose app</option>
 	{% for app in apps %}
 	<option value="{{app.name}}">{{app.name}}</option>
 	{% endfor %}
       </select>
       <div id="models" style="width:100%;height:85%;border: 2px solid grey;padding: 5px;overflow:auto">
+	    <div style="position:relative">
+	      <div class="top-right" style="position: absolute;top:0;right:0;left:auto;">models</div>
+	    </div>
 	<ul id="model_list">
 	</ul>
       </div>
     </div>
 
-    <div id="fields" style="margin-left:10px;width:20%;height:85%;border: 2px solid grey;padding: 5px;display:inline-block;overflow:auto">
+    <div id="fields" style="margin-left:10px;width:15%;height:85%;border: 2px solid grey;padding: 5px;display:inline-block;overflow:auto">
+	    <div style="position:relative">
+	      <div class="top-right" style="position: absolute;top:0;right:0;left:auto;">fields</div>
+	    </div>
 	<ul id="field_list">
 	</ul>
     </div>
 
   </div>
 
-<div class="button"><button onclick="execute_query(false);">query</button></div>
-<div class="button"><button onclick="execute_query(true);">SQL</button></div>
-<div class="button"><button onclick="get_schema();">Schema</button></div>
+  <div class="button"><button title="Send query and retrieve results (Shift-Enter)"
+			      onclick="execute_query(false);">Send</button></div>
+  <div class="button"><button title="Represent query as json"
+			      onclick="represent_query();">Query</button></div>
+  <div class="button"><button title="Get SQL for query"
+			      onclick="execute_query(true);">SQL</button></div>
+  <div class="button"><button title="Get schema for models"
+			      onclick="get_schema();">Schema</button></div>
 
-<div class="field">
-  <label>limit</label>
-  <input type="number" value=100 id="limit"/>
-</div>
+  <div class="field">
+    <label>limit</label>
+    <input type="number" value=100 id="limit"/>
+  </div>
 
-<div class="field">
-  <label>offset</label>
-  <input type="number" value=0 id="offset"/>
-</div>
+  <div class="field">
+    <label>offset</label>
+    <input type="number" value=0 id="offset"/>
+  </div>
 
-<textarea id="result" style="width:100%;min-height:500px;margin-top:10px;"></textarea>
+  <textarea id="result" style="width:100%;min-height:500px;margin-top:10px;"></textarea>
 
 <script>
 
+  function represent_query() {
+      var q = $("#query").val();
+      var context = $("#context").val();
+      var limit = $("#limit").val();
+      var offset = $("#offset").val();
+      console.log(context);
+      try {
+	  context = JSON.parse(context);
+      } catch(err) {
+	  console.log(err);
+	  context = {}
+      }
+
+      q =  q.replace(/(\r\n|\n|\r)/gm,"");
+      data = {
+	  q: q,
+	  context: context,
+	  limit: limit,
+	  offset: offset
+      }
+
+      var s = JSON.stringify(data, null, 1);
+      $("#result").val(s);
+  }
   function execute_query(sql) {
       $("#result").html('working on it...');
       var url = "/dquery/"
