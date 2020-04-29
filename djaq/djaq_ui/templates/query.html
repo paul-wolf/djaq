@@ -141,11 +141,19 @@ $( document ).ready(function() {
 
 	var t = $(this).text();
 	console.log($(this).text());
+
+	var parts = t.split(" ");
+	var model_name = parts[parts.length -1]
+	var m = model_name.charAt().toLowerCase();
+	var fields = '';
+	$('ul#field_list li').each(function(i) {
+	    var f = $(this).text();
+	    fields += `${m}.${f},\n`;
+	});
 	var $txt = jQuery("#query");
         var caretPos = $txt[0].selectionStart;
         var textAreaTxt = $txt.val();
-        $txt.val(textAreaTxt.substring(0, caretPos) + t + textAreaTxt.substring(caretPos) );
-
+        $txt.val(textAreaTxt.substring(0, caretPos) + `(${fields}) ${t} ${m}` + textAreaTxt.substring(caretPos) );
     });
 
     $("#query").keydown(handleEnter).keypress(handleEnter);
