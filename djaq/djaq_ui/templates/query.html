@@ -8,6 +8,7 @@ limit: <input type="number" value=100 id="limit"/>&nbsp;&nbsp;&nbsp;
 offset: <input type="number" value=0 id="offset"/>
 <div><button onclick="execute_query(false);">query</button></div>
 <div><button onclick="execute_query(true);">SQL</button></div>
+<div><button onclick="get_schema();">Schema</button></div>
 
 <textarea id="result" style="width:100%;min-height:500px;"></textarea>
 
@@ -33,7 +34,22 @@ function execute_query(sql) {
 	    }
         },
         error: function (xhr, ajaxOptions, thrownError) {
-	    console.log(xhr);
+            $("#result").val(xhr.responseText);
+        }
+    });
+}
+  function get_schema() {
+    $("#result").html('working on it...');
+    var url = "/dquery/schema/"
+    $.ajax({
+        type: "GET",
+        url: url,
+        success: function(response) {
+	    console.log(response);
+	    console.log(JSON.stringify(response, null, 1));
+	    $("#result").val(JSON.stringify(response, null, 1));
+        },
+        error: function (xhr, ajaxOptions, thrownError) {
             $("#result").val(xhr.responseText);
         }
     });

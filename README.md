@@ -8,8 +8,8 @@ This retrieves a list of book titles with book publisher. You can send Djaq
 queries from any language, Java, Javascript, golang, etc. to a Django
 application and get results as JSON.
 
-Of course, there is a common way to do this already by using some REST
-framework like Django REST Framework (DRF), GraphQL, Django views,
+Of course, there is a common way to do this already by using
+frameworks like Django REST Framework (DRF), GraphQL, Django views,
 etc. The advantage of Djaq is you can immediately provide access
 without writing server side code except for security as explained
 below. Djaq is a good fit if you want:
@@ -23,7 +23,7 @@ below. Djaq is a good fit if you want:
 
 Djaq sits on top of the Django ORM. It can happily be used alongside
 QuerySets and sometimes calling a Djaq query even locally might be
-preferable to constructing a Queryset, although, Djaq is not a
+preferable to constructing a Queryset, although Djaq is not a
 replacement for Querysets.
 
 Features you might appreciate:
@@ -42,6 +42,8 @@ Features you might appreciate:
 * Obvious performance behaviour. It will trigger a query in one
   obvious way through one of the generator methods: `.dict()`,
   `.tuples()`, `.json()`.
+
+* A handy user interface for trying out queries on your data models.
 
 Djaq provides whitelisting of apps and models you want to expose. It
 also lets you hook requests and filter to ensure only data you want to
@@ -437,6 +439,18 @@ Install from PyPi:
 But for now, you probably want to install the latest commit from github:
 
     pip install https://github.com/django/django/archive/master.zip
+
+
+### Query UI
+
+You can optionally install a query user interface to try out queries on your own data set:
+
+* After installing djaq, add `djaq.djaq_ui` to INSTALLED_APPS
+
+* Add `path("dquery/", include("djaq.djaq_ui.urls")),` to `urlpattenrs
+  in the sites `urls.py`
+
+Navigate to `/dquery/' in your app and you should be able to try out queries.
 
 ## Functions
 

@@ -457,7 +457,7 @@ class DjangoQuery(ast.NodeVisitor):
             self.emit_func(s)
 
     def single_quoted(self, s):
-        return "'{}'".format(s)
+        return f"'{s}'"
 
     def generic_visit(self, node):
         if not isinstance(node, ast.Load):
@@ -466,7 +466,7 @@ class DjangoQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_Expr(self, node):
-        # Do not emit any parens yet
+        # Do not emit any parens
         #  because the relation might not have been created yet
         #  self.emit("(")
         ast.NodeVisitor.generic_visit(self, node)
@@ -650,12 +650,6 @@ class DjangoQuery(ast.NodeVisitor):
             # if yes, but no context data, drop the condition
 
         self.emit(")")
-        # look back to see if we have
-        # print("****************")
-        # for m in finditer(self.placeholder_pattern, self.relations[self.relation_index].where[l:]):
-        #     if m:
-        #         pass
-        #  print(self.relations[self.relation_index].where[l:])
 
     def visit_And(self, node):
         self.where_marker = len(self.relations[self.relation_index].where)
@@ -667,15 +661,16 @@ class DjangoQuery(ast.NodeVisitor):
 
     def visit_Tuple(self, node):
         for i, el in enumerate(node.elts):
-            # print("v"*66)
-            #  parseprint(el)
 
             ast.NodeVisitor.visit(self, el)
             exp = self.relations[self.relation_index].expression_str.strip("(")
             self.push_column_expression(exp.strip(", "))
             self.relations[self.relation_index].expression_str = ""
-
+            #  if self.expression_context == "order_by":
+            #      import ipdb; ipdb.set_trace()
             if not i == len(node.elts) - 1:
+                if self.expression_context == "order_by":
+                    self.emit(" ASC")
                 self.emit(", ")
 
     def visit_Arguments(self, node):
@@ -828,7 +823,9 @@ class DjangoQuery(ast.NodeVisitor):
         """
         self.source = self.source.replace("\n", " ")
         relation_sources = self.split_relations(self.source)
+        import ipdb
 
+        ipdb.set_trace()
         for i, relation_source in enumerate(relation_sources):
             #  import ipdb; ipdb.set_trace()
             index, join_type, relation_source = self.get_join_type(relation_source)

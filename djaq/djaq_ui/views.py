@@ -24,7 +24,8 @@ from djaq.app_utils import get_schema, get_model_classes
 
 logger = logging.getLogger(__name__)
 
-#  @login_required
+
+@login_required
 @csrf_exempt
 def query_view(request):
 
@@ -55,3 +56,10 @@ def query_view(request):
 
     data = {}
     return render(request, "query.html", data)
+
+
+@login_required
+@csrf_exempt
+def schema_view(request):
+
+    return JsonResponse(get_schema())
