@@ -1,59 +1,128 @@
+{% extends 'base.html' %}
 
-  <script src="https://code.jquery.com/jquery-2.2.4.js"></script>
-  <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+{% block content %}
 
-Query
-<textarea id="query" style="width:100%;height:200px;border: 2px solid grey;padding: 5px;"></textarea>
-limit: <input type="number" value=100 id="limit"/>&nbsp;&nbsp;&nbsp;
-offset: <input type="number" value=0 id="offset"/>
-<div><button onclick="execute_query(false);">query</button></div>
-<div><button onclick="execute_query(true);">SQL</button></div>
-<div><button onclick="get_schema();">Schema</button></div>
+  <a href="https://github.com/paul-wolf/djaq">Djaq query</a>
+  <div style="height:200px;margin-bottom:10px;">
+    <textarea id="query" style="width:50%;height:100%;border: 2px solid grey;padding: 5px;display:inline-block;"></textarea>
 
-<textarea id="result" style="width:100%;min-height:500px;"></textarea>
+    <div style="display:inline-block;width:20%;">
+      <select id="app" onchange="get_models()">
+	<option value="">Choose app</option>
+	{% for app in apps %}
+	<option value="{{app.name}}">{{app.name}}</option>
+	{% endfor %}
+      </select>
+      <div id="models" style="width:100%;height:85%;border: 2px solid grey;padding: 5px;overflow:auto">
+	<ul id="model_list">
+	</ul>
+      </div>
+    </div>
+
+    <div id="fields" style="margin-left:10px;width:25%;height:85%;border: 2px solid grey;padding: 5px;display:inline-block;overflow:auto">
+	<ul id="field_list">
+	</ul>
+    </div>
+
+  </div>
+
+<div class="button"><button onclick="execute_query(false);">query</button></div>
+<div class="button"><button onclick="execute_query(true);">SQL</button></div>
+<div class="button"><button onclick="get_schema();">Schema</button></div>
+
+<div class="field">
+  <label>limit</label>
+  <input type="number" value=100 id="limit"/>
+</div>
+
+<div class="field">
+  <label>offset</label>
+  <input type="number" value=0 id="offset"/>
+</div>
+
+<textarea id="result" style="width:100%;min-height:500px;margin-top:10px;"></textarea>
 
 <script>
 
-function execute_query(sql) {
-    $("#result").html('working on it...');
-    var url = "/dquery/"
-    $.ajax({
-        type: "POST",
-        data: {
-	    query: $("#query").val(),
-	    limit: $("#limit").val(),
-	    offset: $("#offset").val(),
-	    sql: sql
-	},
-        url: url,
-        success: function(response) {
-	    if (sql) {
-		$("#result").val(response.result);
-	    } else {
-		$("#result").val(JSON.stringify(response.result, null, 1));
-	    }
-        },
-        error: function (xhr, ajaxOptions, thrownError) {
-            $("#result").val(xhr.responseText);
-        }
-    });
-}
+  function execute_query(sql) {
+      $("#result").html('working on it...');
+      var url = "/dquery/"
+      $.ajax({
+          type: "POST",
+          data: {
+	      query: $("#query").val(),
+	      limit: $("#limit").val(),
+	      offset: $("#offset").val(),
+	      sql: sql
+	  },
+          url: url,
+          success: function(response) {
+	      if (sql) {
+		  $("#result").val(response.result);
+	      } else {
+		  $("#result").val(JSON.stringify(response.result, null, 1));
+	      }
+          },
+          error: function (xhr, ajaxOptions, thrownError) {
+              $("#result").val(xhr.responseText);
+          }
+      });
+  }
+
+  function get_models() {
+      var appname = $("#app").val();
+      var url = `/dquery/models/${appname}/`
+      $.ajax({
+          type: "GET",
+          url: url,
+          success: function(response) {
+	      $("#model_list").html("");
+	      response.models.forEach(function(element) {
+		  $("#model_list").append(`<li><a href="javascript:void(0);" onclick="get_fields('${element}')">${element}</a></li>`);
+	      });
+          },
+          error: function (xhr, ajaxOptions, thrownError) {
+              $("#result").val(xhr.responseText);
+          }
+      });
+  }
+
+  function get_fields(modelname) {
+
+      var url = `/dquery/fields/${modelname}/`
+      $.ajax({
+          type: "GET",
+          url: url,
+          success: function(response) {
+	      $("#result").val(JSON.stringify(response, null, 1));
+	      $("#field_list").html("");
+	      for (f in response.fields) {
+		  $("#field_list").append(`<li><a href="javascript:void(0);" ">${f}</a></li>`);
+	      }
+
+
+          },
+          error: function (xhr, ajaxOptions, thrownError) {
+              $("#result").val(xhr.responseText);
+          }
+      });
+  }
+
   function get_schema() {
-    $("#result").html('working on it...');
-    var url = "/dquery/schema/"
-    $.ajax({
-        type: "GET",
-        url: url,
-        success: function(response) {
-	    console.log(response);
-	    console.log(JSON.stringify(response, null, 1));
-	    $("#result").val(JSON.stringify(response, null, 1));
-        },
-        error: function (xhr, ajaxOptions, thrownError) {
-            $("#result").val(xhr.responseText);
-        }
-    });
-}
+      $("#result").html('working on it...');
+      var url = "/dquery/schema/"
+      $.ajax({
+          type: "GET",
+          url: url,
+          success: function(response) {
+	      $("#result").val(JSON.stringify(response, null, 1));
+          },
+          error: function (xhr, ajaxOptions, thrownError) {
+              $("#result").val(xhr.responseText);
+          }
+      });
+  }
+
 $( document ).ready(function() {
 
 
@@ -61,3 +130,4 @@ $( document ).ready(function() {
 });
 
 </script>
+{% endblock %}

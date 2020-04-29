@@ -3,6 +3,7 @@ import traceback
 import json
 import logging
 
+from django.apps import apps
 from django.contrib.auth import login as django_login
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.views.decorators.csrf import csrf_exempt
@@ -15,12 +16,18 @@ from django.http import (
 )
 from django.conf import settings
 from django.db.utils import ProgrammingError
+from django.db import models, connections
 
 import psycopg2
 import sqlparse
 
 from djaq.query import DjangoQuery as DQ
-from djaq.app_utils import get_schema, get_model_classes
+from djaq.app_utils import (
+    get_schema,
+    get_model_classes,
+    find_model_class,
+    get_model_details,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +61,28 @@ def query_view(request):
             traceback.print_exc(file=sys.stdout)
             return HttpResponseServerError(e)
 
-    data = {}
+    list_of_apps = list(apps.get_app_configs())
+
+    data = {"apps": list_of_apps}
     return render(request, "query.html", data)
+
+
+@login_required
+@csrf_exempt
+def get_models(request, appname):
+    classes = get_model_classes(app_name=appname)
+    model_names = []
+    for label, cls in classes.items():
+        model_names.append(cls._meta.label)
+    return JsonResponse({"models": model_names})
+
+
+@login_required
+@csrf_exempt
+def get_fields(request, modelname):
+    model = find_model_class(modelname)
+    d = get_model_details(model, connections["default"])
+    return JsonResponse(d)
 
 
 @login_required

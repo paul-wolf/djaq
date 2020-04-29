@@ -823,9 +823,7 @@ class DjangoQuery(ast.NodeVisitor):
         """
         self.source = self.source.replace("\n", " ")
         relation_sources = self.split_relations(self.source)
-        import ipdb
-
-        ipdb.set_trace()
+        #  import ipdb;ipdb.set_trace()
         for i, relation_source in enumerate(relation_sources):
             #  import ipdb; ipdb.set_trace()
             index, join_type, relation_source = self.get_join_type(relation_source)

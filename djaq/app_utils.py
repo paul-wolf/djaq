@@ -124,7 +124,7 @@ def get_model_details(cls, connection):
     return data
 
 
-def get_model_classes(whitelist=None):
+def get_model_classes(app_name=None, whitelist=None):
     """Return all model classes.
 
     whitelist is a dictionary with appnames and lists of models
@@ -135,6 +135,8 @@ def get_model_classes(whitelist=None):
     models = {}
     #  import ipdb; ipdb.set_trace()
     for a in list_of_apps:
+        if app_name and not a.name == app_name:
+            continue
         if whitelist and a.name not in whitelist:
             continue
         for model_name, model_class in a.models.items():
