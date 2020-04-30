@@ -38,11 +38,11 @@
   </div>
 
   <div class="button"><button title="Send query and retrieve results (Shift-Enter)"
-			      onclick="execute_query(false);">Send</button></div>
+			      onclick="execute_query();">Send</button></div>
   <div class="button"><button title="Represent query as json"
 			      onclick="represent_query();">JSON</button></div>
   <div class="button"><button title="Get SQL for query"
-			      onclick="execute_query(true);">SQL</button></div>
+			      onclick="get_sql();">SQL</button></div>
   <div class="button"><button title="Get schema for models"
 			      onclick="get_schema();">Schema</button></div>
 
@@ -59,8 +59,7 @@
   <textarea id="result" style="width:100%;min-height:500px;margin-top:10px;"></textarea>
 
 <script>
-
-  function represent_query() {
+  function render_query() {
       var q = $("#query").val();
       var context = $("#context").val();
       var limit = $("#limit").val();
@@ -74,34 +73,66 @@
       }
 
       q =  q.replace(/(\r\n|\n|\r)/gm,"");
-      data = {
+      query = {
 	  q: q,
 	  context: context,
 	  limit: limit,
 	  offset: offset
       }
+      return {
+	  queries: [
+	      query
+	  ]
+      }
+  }
 
-      var s = JSON.stringify(data, null, 1);
+  function represent_query() {
+      var s = JSON.stringify(render_query(), null, 1);
       $("#result").val(s);
   }
-  function execute_query(sql) {
-      $("#result").html('working on it...');
-      var url = "/dquery/"
+
+  function execute_query() {
+      $("#result").val('working on it...');
+      var url = "/djaq/api/request/"
+      $.ajax({
+          type: "POST",
+	  data: JSON.stringify(render_query()),
+          url: url,
+	  contentType: "application/json; charset=utf-8",
+          dataType: "json",
+          success: function(response) {
+	      $("#result").val(JSON.stringify(response.result, null, 1));
+          },
+          error: function (xhr, ajaxOptions, thrownError) {
+              $("#result").val(xhr.responseText);
+          }
+      });
+  }
+  function get_sql() {
+      $("#result").val('working on it...');
+      var url = "/dquery/sql/"
       $.ajax({
           type: "POST",
           data: {
 	      query: $("#query").val(),
-	      limit: $("#limit").val(),
-	      offset: $("#offset").val(),
-	      sql: sql
 	  },
           url: url,
           success: function(response) {
-	      if (sql) {
-		  $("#result").val(response.result);
-	      } else {
-		  $("#result").val(JSON.stringify(response.result, null, 1));
-	      }
+	      $("#result").val(response.result);
+          },
+          error: function (xhr, ajaxOptions, thrownError) {
+              $("#result").val(xhr.responseText);
+          }
+      });
+  }
+  function get_schema() {
+      $("#result").val('working on it...');
+      var url = "/djaq/api/schema/"
+      $.ajax({
+          type: "GET",
+          url: url,
+          success: function(response) {
+	      $("#result").val(JSON.stringify(response, null, 1));
           },
           error: function (xhr, ajaxOptions, thrownError) {
               $("#result").val(xhr.responseText);
@@ -141,21 +172,6 @@
 	      }
 
 
-          },
-          error: function (xhr, ajaxOptions, thrownError) {
-              $("#result").val(xhr.responseText);
-          }
-      });
-  }
-
-  function get_schema() {
-      $("#result").html('working on it...');
-      var url = "/dquery/schema/"
-      $.ajax({
-          type: "GET",
-          url: url,
-          success: function(response) {
-	      $("#result").val(JSON.stringify(response, null, 1));
           },
           error: function (xhr, ajaxOptions, thrownError) {
               $("#result").val(xhr.responseText);

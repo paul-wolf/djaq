@@ -11,7 +11,7 @@ import factory
 from faker import Faker
 
 from djaq import DjangoQuery as DQ, DQResult
-from djaq.api.views import queries, updates, creates, deletes
+from djaq.djaq_api.views import queries, updates, creates, deletes
 from djaq.app_utils import (
     model_path,
     get_db_type,

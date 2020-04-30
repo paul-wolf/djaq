@@ -1,6 +1,7 @@
 import json
 import logging
 
+from django.conf import settings
 from django.contrib.auth import login as django_login
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
@@ -11,7 +12,6 @@ from django.http import (
     HttpResponseServerError,
 )
 from django.shortcuts import render
-from django.conf import settings
 from django.apps import apps
 
 from djaq.query import DjangoQuery as DQ
@@ -20,7 +20,23 @@ from djaq import app_utils
 logger = logging.getLogger(__name__)
 
 
-def queries(query_list):
+"""
+settings:
+
+DJAQ_WHITELIST
+DJAQ_UI_URL
+DJAQ_API_URL
+DJAQ_PERMS = {
+staff: true
+admin: true
+groups: []
+}
+
+"""
+
+
+def queries(query_list, whitelist=None):
+    whitelist = whitelist if whitelist else []
     if not query_list:
         return []
     responses = []
@@ -35,7 +51,8 @@ def queries(query_list):
     return responses
 
 
-def creates(creates_list):
+def creates(creates_list, whitelist=None):
+    whitelist = whitelist if whitelist else []
     if not creates_list:
         return []
     responses = []
@@ -46,8 +63,8 @@ def creates(creates_list):
     return responses
 
 
-def updates(updates_list):
-
+def updates(updates_list, whitelist=None):
+    whitelist = whitelist if whitelist else []
     #  import ipdb; ipdb.set_trace()
 
     if not updates_list:
@@ -60,7 +77,8 @@ def updates(updates_list):
     return responses
 
 
-def deletes(deletes_list):
+def deletes(deletes_list, whitelist=None):
+    whitelist = whitelist if whitelist else []
     if not deletes_list:
         return []
     responses = []
@@ -73,24 +91,35 @@ def deletes(deletes_list):
 
 @csrf_exempt
 @login_required
-def djaq_view(request):
-    logger.debug(request.body)
+def djaq_request_view(request):
+    """Main view for query and update requests."""
+    print(request.body)
     data = json.loads(request.body.decode("utf-8"))
+    #  import ipdb; ipdb.set_trace()
+    whitelist = []
+    if hasattr(settings, "DJAQ_WHITELIST"):
+        whitelist = settings.DJAQ_WHITELIST
+
+    logger.debug(request.body)
 
     try:
         return JsonResponse(
             {
                 "result": {
-                    "queries": queries(data.get("queries")),
-                    "creates": creates(data.get("creates")),
-                    "updates": updates(data.get("updates")),
-                    "deletes": deletes(data.get("deletes")),
+                    "queries": queries(data.get("queries"), whitelist=whitelist),
+                    "creates": creates(data.get("creates"), whitelist=whitelist),
+                    "updates": updates(data.get("updates"), whitelist=whitelist),
+                    "deletes": deletes(data.get("deletes"), whitelist=whitelist),
                 }
             }
         )
     except Exception as e:
-        logger.exception(e)
-        return HttpResponseServerError(e)
+        if e.__cause__ and e.__cause__.pgerror:
+            err = e.__cause__.pgerror
+            logger.exception(err)
+            return HttpResponseServerError(err)
+        else:
+            return HttpResponseServerError(e)
 
 
 @csrf_exempt

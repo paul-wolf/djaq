@@ -69,6 +69,22 @@ def query_view(request):
 
 @login_required
 @csrf_exempt
+def sql_view(request):
+
+    print(request.POST)
+    q = request.POST.get("query")
+    try:
+        s = DQ(q).parse()
+        s = sqlparse.format(s, reindent=True, keyword_case="upper")
+        r = {"result": s}
+        return JsonResponse(r)
+    except Exception as e:
+        traceback.print_exc(file=sys.stdout)
+        return HttpResponseServerError(e)
+
+
+@login_required
+@csrf_exempt
 def get_models(request, appname):
     classes = get_model_classes(app_name=appname)
     model_names = []
