@@ -1,5 +1,6 @@
 from django.apps import apps
 from django.db import models, connections
+from django.db.models.fields import NOT_PROVIDED
 
 from .exceptions import ModelNotFoundException
 
@@ -54,6 +55,7 @@ def find_model_class(name, whitelist=None):
 
 
 def get_model_from_table(table_name):
+    """Return Model class from underlying db table."""
     list_of_apps = list(apps.get_app_configs())
     for a in list_of_apps:
         for model_name, model_class in a.models.items():
@@ -68,6 +70,7 @@ def fieldclass_from_model(field_name, model):
 
 
 def get_field_from_model(model, fieldname):
+    """Return Field object for Model.field."""
     for f in model._meta.get_fields():
         if f.name == fieldname:
             return f
@@ -98,18 +101,23 @@ def field_ref(ref):
 
 
 def get_field_details(f, connection):
+    """Return dict of field properties, json serialisable."""
     d = {}
     d["name"] = f.name
     d["name"] = f.name
     d["unique"] = f.unique
     d["primary_key"] = f.primary_key
-    d["max_length"] = f.max_length
-    d["generic_type"] = str(f.description)
+    if f.max_length:
+        d["max_length"] = f.max_length
+    d["internal_type"] = f.get_internal_type()
     d["db_type"] = str(f.db_type(connection=connection))
-    #  d["db_column"] = str(f.db_column(connection=connection))
-    d["default"] = str(f.default)
-    d["related_model"] = str(f.related_model)
-    d["help_text"] = f.help_text
+    if not f.default == NOT_PROVIDED:
+        d["default"] = str(f.default)
+    if f.related_model:
+        d["related_model"] = f.related_model._meta.label
+        d["related_model_field"] = str(f.target_field)
+    if f.help_text:
+        d["help_text"] = f.help_text
     return d
 
 
@@ -123,6 +131,7 @@ def get_model_details(cls, connection):
     data["label"] = cls._meta.label
     data["pk"] = str(cls._meta.pk)
     data["object_name"] = cls._meta.object_name
+    #  data["db_table"] = cls._meta.db_table
     return data
 
 

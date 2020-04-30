@@ -40,7 +40,7 @@
   <div class="button"><button title="Send query and retrieve results (Shift-Enter)"
 			      onclick="execute_query(false);">Send</button></div>
   <div class="button"><button title="Represent query as json"
-			      onclick="represent_query();">Query</button></div>
+			      onclick="represent_query();">JSON</button></div>
   <div class="button"><button title="Get SQL for query"
 			      onclick="execute_query(true);">SQL</button></div>
   <div class="button"><button title="Get schema for models"
@@ -136,8 +136,8 @@
           success: function(response) {
 	      $("#result").val(JSON.stringify(response, null, 1));
 	      $("#field_list").html("");
-	      for (f in response.fields) {
-		  $("#field_list").append(`<li><a href="javascript:void(0);" ">${f}</a></li>`);
+	      for (let [name, f] of Object.entries(response.fields)) {
+		  $("#field_list").append(`<li><a href="javascript:void(0);" ">${name}: ${f.internal_type}</a></li>`);
 	      }
 
 
