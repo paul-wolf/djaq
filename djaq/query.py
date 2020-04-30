@@ -74,6 +74,13 @@ def concat(funcname, args):
     return " || ".join(args)
 
 
+def cast(funcname, args):
+    #  import ipdb; ipdb.set_trace()
+    t = args[1].replace("'", "").replace("'", "")
+    r = f"{args[0]}::{t}"
+    return r
+
+
 class DjangoQuery(ast.NodeVisitor):
 
     # keep a record of named instances
@@ -86,6 +93,7 @@ class DjangoQuery(ast.NodeVisitor):
         "REGEX": "{} ~ {}",
         "CONCAT": concat,
         "TODAY": "CURRENT_DATE",
+        "CAST": cast,
     }
 
     aggregate_functions = {
