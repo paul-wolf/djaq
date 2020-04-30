@@ -176,9 +176,17 @@ class TestDjaq(TestCase):
             self.assertTrue(isinstance(json.loads(r), dict))
 
     def test_aggregate_funcs(self):
+
         dq = DQ("(avg(b.price), max(b.price), min(b.price)) Book b")
         for r in dq.dicts():
             self.assertTrue(isinstance(r, dict))
+
+    def test_dq_subquery(self):
+        """This subquery is a DjangoQuery subquery."""
+        #  import ipdb; ipdb.set_trace()
+        len1 = len(list(DQ('(b.id, b.name) Book{b.id in ["(Book.id)"]} b').dicts()))
+        len2 = len(list(DQ("(Book.id)").dicts()))
+        self.assertEqual(len1, len2)
 
     def test_subquery(self):
         dq_sub = DQ("(b.id) Book{name == 'B*'} b", name="dq_sub")  # noqa: F841

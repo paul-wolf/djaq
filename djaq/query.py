@@ -492,6 +492,15 @@ class DjangoQuery(ast.NodeVisitor):
         self.emit(node.n)
         ast.NodeVisitor.generic_visit(self, node)
 
+    def visit_List(self, node):
+        #  import ipdb; ipdb.set_trace()
+        src = [s for s in node.elts][0].s
+        dq = self.__class__(src)
+        sql = dq.parse()
+        self.emit(f"({sql})")
+        #  ast.NodeVisitor.generic_visit(self, node)
+        return
+
     def visit_Str(self, node):
         s = node.s
 
