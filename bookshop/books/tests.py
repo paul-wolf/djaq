@@ -224,6 +224,21 @@ class TestDjaq(TestCase):
         pubs = DQ("(p.id) Publisher p", name="pubs")  # noqa: F841
         list(DQ("(b.name) Book{publisher in '@pubs'} b").tuples())
 
+    def test_in_list(self):
+        """Test that IN (list) works."""
+
+        # get available ids
+        ids = list(DQ("(b.id) Book b").tuples())
+        ids = [id[0] for id in ids]
+
+        # take just three of them
+        c = {"ids": ids[:3]}
+        dq = DQ("(b.id, b.name) Book{b.id in '$(ids)'} b")
+        r = list(dq.context(c).dicts())
+
+        # make sure we got three of them
+        self.assertEqual(len(r), 3)
+
     def test_complex2(self):
         dq = DQ(
             """(b.name,

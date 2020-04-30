@@ -62,6 +62,9 @@ class ContextValidator(object):
         """
         d = {}
         for k, v in self.data.items():
+            # psycopg2 wants tuples or else it assumes ARRAY
+            if isinstance(v, list):
+                v = tuple(v)
             d[k] = self.get(k, v)
         return d
 
@@ -660,8 +663,9 @@ class DjangoQuery(ast.NodeVisitor):
         self.emit(" OR ")
 
     def visit_Tuple(self, node):
+        if not self.expression_context == "select":
+            self.emit("(")
         for i, el in enumerate(node.elts):
-
             ast.NodeVisitor.visit(self, el)
             exp = self.relations[self.relation_index].expression_str.strip("(")
             self.push_column_expression(exp.strip(", "))
@@ -672,6 +676,8 @@ class DjangoQuery(ast.NodeVisitor):
                 if self.expression_context == "order_by":
                     self.emit(" ASC")
                 self.emit(", ")
+        if not self.expression_context == "select":
+            self.emit(")")
 
     def visit_Arguments(self, node):
         self.emit("|")
@@ -1056,7 +1062,7 @@ class DjangoQuery(ast.NodeVisitor):
         """Create a cursor and execute the sql."""
 
         self.context(context)
-
+        #  import ipdb; ipdb.set_trace()
         # parse() returns sql from self.sql if parsing was done
         sql = self.parse()
 
