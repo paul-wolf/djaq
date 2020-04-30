@@ -6,7 +6,7 @@
   <div style="height:200px;margin-bottom:10px;">
     <textarea placeholder="Query"
 	      id="query"
-	      style="width:30%;height:100%;border: 2px solid grey;padding: 5px;display:inline-block;"></textarea>
+	      style="width:35%;height:100%;border: 2px solid grey;padding: 5px;display:inline-block;"></textarea>
     <textarea placeholder="Context"
 	      id="context"
 	      style="width:18%;height:100%;border: 2px solid grey;padding: 5px;display:inline-block;"></textarea>
@@ -182,12 +182,13 @@ $( document ).ready(function() {
 	var t = $(this).text();
 	console.log($(this).text());
 
-	var parts = t.split(" ");
+	var parts = t.split(".");
+	console.log(parts);
 	var model_name = parts[parts.length -1]
 	var m = model_name.charAt().toLowerCase();
 	var fields = '';
 	$('ul#field_list li').each(function(i) {
-	    var f = $(this).text();
+	    var f = $(this).text().split(":")[0];
 	    fields += `${m}.${f},\n`;
 	});
 	var $txt = jQuery("#query");
