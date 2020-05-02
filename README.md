@@ -180,7 +180,7 @@ You can also create objects, update them and delete them:
 
 You can send multiple `queries`, `creates`, `updates`, `deletes` operations in a single request.
 
-##Custom API
+## Custom API
 
 You can write your own custom API endpoint. Here is what a view function
 for your data layer might look like with Djaq:
@@ -495,26 +495,6 @@ Out[30]:
 
 Notice that the variable holder, `$()`, *must* be in single quotes.
 
-## Requirements
-
-* Python 3.6 or higher.
-
-* Django 2.1 or higher.
-
-* Postgresql only for now. There is some code for future support of
-  SQLite, MySQL, Oracle, but the connections are currently specific to
-  psycopg2.
-
-## Installation
-
-Install from PyPi:
-
-    pip install Djaq
-
-But for now, you probably want to install the latest commit from github:
-
-    pip install https://github.com/django/django/archive/master.zip
-
 
 ### Query UI
 
@@ -527,7 +507,7 @@ You can optionally install a query user interface to try out queries on your own
 
 Navigate to `/dquery/' in your app and you should be able to try out queries.
 
-## Functions
+## Functions
 
 If a function is not defined by DjangoQuery, then the function name is
 passed without further intervention to the underlying SQL. A user can
@@ -604,7 +584,7 @@ def concat(funcname, args):
 DjangoQuery.functions['CONCAT'] = concat
 ```
 
-## Parameters
+## Parameters
 
 We call the Django connection cursor approximately like this:
 
@@ -672,7 +652,7 @@ DQ("(o.order_no, o.customer) Orders{o.order_no == '%(order_no)')} b")
     .tuples()
 ```
 
-## Column expressions
+## Column expressions
 
 Doing column arithmetic is supported directly in the query syntax:
 
@@ -963,14 +943,6 @@ DQ("(count(b.id)) Book b").value()
 will return a single integer value representing the count of books.
 
 
-## Results vs Model Instances
-
-The Djaq generator `.objs()` returns a `DQResult` class instance. Djaq
-produces 'results' in contrast to model instances. Depending on what
-methods you use on QuerySets you may get Django Model instances or a
-list or a dict, etc. Djaq never returns a model instance. But you can
-easily get a model instance via the DQResult.
-
 ## Sample Project
 
 If you want to use Djaq right away in your own test project and you
@@ -1039,6 +1011,8 @@ SELECT books_publisher.name, (max(books_book.price) - round(avg(books_book.price
 ```
 
 Notice the SQL used to retrieve data is printed first.
+
+The best approach now would be to trial various queries using the Djaq UI as explained above.
 
 
 
