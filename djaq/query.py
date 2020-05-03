@@ -15,7 +15,6 @@ import django
 from django.db import connections, models
 from django.db.models.query import QuerySet
 
-#  from django.db.models.sql import UpdateQuery
 from django.utils.text import slugify
 from django.core.serializers.json import DjangoJSONEncoder
 from django.conf import settings

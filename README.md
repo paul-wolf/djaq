@@ -62,6 +62,8 @@ expose is accessible.
 > warranties about reliability, security or that it will work exactly as
 > described.
 
+![Djaq UI](bookshop/screenshots/djaq_ui.png?raw=true "")
+
 ## Limitations
 
 Compared to other frameworks like GraphQL and DRF, you can't easily
