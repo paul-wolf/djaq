@@ -105,3 +105,20 @@ LOGGING = {
         "djaq.query": {"handlers": ["parser"], "level": "DEBUG", "propagate": True},
     },
 }
+
+DJAQ_WHITELIST = {
+    "django.contrib.auth": ["User"],
+    "books": [
+        "Profile",
+        "Author",
+        "Consortium",
+        "Publisher",
+        "Book_authors",
+        "Book",
+        "Store_books",
+        "Store",
+    ],
+}
+DJAQ_UI_URL = None
+DJAQ_API_URL = None
+DJAQ_PERMISSIONS = {"staff": True, "superuser": True, "groups": []}

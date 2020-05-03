@@ -168,3 +168,22 @@ def get_schema(connection=None, whitelist=None):
     for label, cls in classes.items():
         model_data[label] = get_model_details(cls, connection)
     return model_data
+
+
+def get_whitelist(whitelist=None):
+    """Return the list apps models."""
+
+    list_of_apps = list(apps.get_app_configs())
+    wl = {}
+
+    for a in list_of_apps:
+        if whitelist and a.name not in whitelist:
+            continue
+        for model_name, model_class in a.models.items():
+            if whitelist and a.name in whitelist:
+                if whitelist[a.name] and model_class.__name__ not in whitelist[a.name]:
+                    continue
+            if a.name not in wl:
+                wl[a.name] = []
+            wl[a.name].append(model_class.__name__)
+    return wl

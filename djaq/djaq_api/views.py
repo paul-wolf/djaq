@@ -36,7 +36,6 @@ groups: []
 
 
 def queries(query_list, whitelist=None):
-    whitelist = whitelist if whitelist else []
     if not query_list:
         return []
     responses = []
@@ -46,47 +45,61 @@ def queries(query_list, whitelist=None):
         limit = int(data.get("limit", 0))
         context = data.get("context", {})
         responses.append(
-            list(DQ(query_string).context(context).limit(limit).offset(offset).dicts())
+            list(
+                DQ(query_string, whitelist=whitelist)
+                .context(context)
+                .limit(limit)
+                .offset(offset)
+                .dicts()
+            )
         )
     return responses
 
 
 def creates(creates_list, whitelist=None):
-    whitelist = whitelist if whitelist else []
     if not creates_list:
         return []
     responses = []
     for data in creates_list:
-        model = app_utils.find_model_class(data.pop("_model"))
+        model = app_utils.find_model_class(data.pop("_model"), whitelist=whitelist)
         instance = model.objects.create(**data)
         responses.append(instance.pk)
     return responses
 
 
 def updates(updates_list, whitelist=None):
-    whitelist = whitelist if whitelist else []
-    #  import ipdb; ipdb.set_trace()
-
     if not updates_list:
         return []
     responses = []
     for data in updates_list:
-        model = app_utils.find_model_class(data.pop("_model"))
+        model = app_utils.find_model_class(data.pop("_model"), whitelist=whitelist)
         cnt = model.objects.filter(pk=data.pop("_pk")).update(**data)
         responses.append(cnt)
     return responses
 
 
 def deletes(deletes_list, whitelist=None):
-    whitelist = whitelist if whitelist else []
     if not deletes_list:
         return []
     responses = []
     for data in deletes_list:
-        model = app_utils.find_model_class(data.pop("_model"))
+        model = app_utils.find_model_class(data.pop("_model"), whitelist=whitelist)
         cnt = model.objects.filter(pk=data.pop("_pk")).delete()
         responses.append(cnt)
     return responses
+
+
+def is_allowed(user):
+    """Return True if there are no blocking permissions in settings.DJAQ_PERMISSIONS."""
+
+    if hasattr(settings, "DJAQ_PERMISSIONS"):
+        perms = settings.DJAQ_PERMISSIONS
+        if perms.get("staff") and not user.is_staff:
+            return False
+        if perms.get("superuser") and not user.is_superuser:
+            return False
+
+    return True
 
 
 @csrf_exempt
@@ -94,8 +107,12 @@ def deletes(deletes_list, whitelist=None):
 def djaq_request_view(request):
     """Main view for query and update requests."""
     print(request.body)
+
+    if not is_allowed(request.user):
+        return HttpResponse("Djaq unauthorized", status=401)
+
     data = json.loads(request.body.decode("utf-8"))
-    #  import ipdb; ipdb.set_trace()
+
     whitelist = []
     if hasattr(settings, "DJAQ_WHITELIST"):
         whitelist = settings.DJAQ_WHITELIST
@@ -125,7 +142,11 @@ def djaq_request_view(request):
 @csrf_exempt
 @login_required
 def djaq_schema_view(request):
-    whitelist = {}
+    whitelist = []
+    if not is_allowed(request.user):
+        return HttpResponse("Djaq unauthorized", status=401)
+    if hasattr(settings, "DJAQ_WHITELIST"):
+        whitelist = settings.DJAQ_WHITELIST
     try:
         return JsonResponse(app_utils.get_schema(whitelist=whitelist))
     except Exception as e:

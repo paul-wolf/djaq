@@ -15,7 +15,7 @@
       app: <select id="app" onchange="get_models()">
 	<option value="">Choose app</option>
 	{% for app in apps %}
-	<option value="{{app.name}}">{{app.name}}</option>
+	<option value="{{app}}">{{app}}</option>
 	{% endfor %}
       </select>
       <div id="models" style="width:100%;height:85%;border: 2px solid grey;padding: 5px;overflow:auto">
@@ -45,6 +45,8 @@
 			      onclick="get_sql();">SQL</button></div>
   <div class="button"><button title="Get schema for models"
 			      onclick="get_schema();">Schema</button></div>
+  <div class="button"><button title="Get active whitelist"
+			      onclick="get_whitelist();">Whitelist</button></div>
 
   <div class="field">
     <label>limit</label>
@@ -170,8 +172,21 @@
 	      for (let [name, f] of Object.entries(response.fields)) {
 		  $("#field_list").append(`<li><a href="javascript:void(0);" ">${name}: ${f.internal_type}</a></li>`);
 	      }
+          },
+          error: function (xhr, ajaxOptions, thrownError) {
+              $("#result").val(xhr.responseText);
+          }
+      });
+  }
 
+  function get_whitelist() {
 
+      var url = `/dquery/whitelist/`
+      $.ajax({
+          type: "GET",
+          url: url,
+          success: function(response) {
+	      $("#result").val(JSON.stringify(response, null, 1));
           },
           error: function (xhr, ajaxOptions, thrownError) {
               $("#result").val(xhr.responseText);

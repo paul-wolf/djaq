@@ -10,11 +10,11 @@ This retrieves a list of book titles with book publisher. You can send
 Djaq queries from any language, Java, Javascript, golang, etc. to a
 Django application and get results as JSON.
 
-Of course, there is a common way to do this already by using some REST
-framework like Django REST Framework (DRF), GraphQL, Django views, etc.
-The advantage of Djaq is you can immediately provide access without
-writing server side code except for security as explained below. Djaq is
-a good fit if you want:
+Of course, there is a common way to do this already by using frameworks
+like Django REST Framework (DRF), GraphQL, Django views, etc. The
+advantage of Djaq is you can immediately provide access without writing
+server side code except for security as explained below. Djaq is a good
+fit if you want:
 
 -  Microservice communication where some services don’t have access to
    the Django ORM or are not implemented with Python
@@ -25,8 +25,8 @@ a good fit if you want:
 
 Djaq sits on top of the Django ORM. It can happily be used alongside
 QuerySets and sometimes calling a Djaq query even locally might be
-preferable to constructing a Queryset, although, Djaq is not a
-replacement for Querysets.
+preferable to constructing a Queryset, although Djaq is not a
+replacement for QuerySets.
 
 Features you might appreciate:
 
@@ -35,8 +35,8 @@ Features you might appreciate:
    you later move to another framework, like GraphQL or DRF.
 
 -  Djaq uses a syntax that lets you compose queries using Python-like
-   code for column and filter expressions. The query format and syntax
-   is chosen to be written by hand quickly. Readability is a key goal.
+   expressions. The query format and syntax is chosen to be written by
+   hand quickly. Readability is a key goal.
 
 -  Fast cursor semantics and explicit retrieval. It only gets data you
    asked for.
@@ -45,36 +45,44 @@ Features you might appreciate:
    way through one of the generator methods: ``.dict()``, ``.tuples()``,
    ``.json()``.
 
+-  Complex expressions let you push computation down to the database
+   layer from the client.
+
+-  A ready-to-go CRUD API that is easy to use. You can send requests to
+   have an arbitrary number of Create, Read, Write, Delete operations
+   done in a single request.
+
+-  Customisable behaviour using your own functions and data validators.
+
+-  A handy user interface for trying out queries on your data models.
+
 Djaq provides whitelisting of apps and models you want to expose. It
 also lets you hook requests and filter to ensure only data you want to
 expose is accessible.
 
    Note that Djaq is still in an early phase of development. No
-   warranties about reliability, security, that it will work exactly as
-   described.
+   warranties about reliability, security or that it will work exactly
+   as described.
 
 Limitations
 -----------
 
-Compared to other frameworks like GraphQL and DRF, you can’t transform
-data on the server before returning it (you can parameterise). This
-might be a deal breaker for your application. In that case, you should
-look at one of those solutions or PODVs (Plain Old Django Views).
+Compared to other frameworks like GraphQL and DRF, you can’t easily
+implement complex business rules on the server. This might be a deal
+breaker for your application. In that case, you should look at one of
+those solutions or Plain Old Django Views.
 
 Djaq only supports Postgresql at this time.
 
-There is an upper limit to the complexity of queries you can achieve
-with Djaq. Mostly, the generated SQL has a series of joins, by default
-LEFT joins linking the related models. It can probably satisfy a large
-number of use cases. But inevitably there may be backend business rules
-that require a heavyweight REST framework like DRF or GraphQL.
-
 Values in the ``choices`` argument of fields that take only a limited
-set of values will not be retrieved. These are not accessible to Djaq
-which only retrieves what is available via SQL.
+set of values will not be retrieved. Instead you get the raw field
+value. These are not accessible to Djaq which only retrieves what is
+available via SQL.
 
 Quickstart
 ----------
+
+You need Python 3.6 or higher and Django 2.1 or higher.
 
 Install:
 
@@ -82,7 +90,7 @@ Install:
 
    pip install Djaq
 
-For now, it will probably be better to get the most recent commit:
+The bleeding edge experience:
 
 ::
 
@@ -101,15 +109,96 @@ Use:
 Providing an API
 ----------------
 
-The above will not expose external APIs. To do that, you have two
-choices:
+We’ll assume below you are installing the Djaq UI. This is not required
+to provide an API but is very useful to try things out.
 
-1. Install the api app from Djaq
+Install the API and UI in settings:
 
-2. Write your own view
+.. code:: python
 
-Here is what a view function for your data layer might look like with
-Djaq:
+   INSTALLED_APPS = (
+       ...
+       djaq.djaq_api,
+       djaq.djaq_ui,
+   )
+
+Configure urls in urls.py:
+
+.. code:: python
+
+   urlpatterns = [
+       ...
+       path("dquery/", include("djaq.djaq_ui.urls")),`
+       path("djaq/", include("djaq.djaq_api.urls")),`
+   ]
+
+You are done. You can start sending requests to:
+
+::
+
+   /djaq/api/request/
+
+The UI will be available at:
+
+::
+
+   /dquery
+
+Note the UI will send requests to the API endpoint so will not work
+without that being configured. You send a request in this form to the
+api endpoint:
+
+.. code:: python
+
+   {
+    "queries": [
+     {
+      "q": "(b.id,b.name,b.pages,b.price,b.rating,b.publisher,b.alt_publisher,b.pubdate,b.in_print,) books.Book b",
+      "context": {},
+      "limit": "100",
+      "offset": "0"
+     }
+    ]
+   }
+
+The UI will create this JSON for you if you want to avoid typing it.
+
+You can also create objects, update them and delete them:
+
+.. code:: python
+
+   {
+      "queries": [
+       {
+         "q": "(b.id,b.name,b.pages,b.price,b.rating,b.publisher,b.alt_publisher,b.pubdate,b.in_print,) books.Book b",
+         "context": {},
+         "limit": "100",
+         "offset": "0"
+       }
+      ],
+     "creates":[{
+        "_model":"Book"
+        "name":"my new book",
+        }],
+     "updates":[{
+        "_model":"Book"
+        "_pk": 37,
+        "name":"my new title",
+        }],
+     "deletes":[{
+        "_model":"Book"
+          "_pk": 37,
+        }]
+   }
+
+You can send multiple ``queries``, ``creates``, ``updates``, ``deletes``
+operations in a single request.
+
+Custom API
+----------
+
+You can write your own custom API endpoint. Here is what a view function
+for your data layer might look like with Djaq:
 
 .. code:: python
 
@@ -132,25 +221,14 @@ Djaq:
            }
        )
 
-You can then send data like this:
-
-.. code:: python
-
-   {
-       "q": "(b.name as title, b.publisher.name as publisher) Book{ilike(b.publisher.name, '$(name_spec)' b",
-       "offset": 0,
-       "limit": 100,
-       "context": {"name_spec": "D%"}
-   }
-
-If you have a url conf for this, you can now query any models in your
-entire Django deployment remotely, provided the authentication
-underlying the ``login_required`` is satisfied. This is a good solution
-if your endpoint is only available to trusted clients who hold a valid
-authentication token or to clients without authentication who are in
-your own network and over which you have complete control. It is a bad
-solution on its own for any public access since it exposes Django
-framework models, like users, permissions, etc.
+You can now query any models in your entire Django deployment remotely,
+provided the authentication underlying the ``login_required`` is
+satisfied. This is a good solution if your endpoint is only available to
+trusted clients who hold a valid authentication token or to clients
+without authentication who are in your own network and over which you
+have complete control. It is a bad solution on its own for any public
+access since it exposes Django framework models, like users,
+permissions, etc.
 
 Most likely you want to control access in two ways:
 
@@ -199,8 +277,8 @@ Parsing is pretty fast:
    In [12]: %timeit list(DQ("(b.name) Book{ilike(b.name, 'A%')} b").parse())
    314 µs ± 4.1 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
 
-and is a negligible factor if you are parsing during a remote call as
-part of a view function.
+and might be a negligible factor if you are parsing during a remote call
+as part of a view function.
 
 But if you want to iterate over, say, a dictionary of variables locally,
 you’ll want to parse once:
@@ -286,7 +364,10 @@ lines:
 
 .. code:: python
 
-   (b.name, b.price, Publisher.name)
+   (
+      b.name, b.price,
+      Publisher.name
+   )
    Book{p.price > 50} b
 
 Always start with column expressions you want to return in parens:
@@ -373,13 +454,13 @@ publisher name in the result set:
 .. code:: python
 
    In [13]: print(list(DQ("(b.name, b.price) Book b -> (p.name)Publisher p").limit(1).dicts()))
-   [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'p_name': 'Wright, Taylor and Fitzpatrick'}]
 
    In [14]: print(list(DQ("(b.name, b.price, Publisher.name) Book b").limit(1).dicts()))
-   [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'publisher_name': 'Wright, Taylor and Fitzpatrick'}]
 
    In [15]: print(list(DQ("(b.name, b.price, b.publisher.name) Book b").limit(1).dicts()))
-   [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'b_publisher_name': 'Wright, Taylor and Fitzpatrick'}]
+
+Note that the above will each produce slightly different auto-generated
+output names unless you provide your own aliases.
 
 Signal that you want to summarise results using an aggregate function:
 
@@ -456,33 +537,22 @@ To pass parameters, use variables in your query, like ``'$(myvar)'``:
 
 Notice that the variable holder, ``$()``, *must* be in single quotes.
 
-Requirements
-------------
+Query UI
+~~~~~~~~
 
--  Python 3.6 or higher
+You can optionally install a query user interface to try out queries on
+your own data set:
 
--  Django 2.1 or higher
+-  After installing djaq, add ``djaq.djaq_ui`` to INSTALLED_APPS
 
--  Postgresql only for now. There is some code for future support of
-   SQLite, MySQL, Oracle, but the connections are currently specific to
-   psycopg2 at this time.
+-  Add ``path("dquery/", include("djaq.djaq_ui.urls")),`` to
+   ``urlpattenrs   in the sites``\ urls.py\`
 
-Installation
-------------
+Navigate to \`/dquery/’ in your app and you should be able to try out
+queries.
 
-Install from PyPi:
-
-::
-
-   pip install Djaq
-
-But for now, you probably want to install the latest commit from github:
-
-::
-
-   pip install https://github.com/django/django/archive/master.zip
-
-## Functions
+Functions
+---------
 
 If a function is not defined by DjangoQuery, then the function name is
 passed without further intervention to the underlying SQL. A user can
@@ -565,7 +635,8 @@ Here’s an example providing a function:
 
    DjangoQuery.functions['CONCAT'] = concat
 
-## Parameters
+Parameters
+----------
 
 We call the Django connection cursor approximately like this:
 
@@ -637,7 +708,8 @@ Then add the validator:
        .context(locals())
        .tuples()
 
-## Column expressions
+Column expressions
+------------------
 
 Doing column arithmetic is supported directly in the query syntax:
 
@@ -976,15 +1048,6 @@ single value, you can immediately access it without further iterations:
 
 will return a single integer value representing the count of books.
 
-Results vs Model Instances
---------------------------
-
-The Djaq generator ``.objs()`` returns a ``DQResult`` class instance.
-Djaq produces ‘results’ in contrast to model instances. Depending on
-what methods you use on QuerySets you may get Django Model instances or
-a list or a dict, etc. Djaq never returns a model instance. But you can
-easily get a model instance via the DQResult.
-
 Sample Project
 --------------
 
@@ -1069,3 +1132,6 @@ Output of the command should look like this:
    {"publisher_name": "Singleton-King", "diff": 17.0}
 
 Notice the SQL used to retrieve data is printed first.
+
+The best approach now would be to trial various queries using the Djaq
+UI as explained above.
