@@ -182,6 +182,49 @@ You can also create objects, update them and delete them:
 
 You can send multiple `queries`, `creates`, `updates`, `deletes` operations in a single request.
 
+## Settings
+
+The API and UI will use two settings:
+
+* DJAQ_WHITELIST: a list of apps/models that the user is permitted to include in queries.
+
+* DJAQ_PERMISSIONS: permissions required for staff and superuser.
+
+In the following example, we allow the models from 'books' to be
+exposed as well as the `User` model. We also require the caller to be
+both a staff member and superuser:
+
+```
+DJAQ_WHITELIST = {
+    "django.contrib.auth": ["User"],
+    "books": [
+        "Profile",
+        "Author",
+        "Consortium",
+        "Publisher",
+        "Book_authors",
+        "Book",
+        "Store_books",
+        "Store",
+    ],
+}
+DJAQ_UI_URL = None
+DJAQ_API_URL = None
+DJAQ_PERMISSIONS = {"staff": True, "superuser": True, "groups": []}
+```
+
+If we want to allow all models for an app, we can leave away the list
+of models. This will have the same effect as the setting above.
+
+```
+DJAQ_WHITELIST = {
+    "django.contrib.auth": ["User"],
+    "books": [],
+}
+```
+
+
+
 ## Custom API
 
 You can write your own custom API endpoint. Here is what a view function

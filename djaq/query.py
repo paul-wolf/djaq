@@ -500,10 +500,12 @@ class DjangoQuery(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_List(self, node):
+        """Assume the list has one element, a string,
+        that is a Djaq query."""
         #  import ipdb; ipdb.set_trace()
         src = [s for s in node.elts][0].s
         dq = self.__class__(src)
-        sql = dq.parse()
+        sql = dq.parse(outer_scope=self.relations[self.relation_index])
         self.emit(f"({sql})")
         #  ast.NodeVisitor.generic_visit(self, node)
         return
@@ -514,7 +516,7 @@ class DjangoQuery(ast.NodeVisitor):
         if node.s.strip().upper().startswith("SELECT "):
             # this is a literal sql subquery
             # we only allow this if the user says we
-            # are called locally
+            # are called locally (the default)
             if self.local:
                 self.emit(f"({node.s})")
             ast.NodeVisitor.generic_visit(self, node)
@@ -822,7 +824,7 @@ class DjangoQuery(ast.NodeVisitor):
 
         return aliases
 
-    def parse(self):
+    def parse(self, outer_scope=None):
         """Return sql after building query.
 
         """
@@ -954,12 +956,14 @@ class DjangoQuery(ast.NodeVisitor):
                 print(f"Relation        : {r}")
                 r.dump()
 
-        return self.generate()
+        return self.generate(outer_scope)
 
-    def generate(self):
+    def generate(self, outer_scope):
         """Generate the SQL. Assumes source is parsed.
 
         No model lookups are done here.
+
+        `outerscope` is the relation enclosing us if we are a subquery.
 
         """
 
@@ -980,8 +984,9 @@ class DjangoQuery(ast.NodeVisitor):
         s = f"SELECT {select} FROM {master_relation.model_table}"
 
         ## FROM JOINS
-        for relation in self.relations:
-            s += f" {relation.join_operator} {relation.model_table} ON {relation.join_condition_expression} "
+        if not outer_scope:
+            for relation in self.relations:
+                s += f" {relation.join_operator} {relation.model_table} ON {relation.join_condition_expression} "
 
         #  import ipdb; ipdb.set_trace()
         ## WHERE
