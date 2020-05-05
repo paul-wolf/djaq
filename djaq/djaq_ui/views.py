@@ -33,6 +33,13 @@ from djaq.app_utils import (
 logger = logging.getLogger(__name__)
 
 
+def wl():
+    whitelist = []
+    if hasattr(settings, "DJAQ_WHITELIST"):
+        whitelist = settings.DJAQ_WHITELIST
+    return whitelist
+
+
 @login_required
 @csrf_exempt
 def query_view(request):
@@ -45,22 +52,14 @@ def query_view(request):
         sql = request.POST.get("sql", False) == "true"
         try:
             if sql:
-                s = (
-                    DQ(q, whitelist=settings.DJAQ_WHITELIST)
-                    .offset(offset)
-                    .limit(limit)
-                    .parse()
-                )
+                s = DQ(q, whitelist=wl()).offset(offset).limit(limit).parse()
                 s = sqlparse.format(s, reindent=True, keyword_case="upper")
                 r = {"result": s}
             else:
                 try:
                     r = {
                         "result": list(
-                            DQ(q, whitelist=settings.DJAQ_WHITELIST)
-                            .offset(offset)
-                            .limit(limit)
-                            .dicts()
+                            DQ(q, whitelist=wl()).offset(offset).limit(limit).dicts()
                         )
                     }
                 except Exception as e:
@@ -75,9 +74,7 @@ def query_view(request):
             return HttpResponseServerError(e)
 
     list_of_apps = [a.name for a in apps.get_app_configs()]
-    list_of_apps = filter(
-        lambda a: a in list(settings.DJAQ_WHITELIST.keys()), list_of_apps
-    )
+    list_of_apps = filter(lambda a: a in list(wl().keys()), list_of_apps)
     data = {"apps": list_of_apps}
     return render(request, "query.html", data)
 
@@ -101,7 +98,7 @@ def sql_view(request):
 @login_required
 @csrf_exempt
 def get_models(request, appname):
-    classes = get_model_classes(app_name=appname, whitelist=settings.DJAQ_WHITELIST)
+    classes = get_model_classes(app_name=appname, whitelist=wl())
     model_names = []
     for label, cls in classes.items():
         model_names.append(label)
@@ -111,7 +108,7 @@ def get_models(request, appname):
 @login_required
 @csrf_exempt
 def get_fields(request, modelname):
-    model = find_model_class(modelname, whitelist=settings.DJAQ_WHITELIST)
+    model = find_model_class(modelname, whitelist=wl())
     d = get_model_details(model, connections["default"])
     return JsonResponse(d)
 
@@ -119,10 +116,10 @@ def get_fields(request, modelname):
 @login_required
 @csrf_exempt
 def get_whitelist_view(request):
-    return JsonResponse(get_whitelist(whitelist=settings.DJAQ_WHITELIST))
+    return JsonResponse(get_whitelist(whitelist=wl()))
 
 
 @login_required
 @csrf_exempt
 def schema_view(request):
-    return JsonResponse(get_schema(whitelist=settings.DJAQ_WHITELIST))
+    return JsonResponse(get_schema(whitelist=wl()))
