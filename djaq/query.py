@@ -80,6 +80,18 @@ def cast(funcname, args):
     return r
 
 
+def index_choice0(funcname, index, args):
+    """
+    index_choice(status, "live", "not-live", "decommissioned")
+    """
+    #  import ipdb; ipdb.set_trace()
+    s = f"CASE {index} "
+    for i, a in enumerate(args):
+        s += f"WHEN {index+i-1} THEN '{a}' "
+    s += "END"
+    return s
+
+
 class DjangoQuery(ast.NodeVisitor):
 
     # keep a record of named instances
@@ -93,6 +105,9 @@ class DjangoQuery(ast.NodeVisitor):
         "CONCAT": concat,
         "TODAY": "CURRENT_DATE",
         "CAST": cast,
+        "POINTX": "ST_X({})",
+        "POINTY": "ST_Y({})",
+        "INDEX_CHOICE0": index_choice0,
     }
 
     aggregate_functions = {
