@@ -1122,6 +1122,7 @@ class DjangoQuery(ast.NodeVisitor):
         return
 
     def tuples(self, data=None):
+
         row = None
         if not self.cursor:
             self.execute(data)

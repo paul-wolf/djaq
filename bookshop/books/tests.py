@@ -176,23 +176,43 @@ class TestDjaq(TestCase):
             self.assertTrue(isinstance(json.loads(r), dict))
 
     def test_aggregate_funcs(self):
-
         dq = DQ("(avg(b.price), max(b.price), min(b.price)) Book b")
         for r in dq.dicts():
             self.assertTrue(isinstance(r, dict))
 
-    def test_dq_subquery(self):
+    def test_dq_subquery_filter(self):
         """This subquery is a DjangoQuery subquery."""
-        #  import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         len1 = len(list(DQ('(b.id, b.name) Book{b.id in ["(Book.id)"]} b').dicts()))
         len2 = len(list(DQ("(Book.id)").dicts()))
         self.assertEqual(len1, len2)
 
-    def test_subquery(self):
+    def test_dq_subquery_select(self):
+        q = """(
+            p.id as id,
+            p.name,
+            ["(count(b.id)) books.Book{b.publisher==Publisher.id} b"] as cnt
+        ) books.Publisher p
+        """
+        data = list(DQ(q).dicts())
+        # one entry for each publisher
+        self.assertEqual(len(data), len(Publisher.objects.all()))
+
+        # now check each individual value by getting
+        # the same data with a different query
+        s = """(
+            count(b.id) as cnt
+        ) books.Book{Publisher.id=='$(pubid)'} b
+        """
+        for rec in data:
+            v = DQ(s).context({"pubid": rec["id"]}).value()
+            self.assertEqual(v, rec["cnt"])
+
+    def test_subquery_djangoquery(self):
         dq_sub = DQ("(b.id) Book{name == 'B*'} b", name="dq_sub")  # noqa: F841
         list(DQ("(b.name, b.price) Book{id in '@dq_sub'} b").tuples())
 
-    def test_queryset_subquery(self):
+    def test_subquery_queryset(self):
         qs = Book.objects.all().only("id")
         ids = [rec.id for rec in qs]
         list(
