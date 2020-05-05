@@ -1039,9 +1039,7 @@ class DjangoQuery(ast.NodeVisitor):
         """Return source for djangoquery and parameters.
 
         """
-
         self.context(context)
-
         sql = self.parse()
         if self.verbosity > 0:
             print(sql)
@@ -1097,7 +1095,8 @@ class DjangoQuery(ast.NodeVisitor):
                 conn = connections[self.using]
                 cursor = conn.cursor()
                 logger.debug(cursor.mogrify(sql, context))
-                print(f"sql={sql}, params={context}")
+                if self.verbosity:
+                    print(f"sql={sql}, params={context}")
             self.cursor.execute(sql, context)
         else:
             if self.verbosity:
@@ -1105,16 +1104,11 @@ class DjangoQuery(ast.NodeVisitor):
             logger.debug(sql)
             self.cursor.execute(sql)
 
-        # we record the column names from the cursor
-        # but we have our own aliases in self.column_headers
-        #  self.col_names = [desc[0] for desc in self.cursor.description]
-
     def dicts(self, data=None):
         if not self.cursor:
             self.execute(data)
         while True:
             row = self.cursor.fetchone()
-
             if row is None:
                 break
             row_dict = dict(zip(self.column_headers, row))
@@ -1122,18 +1116,11 @@ class DjangoQuery(ast.NodeVisitor):
         return
 
     def tuples(self, data=None):
-
         row = None
         if not self.cursor:
             self.execute(data)
         while True:
-            try:
-                row = self.cursor.fetchone()
-            except django.db.utils.ProgrammingError as dbe:
-                self.dump()
-                print(dbe)
-            except psycopg2.ProgrammingError as pe:
-                print(pe)
+            row = self.cursor.fetchone()
             if row is None:
                 break
             yield row
@@ -1146,7 +1133,6 @@ class DjangoQuery(ast.NodeVisitor):
     def objs(self, data=None):
         if not self.cursor:
             self.execute(data)
-
         while True:
             row = self.cursor.fetchone()
             if row is None:
