@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 def wl():
-    whitelist = []
+    whitelist = dict()
     if hasattr(settings, "DJAQ_WHITELIST"):
         whitelist = settings.DJAQ_WHITELIST
     return whitelist
