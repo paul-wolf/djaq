@@ -80,11 +80,12 @@ def cast(funcname, args):
     return r
 
 
-def index_choice0(funcname, index, args):
+def index_choice0(funcname, args):
     """
     index_choice(status, "live", "not-live", "decommissioned")
     """
     #  import ipdb; ipdb.set_trace()
+    index = args.pop(0)
     s = f"CASE {index} "
     for i, a in enumerate(args):
         s += f"WHEN {index+i-1} THEN '{a}' "
