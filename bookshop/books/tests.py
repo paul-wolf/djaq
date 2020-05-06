@@ -235,6 +235,9 @@ class TestDjaq(TestCase):
             ).tuples()
         )
 
+    def test_order_by(self):
+        list(DQ("(b.name) Book b order by (-b.name, b.publisher, -b.id)").dicts())
+
     def test_implicit_model(self):
         dq = DQ("(Book.name, Book.id)")
         self.assertEquals(dq.count(), 10)

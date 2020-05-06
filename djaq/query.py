@@ -294,6 +294,7 @@ class DjangoQuery(ast.NodeVisitor):
         self.placeholder_pattern = re.compile(r"\'\$\(([\w]*)\)\'")
         self.context_validator_class = ContextValidator
         self.local = local
+        self.unary_stack = []
 
         if self.vendor in self.__class__.aggregate_functions:
             self.vendor_aggregate_functions = self.__class__.aggregate_functions[
@@ -467,6 +468,10 @@ class DjangoQuery(ast.NodeVisitor):
 
     def emit_order_by(self, s):
         self.relations[self.relation_index].order_by += str(s)
+        if self.unary_stack:
+            sign = self.unary_stack.pop()
+            if sign == "-":
+                self.relations[self.relation_index].order_by += " DESC"
 
     def emit_func(self, s):
         """Write to current argument on the stack of the current function call."""
@@ -610,6 +615,10 @@ class DjangoQuery(ast.NodeVisitor):
         self.emit(" - ")
         ast.NodeVisitor.generic_visit(self, node)
 
+    def visit_USub(self, node):
+        self.unary_stack.append("-")
+        ast.NodeVisitor.generic_visit(self, node)
+
     def visit_Gt(self, node):
         self.emit(" > ")
         ast.NodeVisitor.generic_visit(self, node)
@@ -697,20 +706,16 @@ class DjangoQuery(ast.NodeVisitor):
         self.emit(" OR ")
 
     def visit_Tuple(self, node):
-        if not self.expression_context == "select":
+        if self.expression_context not in ["select", "order_by"]:
             self.emit("(")
         for i, el in enumerate(node.elts):
             ast.NodeVisitor.visit(self, el)
             exp = self.relations[self.relation_index].expression_str.strip("(")
             self.push_column_expression(exp.strip(", "))
             self.relations[self.relation_index].expression_str = ""
-            #  if self.expression_context == "order_by":
-            #      import ipdb; ipdb.set_trace()
             if not i == len(node.elts) - 1:
-                if self.expression_context == "order_by":
-                    self.emit(" ASC")
                 self.emit(", ")
-        if not self.expression_context == "select":
+        if self.expression_context not in ["select", "order_by"]:
             self.emit(")")
 
     def visit_Arguments(self, node):
