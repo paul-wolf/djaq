@@ -85,7 +85,7 @@ def index_choice0(funcname, args):
     index_choice(status, "live", "not-live", "decommissioned")
     """
     # import ipdb; ipdb.set_trace()
-    index = int(args.pop(0))
+    index = args.pop(0)
     s = f"CASE {index} "
     for i, a in enumerate(args):
         s += f"WHEN {i} THEN {a} "
