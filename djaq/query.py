@@ -1095,7 +1095,8 @@ class DjangoQuery(ast.NodeVisitor):
     def validator(self, validator_class):
         """Set validator_class that
         will check and mutate context variables."""
-        self.context_validator_class = validator_class
+        if validator_class:
+            self.context_validator_class = validator_class
         return self
 
     def execute(self, context=None, count=False):

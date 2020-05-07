@@ -55,8 +55,7 @@ Features you might appreciate:
 * A handy user interface for trying out queries on your data models.
 
 Djaq provides whitelisting of apps and models you want to expose. It
-also lets you hook requests and filter to ensure only data you want to
-expose is accessible.
+also provides a very simple permissions scheme via settings.
 
 > Note that Djaq is still in an early phase of development. No
 > warranties about reliability, security or that it will work exactly as
@@ -68,8 +67,11 @@ expose is accessible.
 
 Compared to other frameworks like GraphQL and DRF, you can't easily
 implement complex business rules on the server. This might be a deal
-breaker for your application. In that case, you should look at one of
-those solutions or Plain Old Django Views.
+breaker for your application. In particular, if you want to restrict
+access from untrusted clients to prevent them accessing some rows of
+your DB, this is more work than just installing Djaq. In that case,
+you might look at one of those other solutions or Plain Old Django
+Views.
 
 Djaq only supports Postgresql at this time.
 
@@ -229,7 +231,11 @@ DJAQ_WHITELIST = {
 }
 ```
 
-For permissions, you can optionally require any requesting user to be staff and/or superuser. And you can deny or allow update operations. If you do not provide explicit permissions for update operations, the API will respond with 401 if one of those operations is attempted.
+For permissions, you can optionally require any requesting user to be
+staff and/or superuser. And you can deny or allow update
+operations. If you do not provide explicit permissions for update
+operations, the API will respond with 401 if one of those operations
+is attempted.
 
 
 ## Custom API

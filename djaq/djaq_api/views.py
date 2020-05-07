@@ -55,7 +55,20 @@ def is_allowed(op):
     return False
 
 
-def queries(query_list, whitelist=None):
+def get_validator():
+    """Return validator specified in settings."""
+    if hasattr(settings, "DJAQ_VALIDATOR"):
+        return settings.DJAQ_VALIDATOR
+    return None
+
+
+def get_whitelist():
+    if hasattr(settings, "DJAQ_WHITELIST"):
+        return settings.DJAQ_WHITELIST
+    return []
+
+
+def queries(query_list, whitelist=None, validator=None):
     if not query_list:
         return []
     responses = []
@@ -68,6 +81,7 @@ def queries(query_list, whitelist=None):
             list(
                 DQ(query_string, whitelist=whitelist)
                 .context(context)
+                .validator(validator)
                 .limit(limit)
                 .offset(offset)
                 .dicts()
@@ -120,23 +134,29 @@ def deletes(deletes_list, whitelist=None):
 def djaq_request_view(request):
     """Main view for query and update requests."""
     print(request.body)
+    data = json.loads(request.body.decode("utf-8"))
+    logger.debug(data)
 
     if not is_user_allowed(request.user):
         return HttpResponse("Djaq unauthorized", status=401)
 
-    data = json.loads(request.body.decode("utf-8"))
+    whitelist = get_whitelist()
 
-    whitelist = []
-    if hasattr(settings, "DJAQ_WHITELIST"):
-        whitelist = settings.DJAQ_WHITELIST
+    validator = get_validator()
 
-    logger.debug(request.body)
+    # add request to context
+    q = data.get("queries")
+    ctx = q.get("context")
+    if not ctx:
+        ctx = dict()
+    ctx["request"] = request
+    q["context"] = ctx
 
     try:
         return JsonResponse(
             {
                 "result": {
-                    "queries": queries(data.get("queries"), whitelist=whitelist),
+                    "queries": queries(q, whitelist=whitelist, validator=validator),
                     "creates": creates(data.get("creates"), whitelist=whitelist),
                     "updates": updates(data.get("updates"), whitelist=whitelist),
                     "deletes": deletes(data.get("deletes"), whitelist=whitelist),
