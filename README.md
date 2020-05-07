@@ -210,7 +210,13 @@ DJAQ_WHITELIST = {
 }
 DJAQ_UI_URL = None
 DJAQ_API_URL = None
-DJAQ_PERMISSIONS = {"staff": True, "superuser": True, "groups": []}
+DJAQ_PERMISSIONS = {
+    "creates": True,
+    "updates": True,
+    "deletes": True,
+    "staff": True,
+    "superuser": True,
+}
 ```
 
 If we want to allow all models for an app, we can leave away the list
@@ -223,6 +229,7 @@ DJAQ_WHITELIST = {
 }
 ```
 
+For permissions, you can optionally require any requesting user to be staff and/or superuser. And you can deny or allow update operations. If you do not provide explicit permissions for update operations, the API will respond with 401 if one of those operations is attempted.
 
 
 ## Custom API

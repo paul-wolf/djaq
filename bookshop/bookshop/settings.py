@@ -121,4 +121,10 @@ DJAQ_WHITELIST = {
 }
 DJAQ_UI_URL = None
 DJAQ_API_URL = None
-DJAQ_PERMISSIONS = {"staff": True, "superuser": True, "groups": []}
+DJAQ_PERMISSIONS = {
+    "creates": True,
+    "updates": True,
+    "deletes": True,
+    "staff": True,
+    "superuser": True,
+}

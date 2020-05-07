@@ -35,6 +35,26 @@ groups: []
 """
 
 
+def is_user_allowed(user):
+    """Return True if there are no blocking permissions in settings.DJAQ_PERMISSIONS."""
+
+    if hasattr(settings, "DJAQ_PERMISSIONS"):
+        perms = settings.DJAQ_PERMISSIONS
+        if perms.get("staff") and not user.is_staff:
+            return False
+        if perms.get("superuser") and not user.is_superuser:
+            return False
+
+    return True
+
+
+def is_allowed(op):
+    """Return True if op is allowed else False."""
+    if hasattr(settings, "DJAQ_PERMISSIONS"):
+        return settings.DJAQ_PERMISSIONS.get(op)
+    return False
+
+
 def queries(query_list, whitelist=None):
     if not query_list:
         return []
@@ -57,6 +77,8 @@ def queries(query_list, whitelist=None):
 
 
 def creates(creates_list, whitelist=None):
+    if not is_allowed("creates"):
+        return HttpResponse("Djaq unauthorized", status=401)
     if not creates_list:
         return []
     responses = []
@@ -68,6 +90,8 @@ def creates(creates_list, whitelist=None):
 
 
 def updates(updates_list, whitelist=None):
+    if not is_allowed("updates"):
+        return HttpResponse("Djaq unauthorized", status=401)
     if not updates_list:
         return []
     responses = []
@@ -79,6 +103,8 @@ def updates(updates_list, whitelist=None):
 
 
 def deletes(deletes_list, whitelist=None):
+    if not is_allowed("deletes"):
+        return HttpResponse("Djaq unauthorized", status=401)
     if not deletes_list:
         return []
     responses = []
@@ -89,26 +115,13 @@ def deletes(deletes_list, whitelist=None):
     return responses
 
 
-def is_allowed(user):
-    """Return True if there are no blocking permissions in settings.DJAQ_PERMISSIONS."""
-
-    if hasattr(settings, "DJAQ_PERMISSIONS"):
-        perms = settings.DJAQ_PERMISSIONS
-        if perms.get("staff") and not user.is_staff:
-            return False
-        if perms.get("superuser") and not user.is_superuser:
-            return False
-
-    return True
-
-
 @csrf_exempt
 @login_required
 def djaq_request_view(request):
     """Main view for query and update requests."""
     print(request.body)
 
-    if not is_allowed(request.user):
+    if not is_user_allowed(request.user):
         return HttpResponse("Djaq unauthorized", status=401)
 
     data = json.loads(request.body.decode("utf-8"))
@@ -143,7 +156,7 @@ def djaq_request_view(request):
 @login_required
 def djaq_schema_view(request):
     whitelist = []
-    if not is_allowed(request.user):
+    if not is_user_allowed(request.user):
         return HttpResponse("Djaq unauthorized", status=401)
     if hasattr(settings, "DJAQ_WHITELIST"):
         whitelist = settings.DJAQ_WHITELIST
