@@ -24,7 +24,7 @@ from djaq.app_utils import (
     get_schema,
     get_model_classes,
 )
-from djaq.exceptions import ModelNotFoundException
+from djaq.exceptions import ModelNotFoundException, UnknownFunctionException
 
 from books.models import Author, Publisher, Book, Store, Profile
 
@@ -269,6 +269,16 @@ class TestDjaq(TestCase):
 
         # make sure we got three of them
         self.assertEqual(len(r), 3)
+
+    def test_function_whitelist(self):
+        with self.assertRaises(UnknownFunctionException):
+            list(DQ("(b.id, pg_backend_pid()) Book b").tuples())
+
+        with self.assertRaises(UnknownFunctionException):
+            list(DQ("(b.id, asdfasdfasdf()) Book b").tuples())
+
+        # this should be fine because `ceil()` is in our whitelist
+        list(DQ("(b.id, ceil(b.price)) Book b").tuples())
 
     def test_complex2(self):
         dq = DQ(

@@ -7,6 +7,7 @@ from ast import AST, iter_fields
 from collections import defaultdict
 import uuid
 import logging
+import functools
 
 import psycopg2
 from psycopg2.extras import DictCursor
@@ -29,8 +30,15 @@ from .app_utils import (
     get_model_from_table,
     get_field_from_model,
 )
+from .functions import function_whitelist
+from djaq.exceptions import UnknownFunctionException
 
 logger = logging.getLogger(__name__)
+
+
+@functools.lru_cache()
+def func_in_whitelist(funcname):
+    return funcname.lower() in function_whitelist
 
 
 class ContextValidator(object):
@@ -323,7 +331,6 @@ class DjangoQuery(ast.NodeVisitor):
 
     def aggregate(self):
         """Indicate that the current relation requires aggregation."""
-        # print("Setting group by: {}".format(self.relations[self.relation_index]))
         self.relations[self.relation_index].group_by = True
 
     def add_relation(
@@ -593,6 +600,7 @@ class DjangoQuery(ast.NodeVisitor):
         self.expression_context = last_context
         fcall = self.fstack.pop()
         funcname = fcall["funcname"].upper()
+
         if funcname in self.__class__.functions:
             # Fill our custom SQL template with arguments
             t = self.__class__.functions[funcname]
@@ -601,11 +609,17 @@ class DjangoQuery(ast.NodeVisitor):
             elif callable(t):
                 self.emit(t(funcname, fcall["args"]))
             else:
-                raise Exception("Can't mutate function: {}".format(funcname))
+                raise Exception(f"Cannot mutate function: {funcname}")
         else:
+
+            # check with whitelist of functions
+            if not func_in_whitelist(funcname):
+                raise UnknownFunctionException(f"Function '{funcname}' not known")
+
             # Construct the function call with given arguments
             # and expect the underlying db to support this function in upper case
-            self.emit("{}({})".format(fcall["funcname"], ", ".join(fcall["args"])))
+            args = ", ".join(fcall["args"])
+            self.emit(f"{funcname}({args})")
 
     def visit_Add(self, node):
         self.emit(" + ")

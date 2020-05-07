@@ -1012,7 +1012,9 @@ The following do pretty much the same thing:
     DQ("(p.id) Publisher p", name='pubs')
     DQ("(b.name) Book{publisher in '@pubs'} b")
 
-Obviously, in both cases, you would be filtering Publisher to make it actually useful, but the effect and verbosity can be extrapolated from the above.
+Obviously, in both cases, you would be filtering Publisher to make it
+actually useful, but the effect and verbosity can be extrapolated from
+the above.
 
 Most importantly, sending a query request over the wire, you can reference the outer scope:
 
@@ -1026,6 +1028,8 @@ SELECT
    (SELECT count("books_book"."id") FROM books_book WHERE "books_publisher"."id" = "books_book"."publisher_id")
 FROM books_publisher
 ```
+
+There are some constraints on using subqueries like this. The subquery cannot contain any joins.
 
 ## Sample Project
 
