@@ -57,20 +57,26 @@ Features you might appreciate:
 -  A handy user interface for trying out queries on your data models.
 
 Djaq provides whitelisting of apps and models you want to expose. It
-also lets you hook requests and filter to ensure only data you want to
-expose is accessible.
+also provides a simple permissions scheme via settings.
 
    Note that Djaq is still in an early phase of development. No
    warranties about reliability, security or that it will work exactly
    as described.
+
+.. figure:: bookshop/screenshots/djaq_ui.png?raw=true
+   :alt: Djaq UI
+
+   Djaq UI
 
 Limitations
 -----------
 
 Compared to other frameworks like GraphQL and DRF, you can’t easily
 implement complex business rules on the server. This might be a deal
-breaker for your application. In that case, you should look at one of
-those solutions or Plain Old Django Views.
+breaker for your application. In particular, if you want to restrict
+access from untrusted clients to prevent them accessing some rows of
+your DB, this is more work than just installing Djaq. In that case, you
+might look at one of those other solutions or Plain Old Django Views.
 
 Djaq only supports Postgresql at this time.
 
@@ -193,6 +199,60 @@ You can also create objects, update them and delete them:
 
 You can send multiple ``queries``, ``creates``, ``updates``, ``deletes``
 operations in a single request.
+
+Settings
+--------
+
+The API and UI will use two settings:
+
+-  DJAQ_WHITELIST: a list of apps/models that the user is permitted to
+   include in queries.
+
+-  DJAQ_PERMISSIONS: permissions required for staff and superuser.
+
+In the following example, we allow the models from ‘books’ to be exposed
+as well as the ``User`` model. We also require the caller to be both a
+staff member and superuser:
+
+::
+
+   DJAQ_WHITELIST = {
+       "django.contrib.auth": ["User"],
+       "books": [
+           "Profile",
+           "Author",
+           "Consortium",
+           "Publisher",
+           "Book_authors",
+           "Book",
+           "Store_books",
+           "Store",
+       ],
+   }
+   DJAQ_UI_URL = None
+   DJAQ_API_URL = None
+   DJAQ_PERMISSIONS = {
+       "creates": True,
+       "updates": True,
+       "deletes": True,
+       "staff": True,
+       "superuser": True,
+   }
+
+If we want to allow all models for an app, we can leave away the list of
+models. This will have the same effect as the setting above.
+
+::
+
+   DJAQ_WHITELIST = {
+       "django.contrib.auth": ["User"],
+       "books": [],
+   }
+
+For permissions, you can optionally require any requesting user to be
+staff and/or superuser. And you can deny or allow update operations. If
+you do not provide explicit permissions for update operations, the API
+will respond with 401 if one of those operations is attempted.
 
 Custom API
 ----------
@@ -708,6 +768,15 @@ Then add the validator:
        .context(locals())
        .tuples()
 
+You can set your own validator class in Django settings:
+
+::
+
+   DJAQ_VALIDATOR = MyValidator
+
+The ``request`` parameter of the API view is added to the context and
+will be available to the validator as ``request``.
+
 Column expressions
 ------------------
 
@@ -759,8 +828,8 @@ Comparison as a boolean expression:
 While the syntax has a superficial resemblance to Python, you do not
 have access to any functions of the Python Standard Libary.
 
-Subqueries and IN clause
-------------------------
+Subqueries and ``in`` clause
+----------------------------
 
 You can reference subqueries within a Djaq expression using
 
@@ -768,8 +837,21 @@ You can reference subqueries within a Djaq expression using
 -  A Queryset
 -  A list
 
-You can use an IN clause with the keyword ``in`` (note lower case).
-Create one DjangoQuery and reference it with ``@queryname``:
+The two most useful cases are using a subquery in the filter condition:
+
+::
+
+   DQ('(b.id, b.name) Book{b.id in ["(Book.id)"]} b')
+
+And using a subquery in the selected columns expression:
+
+::
+
+   DQ('(p.name, ["(count(b.id)) Book{Publisher.id == b.publisher} b"]) Publisher p')
+
+You can use an IN clause with the keyword ``in`` (note lower case) If
+you are writing queries via the Python API. Create one DjangoQuery and
+reference it with ``@queryname``:
 
 ::
 
@@ -792,25 +874,6 @@ DjangoQuery:
 As with QuerySets it is nearly always faster to generate a sub query
 than use an itemised list.
 
-Django Subquery and OuterRef
-----------------------------
-
-The following do pretty much the same thing:
-
-::
-
-   # QuerySet
-   pubs = Publisher.objects.filter(pk=OuterRef('publisher')).only('pk')
-   Book.objects.filter(publisher__in=Subquery(pubs))
-
-   # Djaq
-   DQ("(p.id) Publisher p", name='pubs')
-   DQ("(b.name) Book{publisher in '@pubs'} b")
-
-Obviously, in both cases, you would be filtering Publisher to make it
-actually useful, but the effect and verbosity can be extrapolated from
-the above.
-
 Order by
 --------
 
@@ -824,9 +887,13 @@ Descending order:
 
 ::
 
-   DQ("(b.id) Book{b.price > 20} b order by -(b.name)")
+   DQ("(b.id) Book{b.price > 20} b order by (-b.name)")
 
-You can use either ``+`` or ``-`` for ASC or DESC.
+You can have multple order by expressions.
+
+::
+
+   DQ("(b.name, Publisher.name) Book{b.price > 20} b order by (-b.name, b.publisher.name)")
 
 Count
 -----
@@ -1037,7 +1104,7 @@ for the object:
 Note that by default, you iterate using a generator. You cannot slice a
 generator.
 
-Some other features:
+Simple counts:
 
 ``DjangoQuery.value()``: when you know the result is a single row with a
 single value, you can immediately access it without further iterations:
@@ -1047,6 +1114,45 @@ single value, you can immediately access it without further iterations:
    DQ("(count(b.id)) Book b").value()
 
 will return a single integer value representing the count of books.
+
+Django Subquery and OuterRef
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following do pretty much the same thing:
+
+::
+
+   # QuerySet
+   pubs = Publisher.objects.filter(pk=OuterRef('publisher')).only('pk')
+   Book.objects.filter(publisher__in=Subquery(pubs))
+
+   # Djaq
+   DQ("(p.id) Publisher p", name='pubs')
+   DQ("(b.name) Book{publisher in '@pubs'} b")
+
+Obviously, in both cases, you would be filtering Publisher to make it
+actually useful, but the effect and verbosity can be extrapolated from
+the above.
+
+Most importantly, sending a query request over the wire, you can
+reference the outer scope:
+
+::
+
+   DQ('(p.name, ["(count(b.id)) Book{Publisher.id == b.publisher} b"]) Publisher p')
+
+the subquery output expression references the outer scope. It evaluates
+to the following SQL:
+
+.. code:: sql
+
+   SELECT
+      "books_publisher"."name",
+      (SELECT count("books_book"."id") FROM books_book WHERE "books_publisher"."id" = "books_book"."publisher_id")
+   FROM books_publisher
+
+There are some constraints on using subqueries like this. The subquery
+cannot contain any joins.
 
 Sample Project
 --------------

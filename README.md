@@ -44,7 +44,7 @@ Features you might appreciate:
   `.tuples()`, `.json()`.
 
 * Complex expressions let you push computation down to the database
-  layer from the client.
+  layer from the client in a natural way.
 
 * A ready-to-go CRUD API that is easy to use. You can send requests to
   have an arbitrary number of Create, Read, Write, Delete operations
@@ -75,12 +75,7 @@ Views.
 
 Djaq only supports Postgresql at this time.
 
-Values in the `choices` argument of fields that take only a limited
- set of values will not be retrieved. Instead you get the raw field
- value. These are not accessible to Djaq which only retrieves what is
- available via SQL.
-
-## Quickstart
+## Quickstart and Installation
 
 You need Python 3.6 or higher and Django 2.1 or higher.
 
@@ -186,11 +181,15 @@ You can send multiple `queries`, `creates`, `updates`, `deletes` operations in a
 
 ## Settings
 
-The API and UI will use two settings:
+The API and UI will use the following settings:
 
 * DJAQ_WHITELIST: a list of apps/models that the user is permitted to include in queries.
 
 * DJAQ_PERMISSIONS: permissions required for staff and superuser.
+
+* DJAQ_VALIDATOR: if using the remote API, you can specify a validator
+  class to handle all requests. The value assigned must be a class
+  derived from `djaq.query.ContextValidator`.
 
 In the following example, we allow the models from 'books' to be
 exposed as well as the `User` model. We also require the caller to be
@@ -210,8 +209,6 @@ DJAQ_WHITELIST = {
         "Store",
     ],
 }
-DJAQ_UI_URL = None
-DJAQ_API_URL = None
 DJAQ_PERMISSIONS = {
     "creates": True,
     "updates": True,
@@ -408,8 +405,11 @@ Always start with column expressions you want to return in parens:
     (b.name, b.price, Publisher.name)
 
 These expressions can be Django Model fields or arithmetic expressions
-or any expression supported by functions of your underlying
-database. Columns are automatically given names. But you can give them
+or any expression supported by functions of your underlying database
+that are also whitelisted by Djaq. Postgresql has thousands of
+functions. About 350 of those are available in Djaq.
+
+Columns are automatically given names. But you can give them
 your own name:
 
     (b.name as title, b.price as price, Publisher.name as publisher)
@@ -568,8 +568,10 @@ Navigate to `/dquery/' in your app and you should be able to try out queries.
 ## Functions
 
 If a function is not defined by DjangoQuery, then the function name is
-passed without further intervention to the underlying SQL. A user can
-define new functions at any time by adding to the custom
+checked with a whitelist of functions. There are approximately 350
+functions available.
+
+A user can define new functions at any time by adding to the custom
 functions. Here's an example of adding a regex matching function:
 
 ```python
@@ -642,7 +644,7 @@ def concat(funcname, args):
 DjangoQuery.functions['CONCAT'] = concat
 ```
 
-## Parameters
+## Parameters and Validator
 
 We call the Django connection cursor approximately like this:
 
@@ -884,12 +886,16 @@ print(get_schema(whitelist=wl))
 
 ## Comparing to Django QuerySets
 
-Djaq queries can be sent over the wire as a string. That is the main
-difference with Quersets. Even then, Djaq is not a replacement for
-Querysets. Querysets are highly integrated with Django and have been
-developed over 15 years by many developers. It is a very well thought
-out framework that is the best choice working within a service based
-on Django's ORM. This section is intended to highlight differences for
+Djaq is not a replacement for Querysets. Djaq queries can be sent over
+the wire as a string. The QuerySet API is not a remote API. You can
+use Djaq queries inside your Django application and Djaq syntax is
+can be more intuitive and simpler than QuerySets. But Querysets are
+highly integrated with Django and have been developed over 15 years by
+many developers. Plus you get code completion in your IDE with
+QuerySets. It is a very well thought out framework that is the best
+choice working within a service based on Django's ORM.
+
+This section is intended to highlight differences for
 users with high familiarity with the `QuerySet` class for the purpose
 of understanding limitations and capabilities of DjangoQuery.
 
