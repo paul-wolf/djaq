@@ -55,7 +55,7 @@ Features you might appreciate:
 * A handy user interface for trying out queries on your data models.
 
 Djaq provides whitelisting of apps and models you want to expose. It
-also provides a very simple permissions scheme via settings.
+also provides a simple permissions scheme via settings.
 
 > Note that Djaq is still in an early phase of development. No
 > warranties about reliability, security or that it will work exactly as
@@ -113,7 +113,7 @@ Install the API and UI in settings:
 INSTALLED_APPS = (
     ...
     djaq.djaq_api,
-	djaq.djaq_ui,
+    djaq.djaq_ui,
 )
 ```
 
@@ -710,6 +710,13 @@ DQ("(o.order_no, o.customer) Orders{o.order_no == '%(order_no)')} b")
     .tuples()
 ```
 
+You can set your own validator class in Django settings:
+
+    DJAQ_VALIDATOR = MyValidator
+
+The `request` parameter of the API view is added to the context and
+will be available to the validator as `request`.
+
 ## Column expressions
 
 Doing column arithmetic is supported directly in the query syntax:
@@ -761,8 +768,7 @@ Out[45]: [(False,)]
 While the syntax has a superficial resemblance to Python, you do not
 have access to any functions of the Python Standard Libary.
 
-Subqueries and IN clause
-------------------------
+## Subqueries and `in` clause
 
 You can reference subqueries within a Djaq expression using
 
@@ -770,7 +776,17 @@ You can reference subqueries within a Djaq expression using
 * A Queryset
 * A list
 
-You can use an IN clause with the keyword `in` (note lower case). Create one DjangoQuery and reference it with `@queryname`:
+The two most useful cases are using a subquery in the filter condition:
+
+    DQ('(b.id, b.name) Book{b.id in ["(Book.id)"]} b')
+
+And using a subquery in the selected columns expression:
+
+    DQ('(p.name, ["(count(b.id)) Book{Publisher.id == b.publisher} b"]) Publisher p')
+
+You can use an IN clause with the keyword `in` (note lower case) If
+you are writing queries via the Python API. Create one DjangoQuery and
+reference it with `@queryname`:
 
     DQ("(b.id) Book{name == 'B*'} b", name='dq_sub')
     dq = DQ("(b.name, b.price) Book{id in '@dq_sub'} b")
@@ -786,23 +802,8 @@ Note that you have to pass a name to the DjangoQuery to reference it later. We c
 
 As with QuerySets it is nearly always faster to generate a sub query than use an itemised list.
 
-Django Subquery and OuterRef
-----------------------------
 
-The following do pretty much the same thing:
-
-    # QuerySet
-    pubs = Publisher.objects.filter(pk=OuterRef('publisher')).only('pk')
-    Book.objects.filter(publisher__in=Subquery(pubs))
-
-    # Djaq
-    DQ("(p.id) Publisher p", name='pubs')
-    DQ("(b.name) Book{publisher in '@pubs'} b")
-
-Obviously, in both cases, you would be filtering Publisher to make it actually useful, but the effect and verbosity can be extrapolated from the above.
-
-Order by
---------
+## Order by
 
 You can order_by like this:
 
@@ -810,12 +811,14 @@ You can order_by like this:
 
 Descending order:
 
-    DQ("(b.id) Book{b.price > 20} b order by -(b.name)")
+    DQ("(b.id) Book{b.price > 20} b order by (-b.name)")
 
-You can use either `+` or `-` for ASC or DESC.
+You can have multple order by expressions.
 
-Count
------
+    DQ("(b.name, Publisher.name) Book{b.price > 20} b order by (-b.name, b.publisher.name)")
+
+
+## Count
 
 There are a couple ways to count results. These both return the exact same thing:
 
@@ -823,13 +826,12 @@ There are a couple ways to count results. These both return the exact same thing
 
     DQ("(count(Book.id)) Book").value()
 
-Datetimes
----------
+
+## Datetimes
 
 Datetimes are provided as strings in the iso format that your backend expects, like '2019-01-01 18:00:00'.
 
-Constants
----------
+## Constants
 
 `None`, `True`, `False` are replaced in SQL with `NULL`, `TRUE`, `FALSE`. All of the following work:
 
@@ -840,8 +842,7 @@ DQ("(b.id, b.name) Book{in_print is False} b")
 DQ("(b.id, b.name) Book{in_print == True} b")
 ```
 
-Slicing
--------
+## Slicing
 
 You cannot slice a DjangoQuery because this would frustrate a design goal of Djaq to provide the performance advantages of cursor-like behaviour.
 
@@ -851,8 +852,7 @@ You can use `limit()` and `offset()`:
 
 Which will provide you with the first hundred results starting from the 1000th record.
 
-Rewind cursor
--------------
+## Rewind cursor
 
 You can rewind the cursor but this is just executing the SQL again:
 
@@ -988,7 +988,7 @@ for book in dq.objs():
 
 Note that by default, you iterate using a generator. You cannot slice a generator.
 
-Some other features:
+Simple counts:
 
 `DjangoQuery.value()`: when you know the result is a single row with a
 single value, you can immediately access it without further
@@ -1000,6 +1000,32 @@ DQ("(count(b.id)) Book b").value()
 
 will return a single integer value representing the count of books.
 
+### Django Subquery and OuterRef
+
+The following do pretty much the same thing:
+
+    # QuerySet
+    pubs = Publisher.objects.filter(pk=OuterRef('publisher')).only('pk')
+    Book.objects.filter(publisher__in=Subquery(pubs))
+
+    # Djaq
+    DQ("(p.id) Publisher p", name='pubs')
+    DQ("(b.name) Book{publisher in '@pubs'} b")
+
+Obviously, in both cases, you would be filtering Publisher to make it actually useful, but the effect and verbosity can be extrapolated from the above.
+
+Most importantly, sending a query request over the wire, you can reference the outer scope:
+
+    DQ('(p.name, ["(count(b.id)) Book{Publisher.id == b.publisher} b"]) Publisher p')
+
+the subquery output expression references the outer scope. It evaluates to the following SQL:
+
+```sql
+SELECT
+   "books_publisher"."name",
+   (SELECT count("books_book"."id") FROM books_book WHERE "books_publisher"."id" = "books_book"."publisher_id")
+FROM books_publisher
+```
 
 ## Sample Project
 
