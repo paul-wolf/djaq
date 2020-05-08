@@ -195,7 +195,7 @@ In the following example, we allow the models from 'books' to be
 exposed as well as the `User` model. We also require the caller to be
 both a staff member and superuser:
 
-```
+```python
 DJAQ_WHITELIST = {
     "django.contrib.auth": ["User"],
     "books": [
@@ -221,7 +221,7 @@ DJAQ_PERMISSIONS = {
 If we want to allow all models for an app, we can leave away the list
 of models. This will have the same effect as the setting above.
 
-```
+```python
 DJAQ_WHITELIST = {
     "django.contrib.auth": ["User"],
     "books": [],
@@ -504,8 +504,10 @@ Order by name:
 ```
 (b.name, b.price, b.publisher.name as publisher)
 Book{p.price > 50} b
-order by b.name
+order by (b.name)
 ```
+
+The parentheses around the order by expression are required.
 
 Get average, minimum and maximum prices:
 
