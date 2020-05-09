@@ -1,6 +1,8 @@
-Djaq provides a query language for Django. In contrast to the QuerySet
-class that provides a Python API, Djaq queries are strings. A query
-string might look like this:
+Djaq provides an instant API to your Django models data with a highly
+expressive query language. It requires almost no configuration.
+
+In contrast to the QuerySet class that provides a Python API, Djaq
+queries are strings. A query string might look like this:
 
     (b.name as title, b.publisher.name as publisher) Book b
 
@@ -28,9 +30,11 @@ replacement for QuerySets.
 
 Features you might appreciate:
 
-* Immediate gratification with zero or minimal server-side code. There
-  is minimal setup. And therefore, there is minimal wasted effort if
-  you later move to another framework, like GraphQL or DRF.
+* Immediate gratification with zero or minimal server-side
+  code. Because there is minimal setup, there is minimal wasted effort
+  if you later move to another framework, like GraphQL or DRF. But
+  getting started calling your API is much faster than those
+  frameworks.
 
 * Djaq uses a syntax that lets you compose queries using Python-like
   expressions. The query format and syntax is chosen to be written by
@@ -67,11 +71,14 @@ also provides a simple permissions scheme via settings.
 
 Compared to other frameworks like GraphQL and DRF, you can't easily
 implement complex business rules on the server. This might be a deal
-breaker for your application. In particular, if you want to restrict
-access from untrusted clients to prevent them accessing some rows of
-your DB, this is more work than just installing Djaq. In that case,
-you might look at one of those other solutions or Plain Old Django
-Views.
+breaker for your application.
+
+Djaq, without any configuration, provides access to *all* your model
+data. That is usually not what you want. For instance, you would not
+want to expose all user data, session data, or many other kinds of data
+to even authenticated clients. It is trivial to prevent access to data
+on an app or a model class level. But this might be too coarse grained
+for your application.
 
 Djaq only supports Postgresql at this time.
 
@@ -1110,5 +1117,8 @@ Notice the SQL used to retrieve data is printed first.
 
 The best approach now would be to trial various queries using the Djaq UI as explained above.
 
-
+Finally, checkout the settings for the bookshop. You will notice that
+many admin models are not accessible. In a real application we'd want
+to prevent access to user data and other data on perhaps a finer
+grained level.
 
