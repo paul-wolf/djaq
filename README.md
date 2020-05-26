@@ -1,21 +1,22 @@
-Djaq provides an instant remote API to your Django models data with a highly
-expressive query language. It requires almost no configuration.
+Djaq - pronounced "Jack" - provides an instant remote API to your
+Django models data with a powerful query language. No server-side code
+beyond two lines of config is required. You don't write backend
+classes, serializers or any other code to be able to immediately get
+whatever data you want to the client. And it is blazing fast.
 
-In contrast to the QuerySet class that provides a Python API, Djaq
-queries are strings. A query string for our example dataset might look
-like this:
+Djaq queries are strings. A query string for our example dataset might
+look like this:
 
     (b.name as title, b.publisher.name as publisher) Book b
 
-This retrieves a list of book titles with book publisher. You can send Djaq
+This retrieves a list of book titles with book publisher. But you can
+formulate far more sophisticated queries, see below. You can send Djaq
 queries from any language, Java, Javascript, golang, etc. to a Django
-application and get results as JSON.
+application and get results as JSON. In contrast to REST frameworks,
+like TastyPie or Django Rest Framework (DRF), you have natural access
+to the Django ORM from the client.
 
-Of course, there is a common way to do this already by using
-frameworks like Django REST Framework (DRF), GraphQL, Django views,
-etc. The advantage of Djaq is you can immediately provide access
-without writing server side code except for some security constraints
-as explained below. Djaq is a good fit if you want:
+Djaq is a good fit if you want:
 
 * Microservice communication where some services don't have access to
   the Django ORM or are not implemented with Python
@@ -37,9 +38,12 @@ Features you might appreciate:
   getting started calling your API is much faster than those
   frameworks.
 
-* Djaq uses a syntax that lets you compose queries using Python-like
+* A natural syntax that lets you compose queries using Python-like
   expressions. The query format and syntax is designed to be written by
   hand quickly. Readability is a key goal.
+
+* Complex expressions let you push computation down to the database
+  layer from the client easily.
 
 * Fast cursor semantics and explicit retrieval. It only gets data you
   asked for.
@@ -47,9 +51,6 @@ Features you might appreciate:
 * Obvious performance behaviour. It will trigger a query in one
   obvious way through one of the generator methods: `.dict()`,
   `.tuples()`, `.json()`.
-
-* Complex expressions let you push computation down to the database
-  layer from the client in a natural way.
 
 * A ready-to-go CRUD API that is easy to use. You can send requests to
   have an arbitrary number of Create, Read, Write, Delete operations
@@ -67,21 +68,6 @@ also provides a simple permissions scheme via settings.
 > described.
 
 ![Djaq UI](bookshop/screenshots/djaq_ui.png?raw=true "")
-
-## Limitations
-
-Compared to other frameworks like GraphQL and DRF, you can't easily
-implement complex business rules on the server. This might be a deal
-breaker for your application.
-
-Djaq, without any configuration, provides access to *all* your model
-data. That is usually not what you want. For instance, you would not
-want to expose all user data, session data, or many other kinds of data
-to even authenticated clients. It is trivial to prevent access to data
-on an app or a model class level. But this might be too coarse grained
-for your application.
-
-Djaq only supports Postgresql at this time.
 
 ## Quickstart and Installation
 
@@ -309,7 +295,54 @@ just start calling and retrieving any data you wish. It's an instant
 API to your application provided you trust the client or have
 sufficient access control in place.
 
+## Difference between Djaq and Other Frameworks
+
+The core of Djaq does not actually have anything _specifically_ to do
+with remote requests. It is primarily a query language for Django
+models. You can just as easily use it within another remote API
+framework.
+
+The default remote API for Djaq is not a REST framework. It does use
+JSON for encoding data and POST to send requests. But it does not
+adhere to the prescribed REST verbs. It comes with a very thin wrapper
+for remote HTTP(S) requests that is a simple Djano view function. It
+would be trivial to write your own or use some REST framework to
+provide this functionality. Mainly, it provides a way to formulate
+queries that are highly expressive, compact and readable.
+
+There is only one endpoint for Djaq on the backend.
+
+Requests for queries, creates, updates, deletes are always POSTed.
+
+Most importantly, the client decides what information to request using
+a query language that is much more powerful than what is available
+from other REST frameworks and GraphQL.
+
+Conversely, REST frameworks and GraphQL are more useful than Djaq in
+providing server-side business rule implementation.
+
+## Limitations
+
+Compared to other frameworks like GraphQL and DRF, you can't easily
+implement complex business rules on the server. This might be a deal
+breaker for your application.
+
+Djaq, without any configuration, provides access to *all* your model
+data. That is usually not what you want. For instance, you would not
+want to expose all user data, session data, or many other kinds of data
+to even authenticated clients. It is trivial to prevent access to data
+on an app or a model class level. But this might be too coarse-grained
+for your application.
+
+Djaq only supports Postgresql at this time.
+
 ## Performance
+
+You will probably experience Djaq calls as blazing fast compared to
+other remote frameworks. This is just because not much happens
+inbetween. Once the query is parsed, it is about as fast as you will
+ever get unless you do something fancy in a validator. The simplest
+possible serialization is used by default.
 
 Once the query is parsed, it is about the same overhead as calling this:
 
@@ -320,14 +353,8 @@ self.cursor = self.connection.cursor()
 self.cursor.execute(sql)
 ```
 
-Parsing is pretty fast:
-
-```
-In [12]: %timeit list(DQ("(b.name) Book{ilike(b.name, 'A%')} b").parse())
-314 µs ± 4.1 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
-```
-
-and might be a negligible factor if you are parsing during a remote call as part of a view function.
+Parsing is pretty fast and might be a negligible factor if you are
+parsing during a remote call as part of a view function.
 
 But if you want to iterate over, say, a dictionary of variables locally, you'll want to parse once:
 
@@ -340,7 +367,6 @@ for vars in var_list:
 ```
 
 Note that each call of `context()` causes the cursor to execute again when `tuples()` is iterated.
-
 
 ## Query usage guide
 
@@ -578,6 +604,26 @@ You can optionally install a query user interface to try out queries on your own
 
 Navigate to `/dquery/' in your app and you should be able to try out queries.
 
+* Send: call the API with the query
+
+* JSON: show the json that will be sent as the request data
+
+* SQL: show how the request will be sent to the database as sql
+
+* Schema: render the schema that describe the available fields
+
+* Whitelist: show the active whitelist. You can use this to generate a whilelist and edit it as required.
+
+There is a combo dropdown control, `apps`. Select the Django
+app. Models for the selected app are listed below. If you click once
+on a model, the result field will show the schema for that model. If
+you double-click the model, it generates a query for you for all
+fields in that model. Once you do that, just press "Send" to see the
+results.
+
+If the query pane has the focus, you can press shift-return to send
+the query request to the server.
+
 ## Functions
 
 If a function is not defined by DjangoQuery, then the function name is
@@ -634,11 +680,11 @@ We can simplify further by creating a new function. The IIF function is defined 
 
     "CASE WHEN {} THEN {} ELSE {} END"
 
- We can create a `SUMIF` function like this:
+We can create a `SUMIF` function like this:
 
     DjangoQuery.functions['SUMIF'] = "SUM(CASE WHEN {} THEN {} ELSE {} END)"
 
- Now we can rewrite the above like this:
+Now we can rewrite the above like this:
 
 ```python
 DQ("""(
