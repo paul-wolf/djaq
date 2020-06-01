@@ -4,3 +4,4 @@ Faker
 factory_boy
 
 ipython
+django_extensions

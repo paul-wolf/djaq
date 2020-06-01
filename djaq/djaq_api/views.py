@@ -144,13 +144,16 @@ def djaq_request_view(request):
 
     validator = get_validator()
 
+    # import pudb; pudb.set_trace()
+    # import ipdb; ipdb.set_trace()
+    
     # add request to context
     q = data.get("queries")
-    ctx = q.get("context")
+    ctx = q[0].get("context")
     if not ctx:
         ctx = dict()
-    ctx["request"] = request
-    q["context"] = ctx
+    # ctx["request"] = request
+    # q["context"] = ctx
 
     try:
         return JsonResponse(
