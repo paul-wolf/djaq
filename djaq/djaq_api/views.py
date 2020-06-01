@@ -92,7 +92,7 @@ def queries(query_list, whitelist=None, validator=None):
 
 def creates(creates_list, whitelist=None):
     if not is_allowed("creates"):
-        return HttpResponse("Djaq unauthorized", status=401)
+        return Exception("Creates not allowed")
     if not creates_list:
         return []
     responses = []
@@ -105,7 +105,7 @@ def creates(creates_list, whitelist=None):
 
 def updates(updates_list, whitelist=None):
     if not is_allowed("updates"):
-        return HttpResponse("Djaq unauthorized", status=401)
+        raise Exception("Updates not allowed")
     if not updates_list:
         return []
     responses = []
@@ -118,7 +118,7 @@ def updates(updates_list, whitelist=None):
 
 def deletes(deletes_list, whitelist=None):
     if not is_allowed("deletes"):
-        return HttpResponse("Djaq unauthorized", status=401)
+        raise Exception("Deletes not allowed")
     if not deletes_list:
         return []
     responses = []
@@ -144,25 +144,42 @@ def djaq_request_view(request):
 
     validator = get_validator()
 
-    # import pudb; pudb.set_trace()
-    # import ipdb; ipdb.set_trace()
-    
+    #  import pudb; pudb.set_trace()
+    #  import ipdb; ipdb.set_trace()
+
     # add request to context
     q = data.get("queries")
     ctx = q[0].get("context")
     if not ctx:
         ctx = dict()
-    # ctx["request"] = request
-    # q["context"] = ctx
+    #  ctx["request"] = request
+    #  q["context"] = ctx
+
+    queries_result = (queries(q, whitelist=whitelist, validator=validator),)
+    creates_result = (
+        creates(data.get("creates"), whitelist=whitelist)
+        if is_allowed("creates")
+        else []
+    )
+    updates_result = (
+        updates(data.get("updates"), whitelist=whitelist)
+        if is_allowed("updates")
+        else []
+    )
+    deletes_result = (
+        deletes(data.get("deletes"), whitelist=whitelist)
+        if is_allowed("deletes")
+        else []
+    )
 
     try:
         return JsonResponse(
             {
                 "result": {
-                    "queries": queries(q, whitelist=whitelist, validator=validator),
-                    "creates": creates(data.get("creates"), whitelist=whitelist),
-                    "updates": updates(data.get("updates"), whitelist=whitelist),
-                    "deletes": deletes(data.get("deletes"), whitelist=whitelist),
+                    "queries": queries_result,
+                    "creates": creates_result,
+                    "updates": updates_result,
+                    "deletes": deletes_result,
                 }
             }
         )
