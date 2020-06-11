@@ -305,7 +305,7 @@ framework.
 The default remote API for Djaq is not a REST framework. It does use
 JSON for encoding data and POST to send requests. But it does not
 adhere to the prescribed REST verbs. It comes with a very thin wrapper
-for remote HTTP(S) requests that is a simple Djano view function. It
+for remote HTTP(S) requests that is a simple Django view function. It
 would be trivial to write your own or use some REST framework to
 provide this functionality. Mainly, it provides a way to formulate
 queries that are highly expressive, compact and readable.

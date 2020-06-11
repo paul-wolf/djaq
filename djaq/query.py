@@ -117,6 +117,7 @@ class DjangoQuery(ast.NodeVisitor):
         "POINTX": "ST_X({})",
         "POINTY": "ST_Y({})",
         "INDEX_CHOICE0": index_choice0,
+        "COUNTDISTINCT": "COUNT(DISTINCT {})",
     }
 
     aggregate_functions = {
