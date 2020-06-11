@@ -126,6 +126,6 @@ DJAQ_PERMISSIONS = {
     "creates": True,
     "updates": True,
     "deletes": True,
-    "staff": True,
-    "superuser": True,
+    "staff": False,
+    "superuser": False,
 }

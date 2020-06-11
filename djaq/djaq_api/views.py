@@ -136,7 +136,7 @@ def djaq_request_view(request):
     print(request.body)
     data = json.loads(request.body.decode("utf-8"))
     logger.debug(data)
-
+    import ipdb; ipdb.set_trace()
     if not is_user_allowed(request.user):
         return HttpResponse("Djaq unauthorized", status=401)
 
@@ -149,9 +149,14 @@ def djaq_request_view(request):
 
     # add request to context
     q = data.get("queries")
-    ctx = q[0].get("context")
-    if not ctx:
-        ctx = dict()
+    ctx = dict()
+    try:
+        ctx = q[0].get("context")
+        if not ctx:
+            ctx = dict()
+    except Exception as e:
+        print(e)
+        
     #  ctx["request"] = request
     #  q["context"] = ctx
 
