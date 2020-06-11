@@ -155,22 +155,22 @@ def djaq_request_view(request):
     #  ctx["request"] = request
     #  q["context"] = ctx
 
-    queries_result = (queries(q, whitelist=whitelist, validator=validator),)
-    creates_result = (
-        creates(data.get("creates"), whitelist=whitelist)
-        if is_allowed("creates")
+    queries_result = queries(q, whitelist=whitelist, validator=validator)
+    creates_result = \
+        creates(data.get("creates"), whitelist=whitelist) \
+        if is_allowed("creates") \
         else []
-    )
-    updates_result = (
-        updates(data.get("updates"), whitelist=whitelist)
-        if is_allowed("updates")
+    
+    updates_result = \
+        updates(data.get("updates"), whitelist=whitelist) \
+        if is_allowed("updates") \
         else []
-    )
-    deletes_result = (
-        deletes(data.get("deletes"), whitelist=whitelist)
-        if is_allowed("deletes")
+    
+    deletes_result = \
+        deletes(data.get("deletes"), whitelist=whitelist) \
+        if is_allowed("deletes") \
         else []
-    )
+    
 
     try:
         return JsonResponse(
