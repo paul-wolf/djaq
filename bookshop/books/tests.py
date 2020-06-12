@@ -3,6 +3,8 @@ import random
 from decimal import Decimal
 
 from django.test import TestCase
+from django.test import RequestFactory
+from django.test import Client
 from django.db.models import Q, Avg, Count, Min, Max, Sum, FloatField, F
 from django.db import connections
 from django.contrib.auth.models import User
@@ -11,7 +13,7 @@ import factory
 from faker import Faker
 
 from djaq import DjangoQuery as DQ, DQResult
-from djaq.djaq_api.views import queries, updates, creates, deletes
+from djaq.djaq_api.views import queries, updates, creates, deletes, djaq_request_view
 from djaq.app_utils import (
     model_path,
     get_db_type,
@@ -30,23 +32,29 @@ from books.models import Author, Publisher, Book, Store, Profile
 
 fake = Faker()
 
+REQUEST_ENDPOINT = "/djaq/api/request/"
+USERNAME = "artemis"
+PASSWORD = "blah"
+EMAIL = "artemis@blah.com"
 
 class TestDjaq(TestCase):
     def setUp(self):
 
-        user = User.objects.create(username="artemis", email="artemis@blah.com")
-        Profile.objects.create(user=user, company="whatever")
-
+        user = User.objects.create_user(username=USERNAME, email=EMAIL, password=PASSWORD)
+        
+        self.user = user
+        Profile.objects.create(user=user, company="whatever")        
+        
         Author.objects.create(name="Sally", age=50)
         Author.objects.create(name="Bob", age=24)
         Author.objects.create(name="Sue", age=33)
 
         Publisher.objects.create(name="Simon and Bloober")
         Publisher.objects.create(name="Alternative press")
-
+        title = factory.Faker("sentence", nb_words=4)
         for i in range(10):
             book = Book.objects.create(
-                name=factory.Faker("sentence", nb_words=4),
+                name=title.generate(),
                 pages=random.choice(range(100, 800)),
                 price=random.choice(range(3, 35)),
                 rating=random.choice(range(5)),
@@ -325,3 +333,85 @@ class TestDjaq(TestCase):
         deletes([data])
         book_count_new = DQ("(count(Book.id)) Book").value()
         self.assertEqual(book_count, book_count_new + 1)
+
+    def test_remote_query(self):
+        data = {
+            "queries": [
+                {
+                    "q": "(Book.id, Book.name, Book.price, Book.pubdate)",
+                    "context": {},
+                    "limit": "100",
+                    "offset": "0"
+                }
+            ]
+        }
+        request_factory = RequestFactory()
+        request = request_factory.post(REQUEST_ENDPOINT,
+                                       data=json.dumps(data),
+                                       content_type='application/json',
+                                       
+        )
+        request.user = self.user
+        response = djaq_request_view(request)
+        r = json.loads(response.content.decode())
+        self.assertTrue("result" in r)
+
+        result = r.get("result")
+        self.assertTrue("queries" in result)
+        self.assertTrue("creates" in result)
+        self.assertTrue("updates" in result)
+        self.assertTrue("deletes" in result)
+
+        self.assertEqual(len(result.get("queries")[0]), 10)
+
+    def test_remote_create(self):
+        data = {
+            "creates": [
+                {
+                    "_model": "books.Author",
+                    "name": "joseph conrad",
+                    "age": 31,
+                }
+            ]
+        }
+
+        c = Client()
+        r = c.login(username=USERNAME, password=PASSWORD)
+
+        r = c.post(REQUEST_ENDPOINT, data, content_type="application/json")
+        result = json.loads(r.content.decode())["result"]
+        self.assertTrue("queries" in result)
+        self.assertTrue("creates" in result)
+        self.assertTrue("updates" in result)
+        self.assertTrue("deletes" in result)
+        print(r.content)
+        pk = result.get("creates")[0]
+        a = Author.objects.get(name="joseph conrad")
+        self.assertEquals(pk, a.id)
+
+    def test_remote_update(self):
+        data = {
+            "creates": [
+                {
+                    "_model": "books.Author",
+                    "name": "joseph conrad",
+                    "age": 31,
+                }
+            ]
+        }
+
+        c = Client()
+        r = c.login(username=USERNAME, password=PASSWORD)
+
+        r = c.post(REQUEST_ENDPOINT, data, content_type="application/json")
+        result = json.loads(r.content.decode())["result"]
+        self.assertTrue("queries" in result)
+        self.assertTrue("creates" in result)
+        self.assertTrue("updates" in result)
+        self.assertTrue("deletes" in result)
+        print(r.content)
+        pk = result.get("creates")[0]
+        a = Author.objects.get(name="joseph conrad")
+        self.assertEquals(pk, a.id)
+
+
