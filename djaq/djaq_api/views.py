@@ -160,24 +160,24 @@ def djaq_request_view(request):
     #  ctx["request"] = request
     #  q["context"] = ctx
 
-    queries_result = queries(q, whitelist=whitelist, validator=validator)
-    creates_result = \
-        creates(data.get("creates"), whitelist=whitelist) \
-        if is_allowed("creates") \
-        else []
-    
-    updates_result = \
-        updates(data.get("updates"), whitelist=whitelist) \
-        if is_allowed("updates") \
-        else []
-    
-    deletes_result = \
-        deletes(data.get("deletes"), whitelist=whitelist) \
-        if is_allowed("deletes") \
-        else []
-    
 
     try:
+        queries_result = queries(q, whitelist=whitelist, validator=validator)
+        creates_result = \
+            creates(data.get("creates"), whitelist=whitelist) \
+            if is_allowed("creates") \
+            else []
+
+        updates_result = \
+            updates(data.get("updates"), whitelist=whitelist) \
+            if is_allowed("updates") \
+            else []
+
+        deletes_result = \
+            deletes(data.get("deletes"), whitelist=whitelist) \
+            if is_allowed("deletes") \
+            else []
+
         return JsonResponse(
             {
                 "result": {
@@ -189,6 +189,7 @@ def djaq_request_view(request):
             }
         )
     except Exception as e:
+
         if e.__cause__ and e.__cause__.pgerror:
             err = e.__cause__.pgerror
             logger.exception(err)
