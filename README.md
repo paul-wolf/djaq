@@ -63,10 +63,6 @@ Features you might appreciate:
 Djaq provides whitelisting of apps and models you want to expose. It
 also provides a simple permissions scheme via settings.
 
-> Note that Djaq is still in an early phase of development. No
-> warranties about reliability, security or that it will work exactly as
-> described.
-
 ![Djaq UI](bookshop/screenshots/djaq_ui.png?raw=true "")
 
 ## Quickstart and Installation
