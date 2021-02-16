@@ -73,7 +73,7 @@ also provides a simple permissions scheme via settings.
    :maxdepth: 3
    :caption: Contents:
 
-   introduction
+   installation
    settings
    api_settings
    query_usage
