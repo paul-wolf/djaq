@@ -150,7 +150,7 @@ We could have done this:
 Our example model also has an owner model called “Consortium” that is
 the owner of the publisher:
 
-.. code:: python
+.. ipython::
 
    In [16]: print(list(DQ("(b.name, b.price, b.publisher.name, b.publisher.owner.name) Book b").limit(1).dicts()))
    Out[16]: [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'b_publisher_name': 'Wright, Taylor and Fitzpatrick', 'b_publisher_owner_name': 'Publishers Group'}]
@@ -158,7 +158,7 @@ the owner of the publisher:
 To recap, there are three alternative patterns to follow to get the
 publisher name in the result set:
 
-.. code:: python
+.. ipython::
 
    In [13]: print(list(DQ("(b.name, b.price) Book b -> (p.name)Publisher p").limit(1).dicts()))
 
@@ -233,7 +233,7 @@ name.
 
 To pass parameters, use variables in your query, like ``'$(myvar)'``:
 
-.. code:: pycon
+.. ipython:: 
 
    In [30]: oldest = '2018-12-20'
        ...: list(DQ("(b.name, b.pubdate) Book{b.pubdate >= '$(oldest)'} b").context({"oldest": oldest}).limit(5).tuples())
