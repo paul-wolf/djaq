@@ -3,6 +3,8 @@
 exp_flymake.py	
 .venv
 log
+.vscode
+_build
 
 django.wsgi
 
