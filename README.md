@@ -20,22 +20,22 @@ application and get results as JSON. In contrast to REST frameworks,
 like TastyPie or Django Rest Framework (DRF), you have natural access
 to the Django ORM from the client.
 
-`Documentation: https://djaq.readthedocs.io`
-
+[Documentation](https://djaq.readthedocs.io)
+[Installation](https://djaq.readthedocs.io/en/latest/installation.html)
 
 Djaq is a good fit if you want:
 
 * Microservice communication where some services don't have access to
   the Django ORM or are not implemented with Python
 
-* Fast local UI development
+* Fast UI development
 
 * Fast development of Proof of Concepts
 
 Djaq sits on top of the Django ORM. It can happily be used alongside
 QuerySets and sometimes calling a Djaq query even locally might be
 preferable to constructing a Queryset, although Djaq is not a
-replacement for QuerySets.
+direct replacement for QuerySets.
 
 Features you might appreciate:
 
@@ -71,4 +71,3 @@ Djaq provides whitelisting of apps and models you want to expose. It
 also provides a simple permissions scheme via settings.
 
 ![Djaq UI](bookshop/screenshots/djaq_ui.png?raw=true "")
-
