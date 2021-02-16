@@ -13,31 +13,33 @@ look like this:
 (b.name as title, b.publisher.name as publisher) Book b
 ```
 
-This retrieves a list of book titles with book publisher. But you can
-formulate far more sophisticated queries, see below. You can send Djaq
-queries from any language, Java, Javascript, golang, etc. to a Django
-application and get results as JSON. In contrast to REST frameworks,
-like TastyPie or Django Rest Framework (DRF), you have natural access
-to the Django ORM from the client.
+This retrieves a list of book titles with book publisher. But you can formulate
+far more sophisticated queries, see below. You can send Djaq queries from any
+language, Java, Javascript, golang, etc. to a Django application and get results
+as JSON. In contrast to REST frameworks, like Django Rest Framework (DRF), you
+have natural access to the Django ORM from the client.
 
 * [Documentation](https://djaq.readthedocs.io)
 * [Installation](https://djaq.readthedocs.io/en/latest/installation.html)
+* [Settings](https://djaq.readthedocs.io/en/latest/settings.html)
+* [Query Usage](https://djaq.readthedocs.io/en/latest/query_usage.html)
+* [Sample Project](https://djaq.readthedocs.io/en/latest/sample_project.html)
 
 Djaq is a good fit if you want:
 
-* A fast, natural query language 
-
-* Microservice communication where some services don't have access to
-  the Django ORM or are not implemented with Python
+* A fast, natural query language with great performance
 
 * Fast UI development
 
 * Fast development of Proof of Concepts
 
-Djaq sits on top of the Django ORM. It can happily be used alongside
-QuerySets and sometimes calling a Djaq query even locally might be
-preferable to constructing a Queryset, although Djaq is not a
-direct replacement for QuerySets.
+* Microservice communication where some services don't have access to
+  the Django ORM or are not implemented with Python
+
+Djaq sits on top of the Django ORM. It can happily be used alongside QuerySets
+and sometimes calling a Djaq query even locally might be preferable to
+constructing a Queryset, although Djaq is not a direct replacement for
+QuerySets. You can even combine Djaq queries and Querysets.
 
 Features you might appreciate:
 
