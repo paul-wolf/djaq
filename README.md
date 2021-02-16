@@ -20,10 +20,12 @@ application and get results as JSON. In contrast to REST frameworks,
 like TastyPie or Django Rest Framework (DRF), you have natural access
 to the Django ORM from the client.
 
-[Documentation](https://djaq.readthedocs.io)
-[Installation](https://djaq.readthedocs.io/en/latest/installation.html)
+* [Documentation](https://djaq.readthedocs.io)
+* [Installation](https://djaq.readthedocs.io/en/latest/installation.html)
 
 Djaq is a good fit if you want:
+
+* A fast, natural query language 
 
 * Microservice communication where some services don't have access to
   the Django ORM or are not implemented with Python

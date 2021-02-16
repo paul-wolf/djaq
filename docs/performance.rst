@@ -28,6 +28,6 @@ But if you want to iterate over, say, a dictionary of variables locally, you'll 
     dq.parse()
     for vars in var_list:
         results = list(dq.context(vars).tuples())
-        <do something with results>
+        '<do something with results>'
 
 Note that each call of `context()` causes the cursor to execute again when `tuples()` is iterated.

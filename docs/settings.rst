@@ -20,7 +20,7 @@ both a staff member and superuser:
 
 .. code:: python
 
-      DJAQ_ALLOW = {
+      DJAQ_WHITELIST = {
           "django.contrib.auth": ["User"],
           "books": [
           "Profile",
@@ -46,7 +46,7 @@ of models. This will have the same effect as the setting above.
 
 .. code:: python
 
-    DJAQ_ALLOW = {
+    DJAQ_WHITELIST = {
         "django.contrib.auth": ["User"],
         "books": [],
     }

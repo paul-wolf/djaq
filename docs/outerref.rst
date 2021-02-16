@@ -3,7 +3,7 @@ Django Subquery and OuterRef
 
 The following do pretty much the same thing:
 
-::
+.. code:: python
 
    # QuerySet
    pubs = Publisher.objects.filter(pk=OuterRef('publisher')).only('pk')
@@ -20,7 +20,7 @@ the above.
 Most importantly, sending a query request over the wire, you can
 reference the outer scope:
 
-::
+.. code:: python
 
    DQ('(p.name, ["(count(b.id)) Book{Publisher.id == b.publisher} b"]) Publisher p')
 

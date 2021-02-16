@@ -30,11 +30,11 @@ Now you can call the Djaq API:
     title': 'Fight task international.', 'publisher': 'Long, Lewis and Wright'}, {'title': 'Discover floor phone.', 'publi\
     sher': 'Long, Lewis and Wright'}]
 
-Providing an API
-----------------
+Providing a Remote API
+----------------------
 
 We'll assume below you are installing the Djaq UI. This is not
-required to provide an API but is very useful to try things out.
+required to provide an API but is useful to try things out.
 
 Install the API and UI in settings:
 
