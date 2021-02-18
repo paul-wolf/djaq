@@ -37,14 +37,17 @@ USERNAME = "artemis"
 PASSWORD = "blah"
 EMAIL = "artemis@blah.com"
 
+
 class TestDjaq(TestCase):
     def setUp(self):
 
-        user = User.objects.create_user(username=USERNAME, email=EMAIL, password=PASSWORD)
-        
+        user = User.objects.create_user(
+            username=USERNAME, email=EMAIL, password=PASSWORD
+        )
+
         self.user = user
-        Profile.objects.create(user=user, company="whatever")        
-        
+        Profile.objects.create(user=user, company="whatever")
+
         Author.objects.create(name="Sally", age=50)
         Author.objects.create(name="Bob", age=24)
         Author.objects.create(name="Sue", age=33)
@@ -54,7 +57,7 @@ class TestDjaq(TestCase):
         title = factory.Faker("sentence", nb_words=4)
         for i in range(10):
             book = Book.objects.create(
-                name=title.generate(),
+                name=factory.Faker("sentence", nb_words=4),
                 pages=random.choice(range(100, 800)),
                 price=random.choice(range(3, 35)),
                 rating=random.choice(range(5)),
@@ -341,15 +344,15 @@ class TestDjaq(TestCase):
                     "q": "(Book.id, Book.name, Book.price, Book.pubdate)",
                     "context": {},
                     "limit": "100",
-                    "offset": "0"
+                    "offset": "0",
                 }
             ]
         }
         request_factory = RequestFactory()
-        request = request_factory.post(REQUEST_ENDPOINT,
-                                       data=json.dumps(data),
-                                       content_type='application/json',
-                                       
+        request = request_factory.post(
+            REQUEST_ENDPOINT,
+            data=json.dumps(data),
+            content_type="application/json",
         )
         request.user = self.user
         response = djaq_request_view(request)
@@ -384,7 +387,7 @@ class TestDjaq(TestCase):
         self.assertTrue("creates" in result)
         self.assertTrue("updates" in result)
         self.assertTrue("deletes" in result)
-        print(r.content)
+
         pk = result.get("creates")[0]
         a = Author.objects.get(name="joseph conrad")
         self.assertEquals(pk, a.id)
@@ -409,9 +412,7 @@ class TestDjaq(TestCase):
         self.assertTrue("creates" in result)
         self.assertTrue("updates" in result)
         self.assertTrue("deletes" in result)
-        print(r.content)
+
         pk = result.get("creates")[0]
         a = Author.objects.get(name="joseph conrad")
         self.assertEquals(pk, a.id)
-
-

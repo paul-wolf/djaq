@@ -1,5 +1,5 @@
-Sample Project
---------------
+Sample Bookshop Project
+=======================
 
 If you want to use Djaq right away in your own test project and you feel
 confident, crack on. In that case skip the following instructions for
@@ -13,7 +13,7 @@ project, clone the django repo:
 
 If you clone the repo and use the sample project, you don’t need to
 include Djaq as a requirement because it’s included as a module by a
-softlink. Create the virtualenv:
+softlink. 
 
 The module itself does not install Django and there are no further
 requirements. Make sure you are in the ``bookshop`` directory:
@@ -44,6 +44,7 @@ like this:
            'ENGINE': 'django.db.backends.postgresql_psycopg2',
            'NAME': 'bookshop',
        },
+   }
 
 So, it assumes peer authentication. Change to suit your needs. Now you
 can migrate. Make sure the virtualenv is activated!
@@ -102,3 +103,19 @@ Run the server:
 Now the query UI should be available here:
 
 http://127.0.0.1:8000/dquery/
+
+
+There is a sample UI at http://localhost:8000/books/books/ that demonstrates a
+view function using a conditional expression like the following:
+
+.. code:: python
+
+   c = (
+      B("regex(b.name, '$(name)')")
+      & B("b.pages > '$(pages)'")
+      & B("b.rating > '$(rating)'")
+      & B("b.price > '$(price)'")
+   )
+
+to search for books based on the form input. 
+

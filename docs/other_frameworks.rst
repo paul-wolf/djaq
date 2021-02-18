@@ -22,5 +22,7 @@ Most importantly, the client decides what information to request using
 a query language that is much more powerful than what is available
 from other REST frameworks and GraphQL.
 
-Conversely, REST frameworks and GraphQL are more useful than Djaq in
-providing server-side business rule implementation.
+Conversely, REST frameworks and GraphQL are more useful than Djaq in providing
+server-side business rule implementation, although you can write your own Djaq
+view functions to achieve the same ends.
+

@@ -2,7 +2,7 @@ Introduction to Djaq
 ====================
 
 Djaq - pronounced "Jack" - provides an instant remote API to your
-`Django <https://www.djangoproject.com/>` models data with a powerful query language. No server-side code
+`Django <https://www.djangoproject.com/>`_ models data with a powerful query language. No server-side code
 beyond two lines of config is required. You don't write backend
 classes, serializers or any other code to be able to immediately get
 whatever data you want to the client. And it is blazing fast.
@@ -75,8 +75,8 @@ also provides a simple permissions scheme via settings.
 
    installation
    settings
-   api_settings
    query_usage
+   conditions
    functions
    column_expressions
    subqueries

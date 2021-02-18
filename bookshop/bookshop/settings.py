@@ -5,8 +5,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = "e4!hgr%iyac!e$x+coxw&qepouq(9a0)iersmd)y=0q6-n3#uf"
 
 DEBUG = True
+TEMPLATE_DEBUG = DEBUG
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 
 INSTALLED_APPS = [
@@ -98,11 +99,17 @@ LOGGING = {
             "filename": os.path.join(BASE_DIR, "log/parser.log"),
             "formatter": "verbose",
         },
+        "console": {
+            "level": "DEBUG",
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
     },
     "loggers": {
-        "django": {"handlers": ["main"], "level": "DEBUG", "propagate": True},
+        "books": {"handlers": ["main"], "level": "DEBUG", "propagate": True},
         "db": {"handlers": ["main"], "level": "DEBUG", "propagate": True},
         "djaq.query": {"handlers": ["parser"], "level": "DEBUG", "propagate": True},
+        "djaq.djaq_api": {"handlers": ["main"], "level": "DEBUG", "propagate": True},
     },
 }
 

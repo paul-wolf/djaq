@@ -1,0 +1,8 @@
+# pyproject.toml
+[tool.pytest.ini_options]
+minversion = "6.0"
+norecursedirs = ".venv"
+addopts = "-ra -q"
+testpaths = [
+    "books/tests",
+]

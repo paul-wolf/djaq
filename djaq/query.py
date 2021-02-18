@@ -32,13 +32,68 @@ from .app_utils import (
 )
 from .functions import function_whitelist
 from djaq.exceptions import UnknownFunctionException
+from djaq.conditions import B
 
 logger = logging.getLogger(__name__)
+
+
+PLACEHOLDER_PATTERN = re.compile(r"\'\$\(([\w]*)\)\'")
+
+import ipdb
 
 
 @functools.lru_cache()
 def func_in_whitelist(funcname):
     return funcname.lower() in function_whitelist
+
+
+def has_context(expression: str, context: dict):
+    """We check if the varname
+    1. Is in the context
+    2. And is not empty
+    Empty means either zero length or None
+    """
+
+    if not context:
+        return True
+
+    m = re.search(PLACEHOLDER_PATTERN, expression)
+    if not m:
+        return True
+    varname = m.group(1)
+    value = context.get(varname, None)
+    if isinstance(value, (int, float, bool)):
+        # we accept 0 and 0.0, False/True as having context
+        return True
+    # we need this because django response has lists as single values
+    # so, you get '[""]' for empty values
+    if isinstance(value, (list, tuple)):
+        return any(value)
+    # otherwise probably a string has context if not zero length or None
+    return bool(value)
+
+
+def render_conditions(node, ctx) -> str:
+
+    if isinstance(node, str):
+        return node if has_context(node, ctx) else ""
+    elif isinstance(node, list):
+        expressions = [render_conditions(n, ctx) for n in node]
+        expressions = [e for e in expressions if e]
+        if not expressions:
+            return ""
+        s = f" and ".join(expressions)
+        return f"({s})"
+    elif isinstance(node.x, str):
+        return node.x if has_context(node.x, ctx) else ""
+    elif isinstance(node.x, list):
+        expressions = [render_conditions(n, ctx) for n in node.x]
+        expressions = [e for e in expressions if e]
+        if not expressions:
+            return ""
+        s = f" {node.conjunction} ".join(expressions)
+        return f"({s})"
+    raise Exception(f"Received unexpected type: {type(node)}")
 
 
 class ContextValidator(object):
@@ -82,7 +137,6 @@ def concat(funcname, args):
 
 
 def cast(funcname, args):
-    #  import ipdb; ipdb.set_trace()
     t = args[1].replace("'", "").replace("'", "")
     r = f"{args[0]}::{t}"
     return r
@@ -92,7 +146,7 @@ def index_choice0(funcname, args):
     """
     index_choice(status, "live", "not-live", "decommissioned")
     """
-    # import ipdb; ipdb.set_trace()
+
     index = args.pop(0)
     s = f"CASE {index} "
     for i, a in enumerate(args):
@@ -110,6 +164,7 @@ class DjangoQuery(ast.NodeVisitor):
         "IIF": "CASE WHEN {} THEN {} ELSE {} END",
         "LIKE": "{} LIKE {}",
         "ILIKE": "{} ILIKE {}",
+        "CONTAINS": "{} ILIKE %{}%",
         "REGEX": "{} ~ {}",
         "CONCAT": concat,
         "TODAY": "CURRENT_DATE",
@@ -139,7 +194,7 @@ class DjangoQuery(ast.NodeVisitor):
             join_type="->",
             alias=None,
         ):
-            #  import ipdb; ipdb.set_trace()
+
             self.model = model
             self.fk_relation = fk_relation
             self.fk_field = fk_field
@@ -190,10 +245,9 @@ class DjangoQuery(ast.NodeVisitor):
 
         @property
         def join_condition_expression(self):
-            """Return a str that is the join expression.
-            """
+            """Return a str that is the join expression."""
             s = ""
-            #  import ipdb; ipdb.set_trace()
+
             if hasattr(self.fk_field, "related_fields"):
                 for related_fields in self.fk_field.related_fields:
 
@@ -209,7 +263,7 @@ class DjangoQuery(ast.NodeVisitor):
                         s += " AND "
                     s += f'"{self.alias or fk.model._meta.db_table}"."{f_from}" = "{fk.related_model._meta.db_table}"."{f_to}"'
             elif isinstance(self.fk_field, ManyToManyField):
-                #  import ipdb; ipdb.set_trace()
+
                 pass
             else:
                 m = f"""
@@ -300,10 +354,12 @@ class DjangoQuery(ast.NodeVisitor):
         self.fstack = []  # function stack
         self.parameters = []  # query parameters
         self.where_marker = 0
-        self.placeholder_pattern = re.compile(r"\'\$\(([\w]*)\)\'")
         self.context_validator_class = ContextValidator
         self.local = local
         self.unary_stack = []
+
+        # a set of conditions defined by B nodes
+        self.condition_node: Optional[B] = None
 
         if self.vendor in self.__class__.aggregate_functions:
             self.vendor_aggregate_functions = self.__class__.aggregate_functions[
@@ -329,6 +385,10 @@ class DjangoQuery(ast.NodeVisitor):
     def dump(self):
         for k, v in self.__dict__.items():
             print(f"{k}={v}")
+
+    def conditions(self, node: B):
+        self.condition_node = node
+        return self
 
     def aggregate(self):
         """Indicate that the current relation requires aggregation."""
@@ -374,7 +434,6 @@ class DjangoQuery(ast.NodeVisitor):
         )
         self.relations.append(relation)
 
-        #  import ipdb; ipdb.set_trace()
         if len(self.relations) > 1 and not relation.fk_field:
             # we need to find out how we are related to existing relations
             for _, rel in enumerate(self.relations):
@@ -531,7 +590,7 @@ class DjangoQuery(ast.NodeVisitor):
     def visit_List(self, node):
         """Assume the list has one element, a string,
         that is a Djaq query."""
-        #  import ipdb; ipdb.set_trace()
+
         src = [s for s in node.elts][0].s
         dq = self.__class__(src)
         sql = dq.parse(outer_scope=self.relations[self.relation_index])
@@ -761,7 +820,6 @@ class DjangoQuery(ast.NodeVisitor):
 
     def split_relations(self, s):
         """Split string by join operators returning a list."""
-        #  import ipdb; ipdb.set_trace()
 
         relation_sources = []
         search = None
@@ -861,9 +919,7 @@ class DjangoQuery(ast.NodeVisitor):
         return aliases
 
     def parse(self, outer_scope=None):
-        """Return sql after building query.
-
-        """
+        """Return sql after building query."""
 
         if self.sql:
             return self.sql
@@ -883,9 +939,9 @@ class DjangoQuery(ast.NodeVisitor):
         """
         self.source = self.source.replace("\n", " ")
         relation_sources = self.split_relations(self.source)
-        #  import ipdb;ipdb.set_trace()
+
         for i, relation_source in enumerate(relation_sources):
-            #  import ipdb; ipdb.set_trace()
+
             index, join_type, relation_source = self.get_join_type(relation_source)
             index, select_src, relation_source = self.get_select(relation_source)
             m = re.match(pattern, relation_source.strip())
@@ -911,6 +967,13 @@ class DjangoQuery(ast.NodeVisitor):
             else:
                 raise Exception(f"Invalid source: ---{relation_source}---")
 
+            if self.condition_node:
+                if where_src:
+                    where_src += " AND "
+                else:
+                    where_src = ""
+                where_src += render_conditions(self.condition_node, self._context)
+
             if self.verbosity > 1:
                 print(
                     f"""
@@ -924,7 +987,6 @@ class DjangoQuery(ast.NodeVisitor):
                     """
                 )
 
-            #  import ipdb; ipdb.set_trace()
             # we need to generate column headers and remove
             # aliases. tuples are (exp, alias)
             if select_src:
@@ -1024,7 +1086,6 @@ class DjangoQuery(ast.NodeVisitor):
             for relation in self.relations:
                 s += f" {relation.join_operator} {relation.model_table} ON {relation.join_condition_expression} "
 
-        #  import ipdb; ipdb.set_trace()
         ## WHERE
         where = ""
         if master_relation.where:
@@ -1064,7 +1125,7 @@ class DjangoQuery(ast.NodeVisitor):
             s += f" OFFSET {int(self._offset)}"
 
         # replace variables placeholders to be valid dict placeholders
-        s = re.sub(self.placeholder_pattern, lambda x: f"%({x.group(1)})s", s)
+        s = re.sub(PLACEHOLDER_PATTERN, lambda x: f"%({x.group(1)})s", s)
 
         self.sql = s
         self.master_relation = master_relation
@@ -1072,9 +1133,7 @@ class DjangoQuery(ast.NodeVisitor):
         return self.sql
 
     def query(self, context=None):
-        """Return source for djangoquery and parameters.
-
-        """
+        """Return source for djangoquery and parameters."""
         self.context(context)
         sql = self.parse()
         if self.verbosity > 0:
@@ -1118,7 +1177,7 @@ class DjangoQuery(ast.NodeVisitor):
         """Create a cursor and execute the sql."""
 
         self.context(context)
-        #  import ipdb; ipdb.set_trace()
+
         # parse() returns sql from self.sql if parsing was done
         sql = self.parse()
 

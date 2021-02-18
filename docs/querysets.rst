@@ -1,16 +1,21 @@
 Comparing to Django QuerySets
------------------------------
+=============================
 
-Djaq is not a replacement for Querysets. They have different purposes.
-The QuerySet API is not a remote API. You can use Djaq queries inside
-your Django application and Djaq syntax can be more intuitive and
-simpler than QuerySets. But Querysets are highly integrated with Django
-and have been developed over 15 years by many developers. Plus you get
-code completion in your IDE with QuerySets. It is a very well thought
-out framework that is the best choice working within a service based on
-Django’s ORM. You could probably write a complete transactional Django
-application with Djaq and not use QuerySets at all but you’d be going
-against the framework.
+Djaq can be used in theory as a total replacement for `Django QuerySets
+<https://docs.djangoproject.com/en/3.1/ref/models/querysets/>`_
+
+However, a couple things should be kept in mind. Firstly, Querysets are highly
+integrated with Django and have been developed over 15 years by many developers.
+If you use the QuerySet API to access data via the Models you specified, you
+are working within the Django framework the way it was intended.
+
+That being said, Djaq has some important advantages over QuerySets: 
+
+* Djaq queries are strings. You can send them over the wire, like via a REST
+  call, and receive JSON results. That's not possible with QuerySets.
+
+* Djaq is explicit about performance semantics. In contrast you need to have
+  knowledge of and use QuerySets carefully to avoid performance pitfalls. 
 
 This section is intended to highlight differences for users with high
 familiarity with the ``QuerySet`` class for the purpose of understanding
@@ -31,7 +36,7 @@ point-by-point comparison with Djaq:
 -  ``prefetch_related()``: When you have a m2m field as a column
    expression, the model hosting that field is repeated in results as
    many times as necessary. Another way is to use a separate query for
-   the m2m related records. In anycase, ``prefetch_related()`` this is
+   the m2m related records. In any case, ``prefetch_related()`` is
    not relevant in Djaq.
 
 -  F expressions: These are QuerySet workarounds for not being able to

@@ -1,0 +1,18 @@
+<table class="table">
+    <thead>
+        <th>Title</th>
+        <th>Price</th>
+        <th>Pages</th>
+        <th>Rating</th>
+        <th>Publisher</th>
+    </thead>
+    {% for book in books %}
+    <tr>
+        <td>{{book.name}}</td>
+        <td>{{book.price}}</td>
+        <td>{{book.pages}}</td>
+        <td>{{book.rating}}</td>
+        <td>{{book.publisher}}</td>
+    </tr>
+    {% endfor %}
+</table>

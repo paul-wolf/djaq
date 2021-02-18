@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>{{ section.title }}</h1>
+
+<form class="form">{% csrf_token %}
+    <table class="table">
+        {{book_form.as_table}}
+    </table>
+    <button type="button" hx-post="/books/book_list/" hx-target="#book-list" hx-swap="innerHTML">
+        Search
+    </button>
+</form>
+
+<div id="book-list">
+</div>
+
+{% endblock %}

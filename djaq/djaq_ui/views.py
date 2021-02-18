@@ -45,7 +45,7 @@ def wl():
 def query_view(request):
 
     if request.method == "POST":
-        print(request.POST)
+
         q = request.POST.get("query")
         limit = request.POST.get("limit", 10)
         offset = request.POST.get("offset", 0)
@@ -83,7 +83,6 @@ def query_view(request):
 @csrf_exempt
 def sql_view(request):
 
-    print(request.POST)
     q = request.POST.get("query")
     try:
         s = DQ(q).parse()
