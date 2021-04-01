@@ -1,0 +1,17 @@
+
+curdir="$(basename `pwd`)"
+echo "Current directory: $curdir"
+if [ "$curdir" != "docs" ]; then
+   echo "You need to be in the docs directory"
+   exit 1
+fi
+
+virtualdir="$(dirname `pwd`)/bookshop/.venv"
+echo "Virtual environment directory: $virtualdir"
+if [ ! -d "$virtualdir" ]; then
+  echo "Error: We expect a virtual directory with sphinx modules loaded in $virtualdir"
+  exit 1
+fi
+
+source "$virtualdir/bin/activate" && make html && open _build/html/index.html
+
