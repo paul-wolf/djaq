@@ -74,7 +74,12 @@ def has_context(expression: str, context: dict):
 
 
 def render_conditions(node, ctx) -> str:
-
+    """Produce a string repesenting all expressions
+    in the node tree as a single expression.
+    If a B() node expression references a parameter,
+    '$(somevariable)', we check if the context can supply that variable.
+    if not we drop that node from the final expression.
+    """
     if isinstance(node, str):
         return node if has_context(node, ctx) else ""
     elif isinstance(node, list):
