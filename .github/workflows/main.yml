@@ -53,4 +53,4 @@ jobs:
         POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }} # get randomly assigned published port
 
     - name: Run tests
-      run: pytest
+      run: pushd bookshop && pytest
