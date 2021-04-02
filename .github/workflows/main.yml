@@ -42,6 +42,6 @@ jobs:
         pip install -r bookshop/requirements.txt
         pip install pytest-django
     - name: Run migrations
-      run: pushd bookshop && python manage.py migrate && popd
+      run: pushd bookshop && mkdir log && python manage.py migrate && popd
     - name: Run tests
       run: pytest
