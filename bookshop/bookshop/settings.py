@@ -71,7 +71,9 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql_psycopg2", 
         "NAME": "bookshop",
         "PORT": "5432",
-        'HOST': '127.0.0.1',
+        "HOST": '127.0.0.1',
+        "USER": "postgres",
+        "PASSWORD": "postgres",
     }
 }
 
