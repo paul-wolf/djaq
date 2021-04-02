@@ -24,7 +24,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: bookshop
         ports:
-          - 5432:5432
+          - 5432:tcp
         # needed because the postgres container does not provide a healthcheck
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
 
@@ -43,5 +43,9 @@ jobs:
         pip install pytest-django
     - name: Run migrations
       run: pushd bookshop && mkdir log && python manage.py migrate && popd
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }} # get randomly assigned published port
+
     - name: Run tests
       run: pytest
