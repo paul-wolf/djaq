@@ -1,13 +1,23 @@
 Djaq
 ====
 
-|Python tests|
+|Python tests| |RTD build| |Python versions| |PyPi version| 
 
 
 .. |Python tests| image:: https://github.com/paul-wolf/djaq/actions/workflows/main.yml/badge.svg
    :target: https://github.com/paul-wolf/djaq/actions/workflows/main.yml
    :alt: Unit test status
+   
+.. |RTD build| image:: https://readthedocs.org/projects/djaq/badge/?version=latest
+   :target: https://djaq.readthedocs.io/en/latest/?badge=latest
+   :alt: Documentation Status
 
+.. |Python versions| image:: https://img.shields.io/pypi/pyversions/djaq?color=brightgreen
+   :alt: PyPI - Python Version
+
+.. |PyPi version| image:: https://badge.fury.io/py/Djaq.svg
+   :target: https://badge.fury.io/py/Djaq
+   :alt: PyPi Version
 
 Djaq - pronounced “Jack” - provides an instant remote API to your Django
 models data with a powerful query language. No server-side code beyond
