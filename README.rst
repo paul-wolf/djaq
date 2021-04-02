@@ -1,6 +1,14 @@
 Djaq
 ====
 
+|Python tests|
+
+
+.. |Python tests| image:: https://github.com/paul-wolf/djaq/actions/workflows/main.yml/badge.svg
+   :target: https://github.com/paul-wolf/djaq/actions/workflows/main.yml
+   :alt: Unit test status
+
+
 Djaq - pronounced “Jack” - provides an instant remote API to your Django
 models data with a powerful query language. No server-side code beyond
 two lines of config is required. You don’t write backend classes,

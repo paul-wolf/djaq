@@ -6,7 +6,7 @@
         height: 500px;
         width: 500px;
         margin-left:10px;
-        
+        border-radius: 5px;
         display:inline-block;
         padding: 5px;
     }
@@ -40,7 +40,7 @@
                 </div>
             </div>
         </div>
-        <div id="models" style="overflow:auto;border: 2px solid grey;height:90%">
+        <div id="models" style="overflow:auto;border: 2px solid lightgrey;height:90%">
             <ul id="model_list"></ul>
         </div>
     </div>
@@ -48,7 +48,7 @@
         <div class="blockheader">
             fields
         </div>
-        <div id="fields" style="overflow:auto;border: 2px solid grey;height:90%">
+        <div id="fields" style="overflow:auto;border: 2px solid lightgrey;height:90%">
             <ul id="field_list"></ul>
         </div>
     </div>
@@ -86,27 +86,27 @@
     <div>
         <div class="field is-grouped">
             <p class="control">
-                <a class="button" title="Send query and retrieve results (Shift-Enter)" onclick="execute_query();">
+                <a class="button is-primary is-light" title="Send query and retrieve results (Shift-Enter)" onclick="execute_query();">
                     Send
                 </a>
             </p>
             <p class="control">
-                <a class="button" title="Represent query as json" onclick="represent_query();">
+                <a class="button is-info is-light" title="Represent query as json" onclick="represent_query();">
                     JSON
                 </a>
             </p>
             <p class="control">
-                <a class="button" title="Get SQL for query" onclick="get_sql();">
+                <a class="button is-info is-light" title="Get SQL for query" onclick="get_sql();">
                     SQL
                 </a>
             </p>
             <p class="control">
-                <a class="button" title="Get schema for models" onclick="get_schema();">
+                <a class="button is-info is-light" title="Get schema for models" onclick="get_schema();">
                     Schema
                 </a>
             </p>
             <p class="control">
-                <a class="button" title="Get active whitelist" onclick="get_whitelist();">
+                <a class="button is-info is-light" title="Get active whitelist" onclick="get_whitelist();">
                     Whitelist
                 </a>
             </p>
