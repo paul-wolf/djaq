@@ -1,8 +1,22 @@
 import os
+import sys
+import logging as python_logging
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SECRET_KEY = "e4!hgr%iyac!e$x+coxw&qepouq(9a0)iersmd)y=0q6-n3#uf"
+
+TESTING = "test" in sys.argv
+
+if TESTING:
+    # to make tests faster
+    PASSWORD_HASHERS = [
+        "django.contrib.auth.hashers.MD5PasswordHasher",
+    ]
+    DEBUG = False
+    TEMPLATE_DEBUG = False
+    python_logging.disable(python_logging.CRITICAL)
+
 
 DEBUG = True
 TEMPLATE_DEBUG = DEBUG

@@ -2,6 +2,8 @@ Django
 psycopg2-binary
 Faker
 factory_boy
-
 ipython
 django_extensions
+pytest
+sphinx
+sphinx_rtd_theme

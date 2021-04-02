@@ -1,7 +1,7 @@
 """Result class
 Thanks to http://code.activestate.com/recipes/577887-a-simple-namespace-class/
 """
-from collections import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 
 class _Dummy:

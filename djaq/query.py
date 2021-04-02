@@ -39,8 +39,6 @@ logger = logging.getLogger(__name__)
 
 PLACEHOLDER_PATTERN = re.compile(r"\'\$\(([\w]*)\)\'")
 
-import ipdb
-
 
 @functools.lru_cache()
 def func_in_whitelist(funcname):
