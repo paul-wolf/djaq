@@ -45,7 +45,7 @@ jobs:
         pip install pytest-django
     - name: Run migrations
       run: |
-        sudo -u postgres createuser runner
+        sudo -u postgres createuser -d runner
         sudo -u postgres createdb -O runner bookshop
         pushd bookshop && mkdir log && python manage.py migrate && popd
       env:
