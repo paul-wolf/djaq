@@ -96,7 +96,7 @@ Features you might appreciate:
 Djaq provides whitelisting of apps and models you want to expose. It
 also provides a simple permissions scheme via settings.
 
-.. figure:: https://github.com/paul-wolf/djaq/blob/master/djaq_ui.png?raw=true
+.. figure:: https://github.com/paul-wolf/djaq/blob/master/docs/images/djaq_ui.png?raw=true
    :alt: Djaq UI
 
    Djaq UI
