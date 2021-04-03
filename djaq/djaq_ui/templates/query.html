@@ -4,7 +4,7 @@
 <style>
     .myblock {
         height: 500px;
-        width: 500px;
+        width: 30%;
         margin-left:10px;
         border-radius: 5px;
         display:inline-block;
@@ -18,7 +18,10 @@
     <div class="myblock">
         <div class="blockheader">
             <a href=".">Djaq</a>
-            <a href="https://djaq.readthedocs.io/" style="font-size: 80%">(doc)</a>
+            <a href="https://djaq.readthedocs.io/" style="font-size: 80%"> (documentation)</a>
+            <div style="float:right">
+                <a class="delete is-medium" href="javascript:void(0);" onclick="$('#query').val('');">clear</a>
+            </div>
         </div>
         <textarea
             placeholder="Query"
@@ -38,6 +41,9 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div style="float:right">
+                    dbl-click model to insert query
+                </div>
             </div>
         </div>
         <div id="models" style="overflow:auto;border: 2px solid lightgrey;height:90%">
@@ -46,7 +52,7 @@
     </div>
     <div class="myblock">
         <div class="blockheader">
-            fields
+            <span id="model-name"></span>
         </div>
         <div id="fields" style="overflow:auto;border: 2px solid lightgrey;height:90%">
             <ul id="field_list"></ul>
@@ -113,7 +119,7 @@
         </div>
     </div>
 </div>
-<textarea class="textarea" id="result" style="width:100%;min-height:500px;margin-top:10px;"></textarea>
+<textarea class="textarea" id="result" style="width:50%;min-height:500px;margin-top:10px;"></textarea>
 <script>
 function render_query() {
     var q = $("#query").val();
@@ -212,11 +218,12 @@ function render_query() {
           type: "GET",
           url: url,
           success: function(response) {
-	      $("#result").val(JSON.stringify(response, null, 1));
-	      $("#field_list").html("");
-	      for (let [name, f] of Object.entries(response.fields)) {
-		  $("#field_list").append(`<li><a href="javascript:void(0);" ">${name}: ${f.internal_type}</a></li>`);
-	      }
+            $("#result").val(JSON.stringify(response, null, 1));
+            $("#field_list").html("");
+            for (let [name, f] of Object.entries(response.fields)) {
+                $("#field_list").append(`<li><a href="javascript:void(0);" ">${name}: ${f.internal_type}</a></li>`);
+            }
+            $("#model-name").html(`${modelname}`)
           },
           error: function (xhr, ajaxOptions, thrownError) {
               $("#result").val(xhr.responseText);
@@ -225,7 +232,6 @@ function render_query() {
   }
 
   function get_whitelist() {
-
       var url = `/dquery/whitelist/`
       $.ajax({
           type: "GET",
@@ -240,13 +246,8 @@ function render_query() {
   }
 
   function handleEnter(evt) {
-      console.log("handleEnter");
       if (evt.keyCode == 13 && evt.shiftKey) {
-	  console.log("yes, we have it");
-	  console.log(evt);
-
-	    execute_query(false);
-
+	  	execute_query(false);
         evt.preventDefault();
     }
 }
@@ -259,7 +260,7 @@ $( document ).ready(function() {
 	console.log($(this).text());
 
 	var parts = t.split(".");
-	console.log(parts);
+	
 	var model_name = parts[parts.length -1]
 	var m = model_name.charAt().toLowerCase();
 	var fields = '';
