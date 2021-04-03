@@ -36,3 +36,7 @@ Once you do that, just press “Send” to see the results.
 
 If the query pane has the focus, you can press shift-return to send the
 query request to the server.
+
+.. figure:: https://github.com/paul-wolf/djaq/blob/master/docs/images/djaq_ui.png?raw=true
+   :alt: Djaq UI
+
