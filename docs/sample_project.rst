@@ -15,6 +15,11 @@ If you clone the repo and use the sample project, you don’t need to
 include Djaq as a requirement because it’s included as a module by a
 softlink. 
 
+   Note that we do nothing to secure this application. It is not intended to be
+   hosted for public access. You would need to undertake the usual steps to lock
+   down the application, use a secure key and database passwords that are
+   secure, etc. 
+
 The module itself does not install Django and there are no further
 requirements. Make sure you are in the ``bookshop`` directory:
 
