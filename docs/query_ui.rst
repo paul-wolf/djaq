@@ -1,5 +1,5 @@
 Query UI
-~~~~~~~~
+--------
 
 You can optionally install a query user interface to try out queries on
 your own data set:

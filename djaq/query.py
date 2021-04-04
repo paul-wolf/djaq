@@ -1203,6 +1203,17 @@ class DjangoQuery(ast.NodeVisitor):
             logger.debug(sql)
             self.cursor.execute(sql)
 
+    def dataframe(self, context=None):
+        """Return a pandas dataframe.
+        This only works if pandas is installed.
+        """
+        import pandas.io.sql as sqlio
+        self.context(context)
+        sql = self.parse()
+        df = sqlio.read_sql_query(sql, self.connection)
+        df.columns = self.column_headers
+        return df
+        
     def dicts(self, data=None):
         if not self.cursor:
             self.execute(data)

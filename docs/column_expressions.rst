@@ -12,7 +12,7 @@ Doing column arithmetic is supported directly in the query syntax:
        b.price - (b.price*0.2) as diff
        ) Book b""")
 
-You can use constants:
+You can use literals:
 
 .. code:: python
 

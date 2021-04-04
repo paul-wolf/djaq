@@ -1,5 +1,5 @@
 Django Subquery and OuterRef
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------
 
 The following do pretty much the same thing:
 

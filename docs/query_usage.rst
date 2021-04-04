@@ -31,8 +31,16 @@ example:
 These examples use auto-generated titles and names and we have a
 slightly more complicated set of models than shown above.
 
+The first thing you want to do is import the DjangoQuery class which we do with an alias:
+
+.. code:: python
+
+   from djaq import DjangoQuery as DQ
+
 Let’s get book title (name), price, discounted price, amount of discount
 and publisher name wherever the price is over 50.
+
+
 
 .. code:: python
 

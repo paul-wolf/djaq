@@ -1,7 +1,7 @@
 Conditions
-==========
+----------
 
-Condition objects are like Q() class in Django QuerySets. The class is `B()` for
+Condition objects are like the ``Q()`` class in Django QuerySets. The class is ``B()`` for
 Boolean. You can combine various expressions using the Python boolean operators:
 
 .. code:: python

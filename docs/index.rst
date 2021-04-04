@@ -14,7 +14,6 @@ look like this:
 
     (b.name as title, b.publisher.name as publisher) Book b
 
-
 This retrieves a list of book titles with book publisher. But you can
 formulate far more sophisticated queries, see below. You can send Djaq
 queries from any language, Java, Javascript, golang, etc. to a Django
@@ -76,6 +75,8 @@ also provides a simple permissions scheme via settings.
    installation
    settings
    query_usage
+   results
+   pandas
    conditions
    functions
    column_expressions

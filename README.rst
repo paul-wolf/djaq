@@ -93,7 +93,7 @@ Features you might appreciate:
 
 -  A handy user interface for trying out queries on your data models.
 
-Djaq provides whitelisting of apps and models you want to expose. It
+Djaq provides allowing and disallowing apps and models you want to expose. It
 also provides a simple permissions scheme via settings.
 
 .. figure:: https://github.com/paul-wolf/djaq/blob/master/docs/images/djaq_ui.png?raw=true
