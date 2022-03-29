@@ -1,9 +1,10 @@
 import logging
 
+from django.http import JsonResponse
 from django.http import HttpResponseServerError
 from django.shortcuts import render
-from django.forms import modelformset_factory
 from django.conf import settings
+from django.db.models import Avg
 
 from djaq.query import DjangoQuery as DQ
 from djaq.conditions import B
@@ -12,6 +13,23 @@ from .models import Book
 from .forms import BookForm
 
 logger = logging.getLogger(__name__)
+
+
+class PriceEngine:
+    def get_average_price():
+        price_data = Book.objects.all().aggregate(Avg("price"))
+        return float(price_data["price__avg"])
+
+
+def books_average_price(request):
+    price_data = Book.objects.all().aggregate(Avg("price"))
+    return JsonResponse({"price": float(price_data["price__avg"])})
+
+
+def books_average_price(request):
+    price_engine = PriceEngine()
+    price = price_engine.get_average_price()
+    return JsonResponse({"price": price})
 
 
 def books(request):

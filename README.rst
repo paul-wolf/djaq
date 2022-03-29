@@ -82,7 +82,7 @@ Features you might appreciate:
    asked for.
 
 -  Obvious performance behaviour. It will trigger a query in one obvious
-   way through one of the generator methods: ``.dict()``, ``.tuples()``,
+   way through one of the generator methods: ``.dicts()``, ``.tuples()``,
    ``.json()``.
 
 -  A ready-to-go CRUD API that is easy to use. You can send requests to

@@ -33,7 +33,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "books.apps.BooksConfig",
     "django_extensions",
-    "djaq.djaq_ui",
+    "djaq.djaq_ui.apps.DjaqUiConfig",
 ]
 
 MIDDLEWARE = [
@@ -68,10 +68,10 @@ WSGI_APPLICATION = "bookshop.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql_psycopg2", 
+        "ENGINE": "django.db.backends.postgresql_psycopg2",
         "NAME": "bookshop",
         "PORT": "5432",
-        "HOST": '127.0.0.1',
+        "HOST": "127.0.0.1",
         "USER": "postgres",
         "PASSWORD": "postgres",
     }
@@ -79,9 +79,7 @@ DATABASES = {
 
 
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
-    },
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -157,3 +155,5 @@ DJAQ_PERMISSIONS = {
     "staff": False,
     "superuser": False,
 }
+
+DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
