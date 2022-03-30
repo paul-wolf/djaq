@@ -919,10 +919,6 @@ class ExpressionParser(ast.NodeVisitor):
         self.expression_context = "where"
         self.visit(ast.parse(src))
 
-    def parse_valuesx(self, src: str):
-        self.expression_context = "select"
-        self.visit(ast.parse(src))
-
     def add_alias(self, alias, model_name):
 
         relation = self.find_relation_from_alias(alias)
@@ -1210,7 +1206,7 @@ class ExpressionParser(ast.NodeVisitor):
             self.context_validator_class = validator_class
         return self
 
-    def execute(self, context=None, count=False):
+    def execute(self, context=None, count=False, unique=False):
         """Create a cursor and execute the sql."""
 
         self.context(context)
@@ -1223,6 +1219,8 @@ class ExpressionParser(ast.NodeVisitor):
 
         if count:
             sql = f"SELECT COUNT(*) FROM ({sql}) c"
+        if unique:
+            sql = f"SELECT DISTINCT * FROM ({sql}) u"
         if len(self._context):
             context = self.context_validator_class(self, self._context).context()
             if self.verbosity:
@@ -1250,9 +1248,9 @@ class ExpressionParser(ast.NodeVisitor):
         df.columns = self.column_headers
         return df
 
-    def dicts(self, data=None):
+    def dicts(self, data=None, unique=False):
         if not self.cursor:
-            self.execute(data)
+            self.execute(data, unique=unique)
         while True:
             row = self.cursor.fetchone()
             if row is None:
@@ -1261,15 +1259,18 @@ class ExpressionParser(ast.NodeVisitor):
             yield row_dict
         return
 
-    def tuples(self, data=None):
+    def tuples(self, data=None, unique=False, flat=False):
         row = None
         if not self.cursor:
-            self.execute(data)
+            self.execute(data, unique=unique)
         while True:
             row = self.cursor.fetchone()
             if row is None:
                 break
-            yield row
+            if flat:
+                yield row[0]
+            else:
+                yield row
         return
 
     def json(self, data=None, encoder=DjangoJSONEncoder):
@@ -1388,13 +1389,21 @@ class Values:
             self.condition_node = node
         return self
 
-    def dicts(self, data=None):
+    def dicts(self, data=None, unique=False):
         self.construct()
-        return self.parser.dicts(data=data)
+        return self.parser.dicts(data=data, unique=unique)
 
-    def tuples(self, data=None):
+    def tuples(self, data=None, unique=False, flat=False):
         self.construct()
-        return self.parser.tuples(data=data)
+        return self.parser.tuples(data=data, unique=unique, flat=flat)
+
+    def count(self, data=None):
+        self.construct()
+        return self.parser.count(data)
+
+    def unique(self, data=None):
+        self.construct()
+        return self.parser.unique(data)
 
     def sql(self):
         self.construct()
