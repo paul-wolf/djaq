@@ -13,19 +13,19 @@ class B:
     def __and__(self, n):
         if isinstance(n, B):
             return B([self.x, n], conjunction="and")
-        raise ValueError("Must B() class")
+        raise ValueError("Requires B() class")
 
     def __or__(self, n):
         if isinstance(n, B):
             return B([self.x, n.x], conjunction="or")
-        raise ValueError("Must be B() class")
+        raise ValueError("Requires be B() class")
 
 
 def stringify(node) -> str:
     if isinstance(node, str):
         return node
     elif isinstance(node, list):
-        s = f" and ".join([stringify(n) for n in node])
+        s = " and ".join([stringify(n) for n in node])
         return f"({s})"
     elif isinstance(node.x, str):
         return node.x

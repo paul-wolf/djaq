@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, Union, List
 import csv
 import io
 import json
@@ -227,7 +227,7 @@ class JoinRelation(object):
     def join_condition_expression(self):
         """Return a str that is the join expression."""
         s = ""
-        # ipdb.set_trace()
+
         if hasattr(self.fk_field, "related_fields"):
             for related_fields in self.fk_field.related_fields:
 
@@ -310,10 +310,10 @@ class ExpressionParser(ast.NodeVisitor):
         s = exp.lower().strip("(").split("(")[0]
         return s in self.vendor_aggregate_functions
 
-    # the DjangoQuery init()
+    # the ExpressionParser init()
     def __init__(
         self,
-        source,
+        source=None,
         using="default",
         limit=None,
         offset=None,
@@ -465,7 +465,7 @@ class ExpressionParser(ast.NodeVisitor):
         """
 
         # last element must be a field name
-        # ipdb.set_trace()
+
         attr = attribute_list.pop()
         if relation and not len(attribute_list):
             # attr is the terminal attribute
@@ -530,10 +530,7 @@ class ExpressionParser(ast.NodeVisitor):
         self.relations[self.relation_index].column_expressions.append(s)
 
     def emit_where(self, s):
-        # ipdb.set_trace()
-        self.dest += str(s)
-        print(self.dest)
-        # self.relations[self.relation_index].where += str(s)
+        self.relations[self.relation_index].where += str(s)
 
     def emit_order_by(self, s):
         self.relations[self.relation_index].order_by += str(s)
@@ -927,7 +924,7 @@ class ExpressionParser(ast.NodeVisitor):
         self.visit(ast.parse(src))
 
     def add_alias(self, alias, model_name):
-        # ipdb.set_trace()
+
         relation = self.find_relation_from_alias(alias)
         model = find_model_class(model_name, whitelist=self.whitelist)
         if model and not relation:
@@ -936,36 +933,29 @@ class ExpressionParser(ast.NodeVisitor):
             if self.verbosity > 2:
                 print(f"Relation already existed: {relation}")
 
-    def parse_values(self, outer_scope=None, aliases: Dict = None):
+    def parse_values(self, select_src=None, where_src=None, order_by_src=None, outer_scope=None, aliases: Dict = None):
         if aliases:
             for alias, model_name in aliases.items():
                 self.add_alias(alias, model_name)
-        # ipdb.set_trace()
-        self.source = self.source.replace("\n", " ")
-        column_tuples = self.parse_column_aliases(self.source)
-        print(column_tuples)
+
+        select_src = select_src.replace("\n", " ")
+        column_tuples = self.parse_column_aliases(select_src)
         self.column_headers.extend([c[1] for c in column_tuples])
-        select_src = ", ".join([c[0] for c in column_tuples])
+        transformed_select_src = ", ".join([c[0] for c in column_tuples])
         self.expression_context = "select"
-        self.visit(ast.parse(select_src))
+        self.visit(ast.parse(transformed_select_src))
+
+        if where_src:
+            self.expression_context = "where"
+            self.visit(ast.parse(where_src))
+
+        if order_by_src:
+            self.expression_context = "order_by"
+            self.visit(ast.parse(order_by_src))
+
+        # need this to group-by where we need grouping
         for relation_index in self.deferred_aggregations:
             self.relations[relation_index].group_by = True
-
-        print(self.relations)
-
-        master_relation = self.relations.pop(0)
-
-        s = f"SELECT {master_relation.select} FROM {master_relation.model_table}"
-
-        for relation in self.relations:
-            s += f" {relation.join_operator} {relation.model_table} ON {relation.join_condition_expression} "
-
-        if master_relation.group_by:
-            gb = master_relation.group_by_columns()
-            if gb:
-                s += f" GROUP BY {gb}"
-        print(s)
-        return s
 
     def parse(self, outer_scope=None):
         """Return sql after building query."""
@@ -1103,7 +1093,7 @@ class ExpressionParser(ast.NodeVisitor):
 
         return self.generate(outer_scope)
 
-    def generate(self, outer_scope):
+    def generate(self, outer_scope=None):
         """Generate the SQL. Assumes source is parsed.
 
         No model lookups are done here.
@@ -1226,7 +1216,8 @@ class ExpressionParser(ast.NodeVisitor):
         self.context(context)
 
         # parse() returns sql from self.sql if parsing was done
-        sql = self.parse()
+        # sql = self.parse()
+        sql = self.sql
 
         self.cursor = self.connection.cursor()
 
@@ -1347,9 +1338,67 @@ class ExpressionParser(ast.NodeVisitor):
 
 
 class Values:
-    def __init__(self, s, aliases=None):
+    def __init__(self, select_source: Union[str, List], aliases: Dict = None):
         self.aliases = aliases
-        self.parser = ExpressionParser(s)
+        self.parser = ExpressionParser()
+
+        self.where_src = None
+        self.order_by_src = None
+        self.condition_node = None
+        if isinstance(select_source, str):
+            select_source = select_source.strip()
+            if not select_source.startswith("("):
+                select_source = f"({select_source})"
+        elif isinstance(select_source, list):
+            select_source = f"({', '.join(select_source)})"
+        else:
+            raise Exception("Expected str or list for select source")
+        self.select_src = select_source
+
+    def construct(self):
+
+        if self.condition_node:
+            if self.where_src:
+                self.where_src += " and "
+            else:
+                self.where_src = ""
+            self.where_src += render_conditions(self.condition_node, self.parser._context)
+
+        self.parser.parse_values(self.select_src, self.where_src, self.order_by_src, aliases=self.aliases)
+
+        self.parser.generate()
+
+    def order_by(self, source: Union[str, List]):
+        if isinstance(source, str):
+            self.order_by_src = source.strip()
+        elif isinstance(source, list):
+            self.order_by_src = f"({', '.join(source)})"
+        else:
+            raise Exception("Expected str or list for order by source")
+        return self
+
+    def where(self, node: Union[str, B]):
+        if isinstance(node, str):
+            node = B(node)
+        elif isinstance(node, B):
+            node = node
+        if self.condition_node:
+            self.condition_node &= node
+        else:
+            self.condition_node = node
+        return self
+
+    def dicts(self, data=None):
+        self.construct()
+        return self.parser.dicts(data=data)
+
+    def tuples(self, data=None):
+        self.construct()
+        return self.parser.tuples(data=data)
+
+    def sql(self):
+        self.construct()
+        return self.parser.query()
 
 
 class Cursor:
