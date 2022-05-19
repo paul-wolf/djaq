@@ -1,7 +1,10 @@
+from typing import Union, List
+
+
 class B:
     def __init__(self, n, conjunction="and"):
         """seq is a list."""
-        self.x = n  # can be str or List[B]
+        self.x: Union[str, List] = n
         self.conjunction = conjunction
 
     def __str__(self):
@@ -10,12 +13,12 @@ class B:
     def __repr__(self):
         return f"{self.__class__.__name__}: {stringify(self)}"
 
-    def __and__(self, n):
+    def __and__(self, n: "B"):
         if isinstance(n, B):
             return B([self.x, n], conjunction="and")
         raise ValueError("Requires B() class")
 
-    def __or__(self, n):
+    def __or__(self, n: "B"):
         if isinstance(n, B):
             return B([self.x, n.x], conjunction="or")
         raise ValueError("Requires be B() class")

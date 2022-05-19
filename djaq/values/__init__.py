@@ -22,7 +22,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.conf import settings
 from django.db.models.fields.related import ManyToOneRel, ManyToManyField
 
-
+from djaq.result import DQResult
 from ..astpp import parseprint, dump as node_string
 from ..app_utils import (
     model_field,
@@ -930,6 +930,9 @@ class ExpressionParser(ast.NodeVisitor):
                 print(f"Relation already existed: {relation}")
 
     def parse_values(self, select_src=None, where_src=None, order_by_src=None, outer_scope=None, aliases: Dict = None):
+        """Generate the sql."""
+
+        self.sql = ""
         if aliases:
             for alias, model_name in aliases.items():
                 self.add_alias(alias, model_name)
@@ -1117,7 +1120,7 @@ class ExpressionParser(ast.NodeVisitor):
         ## FROM JOINS
         if not outer_scope:
             for relation in self.relations:
-                s += f" {relation.join_operator} {relation.model_table} ON {relation.join_condition_expression} "
+                s += f" {relation.join_operator} {relation.model_table} {relation.alias or ''} ON {relation.join_condition_expression} "
 
         ## WHERE
         where = ""
@@ -1339,10 +1342,10 @@ class ExpressionParser(ast.NodeVisitor):
 
 
 class Values:
-    def __init__(self, select_source: Union[str, List], aliases: Dict = None):
+    def __init__(self, select_source: Union[str, List], aliases: Dict = None, name: str = None):
         self.aliases = aliases
         self.parser = ExpressionParser()
-
+        self.parser.name = name
         self.where_src = None
         self.order_by_src = None
         self.condition_node = None
@@ -1357,7 +1360,8 @@ class Values:
         self.select_src = select_source
 
     def construct(self):
-
+        # ipdb.set_trace()
+        self.where_src = ""
         if self.condition_node:
             if self.where_src:
                 self.where_src += " and "
@@ -1408,6 +1412,58 @@ class Values:
     def sql(self):
         self.construct()
         return self.parser.query()
+
+    def rewind(self):
+        self.parser.rewind()
+        return self
+
+    def csv(self, data=None):
+        self.construct()
+        return self.parser.csv(data)
+
+    def limit(self, limit):
+        self.parser._limit = limit
+        return self
+
+    def offset(self, offset):
+        self.parser._offset = offset
+        return self
+
+    def context(self, context):
+        """Update our context with dict context."""
+        if not self.parser._context:
+            self.parser._context = {}
+        if context:
+            self.parser.cursor = None  # cause the query to be re-evaluated
+            self.parser._context.update(context)
+        return self
+
+    def json(self, data=None, encoder=DjangoJSONEncoder):
+        self.construct()
+        return self.parser.json(data, encoder)
+
+    def objs(self, data=None):
+        self.construct()
+        return self.parser.objs(data)
+
+    def value(self, data=None):
+        self.construct()
+        return self.parser.value(data)
+
+    def dataframe(self, context=None):
+        """Return a pandas dataframe.
+        This only works if pandas is installed.
+        """
+        import pandas.io.sql as sqlio
+        import pandas as pd
+
+        self.construct()
+        self.context(context)
+        constructed_sql = self.parser.sql
+        sql = self.parser.mogrify(constructed_sql, self.parser._context)
+        df = pd.read_sql(sql, self.parser.connection)
+        df.columns = self.parser.column_headers
+        return df
 
 
 class Cursor:
