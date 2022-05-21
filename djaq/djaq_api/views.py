@@ -15,7 +15,7 @@ from django.http import (
 from django.shortcuts import render
 from django.apps import apps
 
-from djaq.values import DjaqQuery as DQ
+from djaq import DjaqQuery as DQ
 from djaq import app_utils
 
 import ipdb

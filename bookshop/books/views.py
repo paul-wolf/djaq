@@ -6,7 +6,7 @@ from django.shortcuts import render
 from django.conf import settings
 from django.db.models import Avg
 
-from djaq.query import DjangoQuery as DQ
+from djaq.query import DjaqQuery as DQ
 from djaq.conditions import B
 
 from .models import Book

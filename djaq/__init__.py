@@ -3,4 +3,4 @@ __author__ = "Paul Wolf"
 __license__ = "MIT"
 
 from .result import DQResult
-from .values import DjaqQuery
+from .query import DjaqQuery
