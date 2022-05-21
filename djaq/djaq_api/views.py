@@ -77,17 +77,18 @@ def queries(query_list, whitelist=None, validator=None):
         return list()
     responses = list()
     for data in query_list:
-        query_string = data.get("q")
-        offset = int(data.get("offset", 0))
-        limit = int(data.get("limit", 0))
-        context = data.get("context", dict())
+        model_name = data.get("model_name")
+        output = data.get("output")
+        where = data.get("where")
+        order_by = data.get("order_by")
+        page = int(data.get("page", 0))
+        page_size = int(data.get("page_size", 0))
+
         responses.append(
             list(
-                DQ(query_string, whitelist=whitelist)
-                .context(context)
-                .validator(validator)
-                .limit(limit)
-                .offset(offset)
+                DQ(model_name, output, whitelist=whitelist)
+                .offset(page * page_size)
+                .limit(page_size)
                 .dicts()
             )
         )

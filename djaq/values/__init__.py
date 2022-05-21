@@ -5,27 +5,20 @@ import json
 import re
 import ast
 from ast import AST, iter_fields
-from collections import defaultdict
-import uuid
 import logging
 import functools
 
-import psycopg2
-from psycopg2.extras import DictCursor
-
-import django
 from django.db import connections, models
 from django.db.models.query import QuerySet
 
 from django.utils.text import slugify
 from django.core.serializers.json import DjangoJSONEncoder
-from django.conf import settings
 from django.db.models.fields.related import ManyToOneRel, ManyToManyField
 
 from djaq.result import DQResult
 from ..astpp import parseprint, dump as node_string
 from ..app_utils import (
-    model_field,
+    get_model_details,
     find_model_class,
     model_path,
     get_model_from_table,
@@ -314,7 +307,7 @@ class ExpressionParser(ast.NodeVisitor):
     # the ExpressionParser init()
     def __init__(
         self,
-        model=None, # django model  or string of model
+        model=None,  # django model  or string of model
         source=None,
         using="default",
         limit=None,
@@ -329,8 +322,7 @@ class ExpressionParser(ast.NodeVisitor):
     ):
         # main relation
         self.model = model
-        
-                
+
         self._context = context
 
         if name:
@@ -370,16 +362,20 @@ class ExpressionParser(ast.NodeVisitor):
         # this tracks when to aggregate a relation potentially before the relations exist
         self.deferred_aggregations = list()
         self.distinct = False
-        
+
         self.add_relation(model=self.model)
-        
+
         # a set of conditions defined by B nodes
         self.condition_node: Optional[B] = None
 
         if self.vendor in self.__class__.aggregate_functions:
-            self.vendor_aggregate_functions = self.__class__.aggregate_functions[self.vendor]
+            self.vendor_aggregate_functions = self.__class__.aggregate_functions[
+                self.vendor
+            ]
         else:
-            self.vendor_aggregate_functions = self.__class__.aggregate_functions["unknown"]
+            self.vendor_aggregate_functions = self.__class__.aggregate_functions[
+                "unknown"
+            ]
         self.column_headers = list()
 
     def mogrify(self, sql, parameters):
@@ -441,7 +437,9 @@ class ExpressionParser(ast.NodeVisitor):
                         relation.alias = alias
                     return relation
 
-        relation = JoinRelation(model, self, fk_relation, fk_field, related_field, join_type, alias)
+        relation = JoinRelation(
+            model, self, fk_relation, fk_field, related_field, join_type, alias
+        )
         self.relations.append(relation)
 
         if len(self.relations) > 1 and not relation.fk_field:
@@ -505,7 +503,11 @@ class ExpressionParser(ast.NodeVisitor):
             return self.push_attribute_relations(attribute_list, relation)
 
         # if relation and attributes in list
-        relation = self.relations[0] if len(self.relations) else self.add_relation(model=self.model)
+        relation = (
+            self.relations[0]
+            if len(self.relations)
+            else self.add_relation(model=self.model)
+        )
         # ipdb.set_trace()
         field = relation.model._meta.get_field(attr)
 
@@ -515,7 +517,9 @@ class ExpressionParser(ast.NodeVisitor):
             self.add_relation(model=link_model, fk_relation=relation, fk_field=fk_field)
             fk_field = get_field_from_model(link_model, field.m2m_reverse_field_name())
             attr = attribute_list.pop()
-            new_relation = self.add_relation(model=field.related_model, fk_field=fk_field)
+            new_relation = self.add_relation(
+                model=field.related_model, fk_field=fk_field
+            )
             related_field = get_field_from_model(field.related_model, attr)
             a = f'"{field.related_model._meta.db_table}"."{related_field.column}"'
             return a
@@ -535,7 +539,9 @@ class ExpressionParser(ast.NodeVisitor):
             return None
 
     def queryset_source(self, queryset):
-        sql, sql_params = queryset.query.get_compiler(connection=self.connection).as_sql()
+        sql, sql_params = queryset.query.get_compiler(
+            connection=self.connection
+        ).as_sql()
         return sql, sql_params
 
     def emit_select(self, s):
@@ -769,8 +775,8 @@ class ExpressionParser(ast.NodeVisitor):
             raise Exception("Unknown value: {}".format(node.value))
 
     def visit_Set(self, node):
-        self.emit("{"+node.elts[0].id+"}")
-        
+        self.emit("{" + node.elts[0].id + "}")
+
     def visit_Div(self, node):
         self.emit(" / ")
         ast.NodeVisitor.generic_visit(self, node)
@@ -927,7 +933,9 @@ class ExpressionParser(ast.NodeVisitor):
                 aliases.append(
                     (
                         a[0],
-                        slugify(a[0].replace(".", "_").replace(" ", "_")).replace("-", "_"),
+                        slugify(a[0].replace(".", "_").replace(" ", "_")).replace(
+                            "-", "_"
+                        ),
                     )
                 )
             elif len(a) == 2:
@@ -937,8 +945,9 @@ class ExpressionParser(ast.NodeVisitor):
 
         return aliases
 
-
-    def parse_values(self, select_src=None, where_src=None, order_by_src=None, outer_scope=None):
+    def parse_source(
+        self, select_src=None, where_src=None, order_by_src=None, outer_scope=None
+    ):
         """Parse the source components."""
 
         self.sql = ""
@@ -963,8 +972,7 @@ class ExpressionParser(ast.NodeVisitor):
         for relation_index in self.deferred_aggregations:
             self.relations[relation_index].group_by = True
 
-
-    def generate(self, outer_scope=None):
+    def build_sql_statement(self, outer_scope=None):
         """Generate the SQL. Assumes source is parsed.
 
         No model lookups are done here.
@@ -1040,7 +1048,6 @@ class ExpressionParser(ast.NodeVisitor):
 
         return self.sql
 
-
     def rewind(self):
         """Rewind cursor by setting to None.
         The next time a generator method is called,
@@ -1100,7 +1107,6 @@ class ExpressionParser(ast.NodeVisitor):
                 print(f"sql={sql}")
             logger.debug(sql)
             self.cursor.execute(sql)
-
 
     def dicts(self, data=None):
         if not self.cursor:
@@ -1192,19 +1198,30 @@ class ExpressionParser(ast.NodeVisitor):
             pass
 
 
-class Values:
-    def __init__(self, model_source: Union[models.Model, str], select_source: Union[str, List, None] = None, name: str = None):
+class DjaqQuery:
+    def __init__(
+        self,
+        model_source: Union[models.Model, str],
+        select_source: Union[str, List, None] = None,
+        name: str = None,
+    ):
         if isinstance(model_source, models.base.ModelBase):
             model = model_source
         elif isinstance(model_source, str):
             model = find_model_class(model_source)
         else:
-            raise Exception(f"Type not supported for model source: {type(model_source)}")
-        if not select_source:
-            select_source = model._meta.pk.name
-        self.model = model
-        
+            raise Exception(
+                f"Type not supported for model source: {type(model_source)}"
+            )
+            
         self.parser = ExpressionParser(model=model)
+
+        if not select_source or select_source == "*":
+            select_source = ", ".join([f for f in get_model_details(model, self.parser.connection)["fields"]])
+        elif select_source == "pk":
+            select_source = model._meta.pk.name
+
+        self.model = model
         self.parser.name = name
         self.where_src = None
         self.order_by_src = None
@@ -1221,18 +1238,20 @@ class Values:
 
     def construct(self):
         # ipdb.set_trace()
-        
+
         self.where_src = ""
         if self.condition_node:
             if self.where_src:
                 self.where_src += " and "
             else:
                 self.where_src = ""
-            self.where_src += render_conditions(self.condition_node, self.parser._context)
+            self.where_src += render_conditions(
+                self.condition_node, self.parser._context
+            )
 
-        self.parser.parse_values(self.select_src, self.where_src, self.order_by_src)
+        self.parser.parse_source(self.select_src, self.where_src, self.order_by_src)
 
-        self.parser.generate()
+        self.parser.build_sql_statement()
 
     def order_by(self, source: Union[str, List]):
         if isinstance(source, str):
@@ -1253,19 +1272,15 @@ class Values:
         else:
             self.condition_node = node
         return self
-    
+
     def get(self, pk_value: any):
-        self.where(f"{self.model._meta.pk.name} = '$(pk)'")
-        self.context({"pk": pk_value})
-        qs = self.qs()
-        if not len(qs):
-            raise self.model.DoesNotExist
-        return qs[0]
+        """Return a single model instance whose primary key is pk_value."""
+        return self.model.objects.get(pk=pk_value)
 
     def distinct(self):
         self.parser.distinct = True
         return self
-    
+
     def dicts(self, data=None):
         self.construct()
         return self.parser.dicts(data=data)
@@ -1278,9 +1293,6 @@ class Values:
         self.construct()
         return self.parser.count(data)
 
-    # def unique(self, data=None):
-    #     self.construct()
-    #     return self.parser.unique(data)
 
     def sql(self):
         self.construct()
@@ -1338,50 +1350,50 @@ class Values:
         df.columns = self.parser.column_headers
         return df
 
-
     def qs(self):
         return self.parser.model.objects.raw(self.sql()[0])
 
-class Cursor:
-    def __init__(self, values: Values):
-        self.values = values
-        self.verbosity = values.parser.verbosity
-        self.cursor = None
 
-    def execute(self, context=None, count=False):
-        """Create a cursor and execute the sql."""
+# class Cursor:
+#     def __init__(self, values: Values):
+#         self.values = values
+#         self.verbosity = values.parser.verbosity
+#         self.cursor = None
 
-        self.values.parser.context(context)
+#     def execute(self, context=None, count=False):
+#         """Create a cursor and execute the sql."""
 
-        
-        sql = self.values.parser.parse_values(self.values.aliases)
+#         self.values.parser.context(context)
 
-        self.cursor = self.values.parser.connection.cursor()
 
-        if count:
-            sql = f"SELECT COUNT(*) FROM ({sql}) c"
-        if len(self.values.parser._context):
-            context = self.values.parser.context_validator_class(self, self.values.parser._context).context()
-            if self.verbosity:
-                conn = connections[self.values.parser.using]
-                cursor = conn.cursor()
-                logger.debug(cursor.mogrify(sql, context))
-                if self.verbosity:
-                    print(f"sql={sql}, params={context}")
-            self.cursor.execute(sql, context)
-        else:
-            if self.verbosity:
-                print(f"sql={sql}")
-            logger.debug(sql)
-            self.cursor.execute(sql)
+#         sql = self.values.parser.parse_values(self.values.aliases)
 
-    def dicts(self, data=None):
-        if not self.cursor:
-            self.execute(data)
-        while True:
-            row = self.cursor.fetchone()
-            if row is None:
-                break
-            row_dict = dict(zip(self.values.parser.column_headers, row))
-            yield row_dict
-        return
+#         self.cursor = self.values.parser.connection.cursor()
+
+#         if count:
+#             sql = f"SELECT COUNT(*) FROM ({sql}) c"
+#         if len(self.values.parser._context):
+#             context = self.values.parser.context_validator_class(self, self.values.parser._context).context()
+#             if self.verbosity:
+#                 conn = connections[self.values.parser.using]
+#                 cursor = conn.cursor()
+#                 logger.debug(cursor.mogrify(sql, context))
+#                 if self.verbosity:
+#                     print(f"sql={sql}, params={context}")
+#             self.cursor.execute(sql, context)
+#         else:
+#             if self.verbosity:
+#                 print(f"sql={sql}")
+#             logger.debug(sql)
+#             self.cursor.execute(sql)
+
+#     def dicts(self, data=None):
+#         if not self.cursor:
+#             self.execute(data)
+#         while True:
+#             row = self.cursor.fetchone()
+#             if row is None:
+#                 break
+#             row_dict = dict(zip(self.values.parser.column_headers, row))
+#             yield row_dict
+#         return
