@@ -157,10 +157,9 @@ def djaq_request_view(request):
     """Main view for query and update requests."""
 
     request_data = json.loads(request.body.decode("utf-8"))
-    
+
     print(request_data)
-    
-    
+
     if not is_user_allowed(request.user):
         return HttpResponse("Djaq unauthorized", status=401)
 
@@ -170,7 +169,6 @@ def djaq_request_view(request):
 
     # q = data.get("queries", dict()) or dict()
     # ctx = get_context_data(data)
-    
 
     try:
         queries_result = queries(request_data, whitelist=whitelist, validator=validator)
@@ -204,9 +202,9 @@ def djaq_request_view(request):
         )
     except Exception as e:
 
-        print("-"*60)
+        print("-" * 60)
         traceback.print_exc(file=sys.stdout)
-        print("-"*60)
+        print("-" * 60)
 
         if e.__cause__ and e.__cause__.pgerror:
             err = e.__cause__.pgerror

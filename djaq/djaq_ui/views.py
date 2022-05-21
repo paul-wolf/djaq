@@ -30,6 +30,7 @@ from djaq.app_utils import (
     get_whitelist,
 )
 import ipdb
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,12 +40,14 @@ def wl():
         whitelist = settings.DJAQ_WHITELIST
     return whitelist
 
+
 def get_params(data):
     model = data.get("model")
     output = data.get("output")
     where = data.get("where")
     order_by = data.get("order_by")
     return model, output, where, order_by
+
 
 @login_required
 @csrf_exempt
@@ -53,20 +56,32 @@ def query_view(request):
     if request.method == "POST":
         ipdb.set_trace()
 
-        model, output,where,order_by = get_params(request.POST.get("queries")[0])
+        model, output, where, order_by = get_params(request.POST.get("queries")[0])
         limit = request.POST.get("limit", 10)
         offset = request.POST.get("offset", 0)
         sql = request.POST.get("sql", False) == "true"
         try:
             if sql:
-                s = DQ(model, output, whitelist=wl()).where(where).order_by(order_by).offset(offset).limit(limit).sql()
+                s = (
+                    DQ(model, output, whitelist=wl())
+                    .where(where)
+                    .order_by(order_by)
+                    .offset(offset)
+                    .limit(limit)
+                    .sql()
+                )
                 s = sqlparse.format(s, reindent=True, keyword_case="upper")
                 r = {"result": s}
             else:
                 try:
                     r = {
                         "result": list(
-                            DQ(model, output, whitelist=wl()).where(where).order_by(order_by).offset(offset).limit(limit).dicts()
+                            DQ(model, output, whitelist=wl())
+                            .where(where)
+                            .order_by(order_by)
+                            .offset(offset)
+                            .limit(limit)
+                            .dicts()
                         )
                     }
                 except Exception as e:
@@ -93,7 +108,7 @@ def sql_view(request):
     print(request.body)
     request_data = json.loads(request.body.decode("utf-8"))
     print(request_data)
-    model, output,where,order_by = get_params(request_data.get("queries")[0])
+    model, output, where, order_by = get_params(request_data.get("queries")[0])
     try:
         s = DQ(model, output).where(where).order_by(order_by).sql()
         s = sqlparse.format(s, reindent=True, keyword_case="upper")

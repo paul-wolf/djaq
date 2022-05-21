@@ -1204,7 +1204,7 @@ class DjaqQuery:
         model_source: Union[models.Model, str],
         select_source: Union[str, List, None] = None,
         name: str = None,
-        whitelist=None
+        whitelist=None,
     ):
         if isinstance(model_source, models.base.ModelBase):
             model = model_source
@@ -1214,11 +1214,13 @@ class DjaqQuery:
             raise Exception(
                 f"Type not supported for model source: {type(model_source)}"
             )
-            
+
         self.parser = ExpressionParser(model=model)
 
         if not select_source or select_source == "*":
-            select_source = ", ".join([f for f in get_model_details(model, self.parser.connection)["fields"]])
+            select_source = ", ".join(
+                [f for f in get_model_details(model, self.parser.connection)["fields"]]
+            )
         elif select_source == "pk":
             select_source = model._meta.pk.name
 
@@ -1294,7 +1296,6 @@ class DjaqQuery:
         self.construct()
         return self.parser.count(data)
 
-
     def sql(self):
         self.construct()
         return self.parser.sql
@@ -1356,7 +1357,7 @@ class DjaqQuery:
 
     def go(self):
         return list(self.dicts())
-        
+
 
 # class Cursor:
 #     def __init__(self, values: Values):
