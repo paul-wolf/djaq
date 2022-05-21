@@ -40,7 +40,8 @@ import ipdb
 logger = logging.getLogger(__name__)
 
 
-PLACEHOLDER_PATTERN = re.compile(r"\'\$\(([\w]*)\)\'")
+# PLACEHOLDER_PATTERN = re.compile(r"\'\$\(([\w]*)\)\'")
+PLACEHOLDER_PATTERN = re.compile(r"\{([\w]*)\}")
 
 
 @functools.lru_cache()
@@ -313,6 +314,7 @@ class ExpressionParser(ast.NodeVisitor):
     # the ExpressionParser init()
     def __init__(
         self,
+        model=None, # django model  or string of model
         source=None,
         using="default",
         limit=None,
@@ -325,7 +327,10 @@ class ExpressionParser(ast.NodeVisitor):
         whitelist=None,
         local=False,
     ):
-
+        # main relation
+        self.model = model
+        
+                
         self._context = context
 
         if name:
@@ -349,10 +354,10 @@ class ExpressionParser(ast.NodeVisitor):
         self.cursor = None
         self.col_names = None
         self.code = ""
-        self.stack = []
-        self.names = []
-        self.column_expressions = []
-        self.relations = []
+        self.stack = list()
+        self.names = list()
+        self.column_expressions = list()
+        self.relations = list()
         self.parsed = False
         self.expression_context = "select"  # change to 'where' or 'func' later
         self.function_context = ""
@@ -364,7 +369,10 @@ class ExpressionParser(ast.NodeVisitor):
         self.unary_stack = list()
         # this tracks when to aggregate a relation potentially before the relations exist
         self.deferred_aggregations = list()
-
+        self.distinct = False
+        
+        self.add_relation(model=self.model)
+        
         # a set of conditions defined by B nodes
         self.condition_node: Optional[B] = None
 
@@ -465,8 +473,14 @@ class ExpressionParser(ast.NodeVisitor):
         """
 
         # last element must be a field name
+        try:
+            attr = attribute_list.pop()
+        except IndexError:
+            # this happens when we are finished
+            if not relation:
+                relation = self.add_relation(model=self.model)
+            return self.push_attribute_relations(attribute_list, relation)
 
-        attr = attribute_list.pop()
         if relation and not len(attribute_list):
             # attr is the terminal attribute
             field = relation.model._meta.get_field(attr)
@@ -474,11 +488,14 @@ class ExpressionParser(ast.NodeVisitor):
             return a
         elif not relation and not len(attribute_list):
             # attr is a stand-alone name
-            model = self.relations[-1].model
+            if not self.relations:
+                relation = self.add_relation(model=self.model)
+            model = self.relations[0].model
+            # ipdb.set_trace()
             field = model._meta.get_field(attr)
             a = f'"{model._meta.db_table}"."{field.column}"'
             return a
-        elif not relation and len(attribute_list):
+        elif False and not relation and len(attribute_list):
             # this happens when we have something like 'Book.name'
             # therefore attr must be a model name or alias
             relation = self.find_relation_from_alias(attr)
@@ -488,6 +505,8 @@ class ExpressionParser(ast.NodeVisitor):
             return self.push_attribute_relations(attribute_list, relation)
 
         # if relation and attributes in list
+        relation = self.relations[0] if len(self.relations) else self.add_relation(model=self.model)
+        # ipdb.set_trace()
         field = relation.model._meta.get_field(attr)
 
         if isinstance(field, ManyToManyField):
@@ -749,6 +768,9 @@ class ExpressionParser(ast.NodeVisitor):
         else:
             raise Exception("Unknown value: {}".format(node.value))
 
+    def visit_Set(self, node):
+        self.emit("{"+node.elts[0].id+"}")
+        
     def visit_Div(self, node):
         self.emit(" / ")
         ast.NodeVisitor.generic_visit(self, node)
@@ -915,31 +937,16 @@ class ExpressionParser(ast.NodeVisitor):
 
         return aliases
 
-    def parse_where(self, src: str):
-        self.expression_context = "where"
-        self.visit(ast.parse(src))
 
-    def add_alias(self, alias, model_name):
-
-        relation = self.find_relation_from_alias(alias)
-        model = find_model_class(model_name, whitelist=self.whitelist)
-        if model and not relation:
-            relation = self.add_relation(model=model, alias=alias, join_type=None)
-        else:
-            if self.verbosity > 2:
-                print(f"Relation already existed: {relation}")
-
-    def parse_values(self, select_src=None, where_src=None, order_by_src=None, outer_scope=None, aliases: Dict = None):
-        """Generate the sql."""
+    def parse_values(self, select_src=None, where_src=None, order_by_src=None, outer_scope=None):
+        """Parse the source components."""
 
         self.sql = ""
-        if aliases:
-            for alias, model_name in aliases.items():
-                self.add_alias(alias, model_name)
 
         select_src = select_src.replace("\n", " ")
         column_tuples = self.parse_column_aliases(select_src)
-        self.column_headers.extend([c[1] for c in column_tuples])
+        # self.column_headers.extend([c[1] for c in column_tuples])
+        self.column_headers = [c[1] for c in column_tuples]
         transformed_select_src = ", ".join([c[0] for c in column_tuples])
         self.expression_context = "select"
         self.visit(ast.parse(transformed_select_src))
@@ -956,141 +963,6 @@ class ExpressionParser(ast.NodeVisitor):
         for relation_index in self.deferred_aggregations:
             self.relations[relation_index].group_by = True
 
-    def parse(self, outer_scope=None):
-        """Return sql after building query."""
-
-        if self.sql:
-            return self.sql
-
-        pattern = "([\w.]+)[\s]*(\{.*\})?\s*([\w]+)?\s*(order_by|order by)?\s*(\+|\-)?(\(.*\))?"
-        """
-        We get a relation string like this:
-
-        ->(Book.name as title, Book.publisher.name as pub, count()) Book{length(b.name) > 50)} b
-
-        group 1: model
-        group 2: filter
-        group 3: alias
-        group 4: order by
-        group 5: order by direction
-        group 6: order_by_src
-        """
-        self.source = self.source.replace("\n", " ")
-        relation_sources = self.split_relations(self.source)
-
-        for i, relation_source in enumerate(relation_sources):
-
-            index, join_type, relation_source = self.get_join_type(relation_source)
-            index, select_src, relation_source = self.get_select(relation_source)
-            m = re.match(pattern, relation_source.strip())
-            if m:
-                model_name = m.group(1)
-                where_src = m.group(2)
-                alias = m.group(3) if m.group(3) else model_name
-                order_by_direction = m.group(5)
-                order_by_src = m.group(6)
-
-            elif re.match("^(\(.*\))$", self.source):
-                join_type = None
-
-                src = self.source.strip()
-                if src[0] == "(":
-                    src = src[1:-1]
-                select_src = src.strip()
-                model_name = None
-                where_src = None
-                order_by_src = None
-                order_by_direction = None
-                alias = None
-            else:
-                raise Exception(f"Invalid source: ---{relation_source}---")
-
-            if self.condition_node:
-                if where_src:
-                    where_src += " AND "
-                else:
-                    where_src = ""
-                where_src += render_conditions(self.condition_node, self._context)
-
-            if self.verbosity > 1:
-                print(
-                    f"""
-                    join_type={join_type},
-                    select_src={select_src},
-                    model_name={model_name},
-                    where_src={where_src},
-                    order_by_src={order_by_src},
-                    order_by_direction={order_by_direction},
-                    alias={alias}
-                    """
-                )
-
-            # we need to generate column headers and remove
-            # aliases. tuples are (exp, alias)
-            if select_src:
-                column_tuples = self.parse_column_aliases(select_src)
-                self.column_headers.extend([c[1] for c in column_tuples])
-                select_src = ", ".join([c[0] for c in column_tuples])
-            else:
-                select_src = ""
-            # when there is no defined relation, we need to figure it out
-            # without a model_name or alias, we can do nothing
-            # just take the first model name if there is one
-            if not model_name and not alias:
-                try:
-                    model_name = column_tuples[0][0].split(".")[0]
-                except Exception:
-                    raise Exception(f"Could not find model for {column_tuples}")
-
-            relation = self.find_relation_from_alias(alias)
-            model = find_model_class(model_name, whitelist=self.whitelist)
-            if model and not relation:
-                relation = self.add_relation(model=model, alias=alias, join_type=join_type)
-            else:
-                if self.verbosity > 2:
-                    print(f"Relation already existed: {relation}")
-            self.relation_index = i
-
-            if select_src:
-                if select_src.upper().startswith("'(SELECT "):
-                    relation.src = select_src
-                else:
-                    self.expression_context = "select"
-                    self.visit(ast.parse(select_src))
-
-            if self.verbosity > 2 or len(self.relations) == 0:
-                print(f"relation index {i}:")
-                print(f"\trelation_source={relation_source}")
-                print(f"\tjoin_type={join_type}")
-                print(f"\tselect_src={select_src}")
-                print(f"\tmodel_name={model_name}")
-                print(f"\twhere_src={where_src}")
-                print(f"\talias={alias}")
-                print(f"\torder_by_direction={order_by_direction}")
-                print(f"\torder_by_src={order_by_src}")
-                self.dump()
-
-            if not relation:
-                relation = self.relations[-1]
-            relation.order_by_direction = order_by_direction
-
-            if where_src:
-                self.expression_context = "where"
-                self.visit(ast.parse(where_src))
-
-            if order_by_src:
-                self.expression_context = "order_by"
-                self.visit(ast.parse(order_by_src))
-
-        if self.verbosity > 2:
-            print(f"Database vendor: {self.vendor}")
-
-        if self.verbosity > 1:
-            for r in self.relations:
-                print(f"Relation        : {r}")
-                r.dump()
-
-        return self.generate(outer_scope)
 
     def generate(self, outer_scope=None):
         """Generate the SQL. Assumes source is parsed.
@@ -1168,14 +1040,6 @@ class ExpressionParser(ast.NodeVisitor):
 
         return self.sql
 
-    def query(self, context=None):
-        """Return source for djangoquery and parameters."""
-        self.context(context)
-        sql = self.parse()
-        if self.verbosity > 0:
-            print(sql)
-        sql = sql.replace("'%s'", "%s")
-        return sql, self.parameters
 
     def rewind(self):
         """Rewind cursor by setting to None.
@@ -1209,20 +1073,18 @@ class ExpressionParser(ast.NodeVisitor):
             self.context_validator_class = validator_class
         return self
 
-    def execute(self, context=None, count=False, unique=False):
+    def execute(self, context=None, count=False):
         """Create a cursor and execute the sql."""
 
         self.context(context)
 
-        # parse() returns sql from self.sql if parsing was done
-        # sql = self.parse()
         sql = self.sql
 
         self.cursor = self.connection.cursor()
 
         if count:
             sql = f"SELECT COUNT(*) FROM ({sql}) c"
-        if unique:
+        if self.distinct:
             sql = f"SELECT DISTINCT * FROM ({sql}) u"
         if len(self._context):
             context = self.context_validator_class(self, self._context).context()
@@ -1239,21 +1101,10 @@ class ExpressionParser(ast.NodeVisitor):
             logger.debug(sql)
             self.cursor.execute(sql)
 
-    def dataframe(self, context=None):
-        """Return a pandas dataframe.
-        This only works if pandas is installed.
-        """
-        import pandas.io.sql as sqlio
 
-        self.context(context)
-        sql = self.parse()
-        df = sqlio.read_sql_query(sql, self.connection)
-        df.columns = self.column_headers
-        return df
-
-    def dicts(self, data=None, unique=False):
+    def dicts(self, data=None):
         if not self.cursor:
-            self.execute(data, unique=unique)
+            self.execute(data)
         while True:
             row = self.cursor.fetchone()
             if row is None:
@@ -1262,10 +1113,10 @@ class ExpressionParser(ast.NodeVisitor):
             yield row_dict
         return
 
-    def tuples(self, data=None, unique=False, flat=False):
+    def tuples(self, data=None, flat=False):
         row = None
         if not self.cursor:
-            self.execute(data, unique=unique)
+            self.execute(data)
         while True:
             row = self.cursor.fetchone()
             if row is None:
@@ -1342,9 +1193,18 @@ class ExpressionParser(ast.NodeVisitor):
 
 
 class Values:
-    def __init__(self, select_source: Union[str, List], aliases: Dict = None, name: str = None):
-        self.aliases = aliases
-        self.parser = ExpressionParser()
+    def __init__(self, model_source: Union[models.Model, str], select_source: Union[str, List, None] = None, name: str = None):
+        if isinstance(model_source, models.base.ModelBase):
+            model = model_source
+        elif isinstance(model_source, str):
+            model = find_model_class(model_source)
+        else:
+            raise Exception(f"Type not supported for model source: {type(model_source)}")
+        if not select_source:
+            select_source = model._meta.pk.name
+        self.model = model
+        
+        self.parser = ExpressionParser(model=model)
         self.parser.name = name
         self.where_src = None
         self.order_by_src = None
@@ -1361,6 +1221,7 @@ class Values:
 
     def construct(self):
         # ipdb.set_trace()
+        
         self.where_src = ""
         if self.condition_node:
             if self.where_src:
@@ -1369,7 +1230,7 @@ class Values:
                 self.where_src = ""
             self.where_src += render_conditions(self.condition_node, self.parser._context)
 
-        self.parser.parse_values(self.select_src, self.where_src, self.order_by_src, aliases=self.aliases)
+        self.parser.parse_values(self.select_src, self.where_src, self.order_by_src)
 
         self.parser.generate()
 
@@ -1392,26 +1253,38 @@ class Values:
         else:
             self.condition_node = node
         return self
+    
+    def get(self, pk_value: any):
+        self.where(f"{self.model._meta.pk.name} = '$(pk)'")
+        self.context({"pk": pk_value})
+        qs = self.qs()
+        if not len(qs):
+            raise self.model.DoesNotExist
+        return qs[0]
 
-    def dicts(self, data=None, unique=False):
+    def distinct(self):
+        self.parser.distinct = True
+        return self
+    
+    def dicts(self, data=None):
         self.construct()
-        return self.parser.dicts(data=data, unique=unique)
+        return self.parser.dicts(data=data)
 
-    def tuples(self, data=None, unique=False, flat=False):
+    def tuples(self, data=None, flat=False):
         self.construct()
-        return self.parser.tuples(data=data, unique=unique, flat=flat)
+        return self.parser.tuples(data=data, flat=flat)
 
     def count(self, data=None):
         self.construct()
         return self.parser.count(data)
 
-    def unique(self, data=None):
-        self.construct()
-        return self.parser.unique(data)
+    # def unique(self, data=None):
+    #     self.construct()
+    #     return self.parser.unique(data)
 
     def sql(self):
         self.construct()
-        return self.parser.query()
+        return self.parser.sql
 
     def rewind(self):
         self.parser.rewind()
@@ -1466,6 +1339,9 @@ class Values:
         return df
 
 
+    def qs(self):
+        return self.parser.model.objects.raw(self.sql()[0])
+
 class Cursor:
     def __init__(self, values: Values):
         self.values = values
@@ -1477,7 +1353,7 @@ class Cursor:
 
         self.values.parser.context(context)
 
-        # parse() returns sql from self.sql if parsing was done
+        
         sql = self.values.parser.parse_values(self.values.aliases)
 
         self.cursor = self.values.parser.connection.cursor()

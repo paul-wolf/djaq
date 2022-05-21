@@ -21,7 +21,7 @@ class B:
     def __or__(self, n: "B"):
         if isinstance(n, B):
             return B([self.x, n.x], conjunction="or")
-        raise ValueError("Requires be B() class")
+        raise ValueError("Requires B() class")
 
 
 def stringify(node) -> str:
