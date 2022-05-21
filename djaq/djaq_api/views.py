@@ -1,3 +1,4 @@
+import sys, traceback
 import json
 import logging
 
@@ -14,8 +15,10 @@ from django.http import (
 from django.shortcuts import render
 from django.apps import apps
 
-from djaq.query import DjangoQuery as DQ
+from djaq.values import DjaqQuery as DQ
 from djaq import app_utils
+
+import ipdb
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +74,14 @@ def get_whitelist():
     return list()
 
 
-def queries(query_list, whitelist=None, validator=None):
+def queries(request_data, whitelist=None, validator=None):
 
+    query_list = request_data.get("queries")
     if not query_list:
         return list()
     responses = list()
     for data in query_list:
-        model_name = data.get("model_name")
+        model_name = data.get("model")
         output = data.get("output")
         where = data.get("where")
         order_by = data.get("order_by")
@@ -87,6 +91,8 @@ def queries(query_list, whitelist=None, validator=None):
         responses.append(
             list(
                 DQ(model_name, output, whitelist=whitelist)
+                .where(where)
+                .order_by(order_by)
                 .offset(page * page_size)
                 .limit(page_size)
                 .dicts()
@@ -150,9 +156,11 @@ def get_context_data(data) -> dict:
 def djaq_request_view(request):
     """Main view for query and update requests."""
 
-    data = json.loads(request.body.decode("utf-8"))
-    logger.debug(data)
-
+    request_data = json.loads(request.body.decode("utf-8"))
+    
+    print(request_data)
+    
+    
     if not is_user_allowed(request.user):
         return HttpResponse("Djaq unauthorized", status=401)
 
@@ -160,26 +168,26 @@ def djaq_request_view(request):
 
     validator = get_validator()
 
-    q = data.get("queries", dict()) or dict()
-    ctx = get_context_data(data)
-    # ctx["request"] = request
+    # q = data.get("queries", dict()) or dict()
+    # ctx = get_context_data(data)
+    
 
     try:
-        queries_result = queries(q, whitelist=whitelist, validator=validator)
+        queries_result = queries(request_data, whitelist=whitelist, validator=validator)
         creates_result = (
-            creates(data.get("creates"), whitelist=whitelist)
+            creates(request_data.get("creates"), whitelist=whitelist)
             if has_permission("creates")
             else list()
         )
 
         updates_result = (
-            updates(data.get("updates"), whitelist=whitelist)
+            updates(request_data.get("updates"), whitelist=whitelist)
             if has_permission("updates")
             else list()
         )
 
         deletes_result = (
-            deletes(data.get("deletes"), whitelist=whitelist)
+            deletes(request_data.get("deletes"), whitelist=whitelist)
             if has_permission("deletes")
             else list()
         )
@@ -195,6 +203,10 @@ def djaq_request_view(request):
             }
         )
     except Exception as e:
+
+        print("-"*60)
+        traceback.print_exc(file=sys.stdout)
+        print("-"*60)
 
         if e.__cause__ and e.__cause__.pgerror:
             err = e.__cause__.pgerror

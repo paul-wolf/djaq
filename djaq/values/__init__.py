@@ -1204,6 +1204,7 @@ class DjaqQuery:
         model_source: Union[models.Model, str],
         select_source: Union[str, List, None] = None,
         name: str = None,
+        whitelist=None
     ):
         if isinstance(model_source, models.base.ModelBase):
             model = model_source
@@ -1353,6 +1354,9 @@ class DjaqQuery:
     def qs(self):
         return self.parser.model.objects.raw(self.sql()[0])
 
+    def go(self):
+        return list(self.dicts())
+        
 
 # class Cursor:
 #     def __init__(self, values: Values):
