@@ -40,8 +40,8 @@ PASSWORD = "blah"
 EMAIL = "artemis@blah.com"
 
 
-@unittest.skip
-class XTestDjaq(TestCase):
+
+class TestDjaqAPI(TestCase):
     def setUp(self):
 
         user = User.objects.create_user(
@@ -80,46 +80,6 @@ class XTestDjaq(TestCase):
     def tearDown(self):
         pass
 
-    def test_model_path(self):
-        self.assertEqual(model_path(Book), "books.models.Book")
-
-    def test_get_db_type(self):
-        f = fieldclass_from_model("name", Book)
-        t = get_db_type(f, connections["default"])
-        self.assertEqual(t, "varchar(300)")
-
-    def test_find_model_class(self):
-        self.assertEqual(find_model_class("Book"), Book)
-
-    def test_fieldclass_from_model(self):
-        f = fieldclass_from_model("name", Book)
-        self.assertEqual(f.name, "name")
-
-    def test_model_field(self):
-        m, f = model_field("Book", "name")
-        self.assertEqual(f.name, "name")
-
-    def test_field_ref(self):
-        m, f = field_ref("Book.name")
-        self.assertEqual(f.name, "name")
-
-    def test_field_details(self):
-        m, f = field_ref("Book.name")
-        d = get_field_details(f, connections["default"])
-        self.assertEqual(d["name"], "name")
-
-    def test_get_model_details(self):
-        m, f = field_ref("Book.name")
-        d = get_model_details(m, connections["default"])
-        self.assertEqual(d["object_name"], "Book")
-
-    def test_get_model_classes(self):
-        classes = get_model_classes()
-        self.assertTrue("books.Book" in classes)
-
-    def test_get_schema(self):
-        schema = get_schema(connections["default"])
-        self.assertTrue("books.Book" in schema)
 
     def test_whitelist(self):
 
@@ -128,7 +88,8 @@ class XTestDjaq(TestCase):
         schema = get_schema(connections["default"], whitelist=wl)
         self.assertIn("books.Book", schema)
         self.assertEqual(len(schema.keys()), 1)
-        DQ("(b.name) Book{ilike(b.name, 'A%')} b", whitelist=wl).parse()
+        
+        DQ("Book", "name", whitelist=wl).where("ilike(name, 'A%')").construct()
 
         # make sure it keeps us out
         wl = {"django.contrib.auth": ["User"]}
@@ -139,9 +100,14 @@ class XTestDjaq(TestCase):
 
         wl = {"django.contrib.auth": ["User"]}
         with self.assertRaises(ModelNotFoundException):
-            DQ("(b.name) Book{ilike(b.name, 'A%')} b", whitelist=wl).parse()
+            DQ("Book", "name", whitelist=wl).where("ilike(name, 'A%')").construct()
 
+        #  it also needs to refuse related models
+        wl = {"books": ["Book"]}
+        with self.assertRaises(ModelNotFoundException):
+            DQ("Book", "publisher.name", whitelist=wl).where("ilike(name, 'A%')").construct()
 
+    @unittest.skip
     def test_updates(self):
         SPECIAL_PRICE = 12345.01
         results = queries([{"q": "(Book.id, Book.name, Book.price)", "limit": 1}])
@@ -166,6 +132,7 @@ class XTestDjaq(TestCase):
         book_price = book["book_price"]
         self.assertEqual(float(book_price), SPECIAL_PRICE)
 
+    @unittest.skip
     def test_deletes(self):
         #  import ipdb; ipdb.set_trace()
         book_count = DQ("(count(Book.id)) Book").value()
@@ -175,6 +142,7 @@ class XTestDjaq(TestCase):
         book_count_new = DQ("(count(Book.id)) Book").value()
         self.assertEqual(book_count, book_count_new + 1)
 
+    @unittest.skip
     def test_remote_query(self):
         data = {
             "queries": [
@@ -205,6 +173,7 @@ class XTestDjaq(TestCase):
 
         self.assertEqual(len(result.get("queries")[0]), 10)
 
+    @unittest.skip
     def test_remote_create(self):
         data = {
             "creates": [
@@ -230,6 +199,7 @@ class XTestDjaq(TestCase):
         a = Author.objects.get(name="joseph conrad")
         self.assertEquals(pk, a.id)
 
+    @unittest.skip
     def test_remote_update(self):
         data = {
             "creates": [

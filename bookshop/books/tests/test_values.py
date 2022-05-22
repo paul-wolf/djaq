@@ -216,3 +216,9 @@ class TestDjaqQuery(TestCase):
         
         
     # test page size, offset, limit
+    
+    # test qs()
+    
+    # test date operations like comparison
+    
+    

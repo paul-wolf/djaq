@@ -15,20 +15,26 @@ from django.utils.text import slugify
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models.fields.related import ManyToOneRel, ManyToManyField
 
+
 from djaq.result import DQResult
 from ..astpp import parseprint, dump as node_string
 from ..app_utils import (
     get_model_details,
+    get_model_classes,
     find_model_class,
     model_path,
+    get_schema,
     get_model_from_table,
     get_field_from_model,
+    make_dataclass,
 )
 from ..functions import function_whitelist
 from djaq.exceptions import UnknownFunctionException
 from djaq.conditions import B
 
 import ipdb
+
+# from djaq import app_utils
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +328,7 @@ class ExpressionParser(ast.NodeVisitor):
     ):
         # main relation
         self.model = model
+        
 
         self._context = context
 
@@ -362,7 +369,7 @@ class ExpressionParser(ast.NodeVisitor):
         # this tracks when to aggregate a relation potentially before the relations exist
         self.deferred_aggregations = list()
         self.distinct = False
-
+        
         self.add_relation(model=self.model)
 
         # a set of conditions defined by B nodes
@@ -526,6 +533,8 @@ class ExpressionParser(ast.NodeVisitor):
         else:
             # this means attr is a foreign key
             related_model = field.related_model
+            #  we do this to check it is in the whitelist
+            find_model_class(related_model._meta.label, whitelist=self.whitelist)
             new_relation = self.add_relation(related_model, field_name=attr)
 
         return self.push_attribute_relations(attribute_list, new_relation)
@@ -1209,13 +1218,13 @@ class DjaqQuery:
         if isinstance(model_source, models.base.ModelBase):
             model = model_source
         elif isinstance(model_source, str):
-            model = find_model_class(model_source)
+            model = find_model_class(model_source, whitelist=whitelist)
         else:
             raise Exception(
                 f"Type not supported for model source: {type(model_source)}"
             )
 
-        self.parser = ExpressionParser(model=model)
+        self.parser = ExpressionParser(model=model, whitelist=whitelist)
 
         if not select_source or select_source == "*":
             select_source = ", ".join(
@@ -1240,7 +1249,7 @@ class DjaqQuery:
         self.select_src = select_source
 
     def construct(self):
-        # ipdb.set_trace()
+        """Build the final SQL into parser.sql"""
 
         self.where_src = ""
         if self.condition_node:
@@ -1358,6 +1367,16 @@ class DjaqQuery:
     def go(self):
         return list(self.dicts())
 
+    @property
+    def schema(self):
+        return get_model_details(self.model, self.parser.connection)
+
+    @classmethod
+    def schema_all(cls, connection=None):
+        return get_schema(connection)
+    
+    def dataclass(self, defaults=False, base_class=None):
+        make_dataclass(self.model, defaults, base_class)
 
 # class Cursor:
 #     def __init__(self, values: Values):
