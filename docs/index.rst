@@ -12,7 +12,7 @@ look like this:
 
 .. code:: python
 
-    (b.name as title, b.publisher.name as publisher) Book b
+    DQ("Book", "name as title, publisher.name as publisher")
 
 This retrieves a list of book titles with book publisher. But you can
 formulate far more sophisticated queries, see below. You can send Djaq

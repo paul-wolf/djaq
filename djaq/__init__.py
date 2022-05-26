@@ -4,3 +4,5 @@ __license__ = "MIT"
 
 from .result import DQResult
 from .query import DjaqQuery
+from .conditions import B
+

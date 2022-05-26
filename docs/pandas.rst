@@ -6,17 +6,18 @@ that pandas is installed (``pip install pandas``):
 
 .. code:: python
 
-    In [1]: from djaq import DjangoQuery as DQ
+    In [1]: from djaq import DjaqQuery as DQ
 
-    In [2]: df = \
-    ...:   DQ("""(b.name,
-    ...:     b.price as price,
-    ...:     0.2 as discount,
-    ...:     b.price * 0.2 as discount_price,
-    ...:     b.price - (b.price*0.2) as diff,
-    ...:     Publisher.name
-    ...:   ) Book{b.price > 5} b""").dataframe()
 
+In [5]: DQ("Book",
+   ...:     """name as Booktitle,
+   ...:     price as price,
+   ...:     0.2 as discount,
+   ...:     price * 0.2 as discount_price,
+   ...:     price - (price*0.2) as diff,
+   ...:     publisher.name
+   ...:    """).where("price > 5").dataframe()
+   
     In [5]: df.head()
     Out[5]:
                                 b_name  price  discount  discount_price  diff           publisher_name

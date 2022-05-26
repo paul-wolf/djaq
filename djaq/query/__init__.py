@@ -510,12 +510,11 @@ class ExpressionParser(ast.NodeVisitor):
             return self.push_attribute_relations(attribute_list, relation)
 
         # if relation and attributes in list
-        relation = (
-            self.relations[0]
-            if len(self.relations)
-            else self.add_relation(model=self.model)
-        )
+        
         # ipdb.set_trace()
+        # if no given relation, we want the master relation
+        relation = relation if relation else self.relations[0]
+        print(f"{relation=}")
         field = relation.model._meta.get_field(attr)
 
         if isinstance(field, ManyToManyField):
@@ -534,6 +533,7 @@ class ExpressionParser(ast.NodeVisitor):
             # this means attr is a foreign key
             related_model = field.related_model
             #  we do this to check it is in the whitelist
+            # ipdb.set_trace()
             find_model_class(related_model._meta.label, whitelist=self.whitelist)
             new_relation = self.add_relation(related_model, field_name=attr)
 
@@ -1362,7 +1362,7 @@ class DjaqQuery:
         return df
 
     def qs(self):
-        return self.parser.model.objects.raw(self.sql()[0])
+        return self.parser.model.objects.raw(self.sql(), self.parser._context)
 
     def go(self):
         return list(self.dicts())

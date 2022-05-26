@@ -6,20 +6,20 @@ Boolean. You can combine various expressions using the Python boolean operators:
 
 .. code:: python
 
-     c = (B("regex(b.name, '$(name)')") & B("b.pages > '$(pages)'")) |  B("b.rating > '$(rating)'")
+     c = (B("regex(name, {name}") & B("pages > {pages}")) |  B("rating > {rating}")
 
-You then add the condition to a DjangoQuery:
+You then add the condition to a DjaqQuery:
 
 .. code:: python
 
-    DQ('my query...').conditions(c)
+    DQ("Book", "my query..."").conditions(c)
 
 If you are using variable substitution as in this example, you'll want to pass
 context data. This might be from a Django request object (though it can be from
 any dict-like object).
 
 It is a special feature that if there is a ``B()`` expression that has a
-variable like ``$(pages)`` and the context is missing a variable called
+variable like ``pages`` and the context is missing a variable called
 ``pages``, that ``B()`` expression will be dropped from the final generated SQL. 
 
 The purpose of this is to provide a filter expression that is conditional on the
@@ -31,14 +31,15 @@ it is not provided, the user does not want to search by name.
 When you write your conditional expressions, these are what would normally go
 into the filter part of the query:
 
-.. code:: text
+.. code:: python
 
-    (b.name as name, 
-    b.price as price, 
-    b.rating as rating, 
-    b.pages as pages, 
-    b.publisher.name as publisher) 
-    Book {regex(b.name, '$(name)' and b.pages > '$(pages)' and b.rating > '$(rating)' and b.price > '$(price)'} b
+    DQ("Book", """name as name, 
+    price as price, 
+    rating as rating, 
+    pages as pages, 
+    publisher.name as publisher
+    """)
+    .where("regex(name, {name} and pages > {pages} and rating > {rating} and price > {price}")
 
 In the following example, it is not required to provide data for all fields,
 name, pages, rating, price. The conditional expressions will be refactored to

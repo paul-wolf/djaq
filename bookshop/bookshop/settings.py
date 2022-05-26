@@ -31,9 +31,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "books.apps.BooksConfig",
     "django_extensions",
+    "books.apps.BooksConfig",
     "djaq.djaq_ui.apps.DjaqUiConfig",
+    # "djaq.djaq_api.apps.DjaqApiConfig",
 ]
 
 MIDDLEWARE = [
@@ -133,7 +134,8 @@ LOGGING = {
 }
 
 DJAQ_WHITELIST = {
-    "django.contrib.auth": ["User"],
+    "django.contrib.auth": ["User",],
+    "django.contrib.sessions": ["Session"],
     "books": [
         "Profile",
         "Author",

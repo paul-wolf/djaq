@@ -14,3 +14,18 @@ Pass the same whitelist you use for exposing the query endpoint:
 
    wl = {"books": []}
    print(get_schema(whitelist=wl))
+
+
+You can get the schema from the DQ object as well: 
+
+.. code:: python
+
+   DQ("Book").schema_all()
+
+
+Or a specific model:
+
+.. code:: python
+
+   DQ("Book").schema
+

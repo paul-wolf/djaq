@@ -24,7 +24,7 @@ But if you want to iterate over, say, a dictionary of variables locally, you'll 
 
 .. code:: python
 
-    dq = DQ("(b.name) Book{ilike(b.name, '$(namestart)')} b")
+    dq = DQ("Book", "name").where("ilike(name, {namestart})")
     dq.parse()
     for vars in var_list:
         results = list(dq.context(vars).tuples())

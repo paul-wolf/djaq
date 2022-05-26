@@ -21,20 +21,22 @@ def get_db_type(field, connection):
     return field.db_type(connection)
 
 
-def find_model_class(name, whitelist=None):
+def find_model_class(model_label, whitelist=None):
     """Return model class for name, like 'Book'.
-
-    if name has dots, then everything before the last segment
+    app_label is an app **label**
+    The label is the same as app name if your apps.py doesn't
+    provide a label.
+    If name has dots, then everything before the last segment
     is an app specifier
 
     """
     #  import ipdb; ipdb.set_trace()
-    if "." in name:
-        class_name = name.split(".")[-1]
-        app_name = ".".join(name.split(".")[:-1])
+    if "." in model_label:
+        class_name = model_label.split(".")[-1]
+        model_label = ".".join(model_label.split(".")[:-1])
     else:
-        class_name = name
-        app_name = None
+        class_name = model_label
+        model_label = None
 
     list_of_apps = list(apps.get_app_configs())
     for a in list_of_apps:
@@ -42,16 +44,16 @@ def find_model_class(name, whitelist=None):
         if whitelist and a.name not in whitelist:
             continue
 
-        if app_name and not app_name == a.name:
+        if model_label and not model_label == a.label:
             continue
         for model_name, model_class in a.models.items():
-            if whitelist and a.name in whitelist:
-                if whitelist[a.name] and model_class.__name__ not in whitelist[a.name]:
+            if whitelist and a.label in whitelist:
+                if whitelist[a.label] and model_class.__name__ not in whitelist[a.label]:
                     continue
             if class_name == model_class.__name__:
                 return model_class
 
-    raise ModelNotFoundException(f"Could not find model: {name}")
+    raise ModelNotFoundException(f"Could not find model label: {model_label}")
 
 
 def get_model_from_table(table_name):

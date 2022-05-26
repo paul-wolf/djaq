@@ -183,7 +183,7 @@ class TestDjaqQuery(TestCase):
     def test_sql(self):
         v = DQ(Book, "id, name")
         v = v.where("id in {ids}")
-        print(v.sql())
+        # print(v.sql())
 
     def test_complex2(self):
         discount = 0.2
@@ -214,11 +214,24 @@ class TestDjaqQuery(TestCase):
             break
         DQ(Book).get(id)
         
+    def test_attribute_nesting(self):
+        assert list(DQ("Book", "publisher.owner.name").dicts())
         
-    # test page size, offset, limit
     
+    def test_limit(self):
+        #  we have 10 books
+        assert len(list(DQ("Book").offset(0).limit(4).dicts())) == 4
+
+    def test_offset(self):
+        #  we have 10 books
+        assert len(list(DQ("Book").offset(7).dicts())) == 3
+        
+        
     # test qs()
-    
+    def test_queryset(self):
+        assert len(DQ("Book").qs()) == 10
+        
+        
     # test date operations like comparison
-    
+    DQ("Book", "pubdate").where("pubdate > '2021-01-01'").go()
     

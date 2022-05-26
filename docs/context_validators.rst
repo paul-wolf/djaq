@@ -15,14 +15,14 @@ When we execute the resulting SQL query, named parameters are used. You
 .. code:: python
 
    oldest = '2000-01-01'
-   DQ("(b.id) Book{b.pub_date >= '$(oldest)'} b").context({"oldest": oldest}).tuples()
+   DQ("Book", "id").where("pub_date >= '{oldest}").context({"oldest": oldest}).tuples()
 
 Notice that any parameterised value must be represented in the query
-expression in single quotes:
+expression in curly braces. Note as well, this is not an f-string!
 
 ::
 
-   '$(myparam)'
+   {myparam}
 
 Therefore, when you add subqueries, their parameters have to be supplied
 at the same time.
@@ -32,13 +32,13 @@ Note what is happening here:
 ::
 
    name_search = 'Bar.*'
-   DQ("(b.id) Book{regex(b.name, '%(name_search)')} b").context(locals()).tuples()
+   DQ("Book", "id").where("regex(b.name, {name_search}").context(locals()).tuples()
 
 To get all books starting with ‘Bar’. Or:
 
 .. code:: python
 
-   DQ("(b.name) Book{like(upper(b.name), upper('$(name_search)'))} b").context(request.POST)
+   DQ("Book", "name").where("like(upper(name), upper({name_search})").context(request.POST)
 
 Provided that ``request.POST`` has a ``name_search`` key/value.
 
@@ -66,7 +66,7 @@ Then add the validator:
 .. code:: python
 
     order_no = "12345"
-    DQ("(o.order_no, o.customer) Orders{o.order_no == '%(order_no)')} b")
+    DQ("Orders", "order_no, customer").where("order_no == {order_no}")
         .validator(MyContextValidator)
         .context(locals())
         .tuples()

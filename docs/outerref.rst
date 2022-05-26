@@ -10,8 +10,8 @@ The following do pretty much the same thing:
    Book.objects.filter(publisher__in=Subquery(pubs))
 
    # Djaq
-   DQ("(p.id) Publisher p", name='pubs')
-   DQ("(b.name) Book{publisher in '@pubs'} b")
+   DQ("Publisher", "id", name='pubs')
+   DQ("Book", "book.name").where("publisher in '@pubs'")
 
 Obviously, in both cases, you would be filtering Publisher to make it
 actually useful, but the effect and verbosity can be extrapolated from

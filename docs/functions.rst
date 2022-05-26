@@ -19,14 +19,14 @@ Now find all book names starting with ‘B’:
 
 .. code:: python
 
-   DQ("(b.name) Book{regex(b.name, 'B.*')} b")
+   DQ("Book", "name").where("regex(b.name, 'B.*'")
 
 We always want to use upper case for the function name when defining the
 function. Usage of a function is then case-insensitive. You may wish to
 make sure you are not over-writing existing functions. “REGEX” already
 exists, for instance.
 
-You can also provide a ``callable`` to ``DjangoQuery.functions``. The
+You can also provide a ``callable`` to ``DjaqQuery.functions``. The
 callable needs to take two arguments: the function name and a list of
 positional parameters and it must return SQL as a string that can either
 represent a column expression or some value expression from the
@@ -36,12 +36,12 @@ In the following:
 
 .. code:: python
 
-   DQ("(b.name) Book{like(upper(b.name), upper('$(name_search)'))} b")
+   DQ("Book", "name").where("like(upper(name), upper({name_search})")
 
 ``like()`` is a Djaq-defined function that is converted to
 ``field LIKE string``. Whereas ``upper()`` is sent to the underlying
 database because it’s a common SQL function. Any function can be created
-or existing functions mutated by updating the ``DjangoQuery.functions``
+or existing functions mutated by updating the ``DjaqQuery.functions``
 dict where the key is the upper case function name and the value is a
 template string with ``{}`` placeholders. Arguments are positionally
 interpolated.
@@ -50,10 +50,11 @@ Above, we provided this example:
 
 .. code:: python
 
-   DQ("""(
-      sum(iif(b.rating < 5, b.rating, 0)) as below_5,
-      sum(iif(b.rating >= 5, b.rating, 0)) as above_5
-   ) Book b""")
+   DQ("Book", """
+      sum(iif(rating < 5, rating, 0)) as below_5,
+      sum(iif(rating >= 5, rating, 0)) as above_5
+      """)
+   
 
 We can simplify further by creating a new function. The IIF function is
 defined like this:
@@ -66,16 +67,16 @@ We can create a ``SUMIF`` function like this:
 
 .. code:: python
 
-   DjangoQuery.functions['SUMIF'] = "SUM(CASE WHEN {} THEN {} ELSE {} END)"
+   DjaqQuery.functions['SUMIF'] = "SUM(CASE WHEN {} THEN {} ELSE {} END)"
 
 Now we can rewrite the above like this:
 
 .. code:: python
 
-   DQ("""(
-       sumif(b.rating < 5, b.rating, 0) as below_5,
-       sumif(b.rating >= 5, b.rating, 0) as above_5
-       ) Book b""")
+   DQ("Book", """
+       sumif(rating < 5, rating, 0) as below_5,
+       sumif(rating >= 5, rating, 0) as above_5
+       """)
 
 Here’s an example providing a function:
 
@@ -85,4 +86,4 @@ Here’s an example providing a function:
        """Return args spliced by sql concat operator."""
        return " || ".join(args)
 
-   DjangoQuery.functions['CONCAT'] = concat
+   DjaqQuery.functions['CONCAT'] = concat

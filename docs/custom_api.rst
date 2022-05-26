@@ -9,7 +9,9 @@ for your data layer might look like with Djaq:
     @login_required
     def djaq_view(request):
         data = json.loads(request.body.decode("utf-8"))
-        query_string = data.get("q")
+        query_string = data.get("model")
+        query_string = data.get("where")
+        query_string = data.get("order_by")
         offset = int(data.get("offset", 0))
         limit = int(data.get("limit", 0))
         context = data.get("context", {})

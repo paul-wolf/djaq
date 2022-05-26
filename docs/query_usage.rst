@@ -45,20 +45,21 @@ and publisher name wherever the price is over 50.
 .. code:: python
 
    result = \
-     list(DQ("""(b.name,
-       b.price as price,
+     list(DQ("Book", """name,
+       price as price,
        0.2 as discount,
-       b.price * 0.2 as discount_price,
-       b.price - (b.price*0.2) as diff,
-       Publisher.name
-     ) Book{b.price > 50} b""").dicts())
+       price * 0.2 as discount_price,
+       price - (price*0.2) as diff,
+       publisher.name
+       """
+     ).where("price > 5").dicts())
 
 ``result`` now contains a list of dicts each of which is a row in the
 result set. One example:
 
 .. code:: python
 
-   [{'b_name': 'Address such conference.',
+   [{'name': 'Address such conference.',
      'price': Decimal('99.01'),
      'discount': Decimal('0.2'),
      'discount_price': Decimal('19.802'),
@@ -69,26 +70,15 @@ Here is the structure of the syntax:
 
 .. code:: shell
 
-   (<field_exp1>, ...) <ModelName>{<filter_expression>} <alias> order by (<field_exp1>, ...)
+   DjaqQuery([model_name|model], [<field_exp1>, ...])
+   .where(<field_exp1>, ...)
+   .order_by(<field_exp1>, ...)
 
 Whitespace does not matter too much. You could put things on separate
-lines:
+lines.
 
-.. code:: shell
 
-   (
-      b.name, b.price,
-      Publisher.name
-   )
-   Book{p.price > 50} b
-
-Always start with column expressions you want to return in parens:
-
-.. code:: shell
-
-   (b.name, b.price, Publisher.name)
-
-These expressions can be Django Model fields or arithmetic expressions
+The column expressions can be Django Model fields or arithmetic expressions
 or any expression supported by functions of your underlying database
 that are also whitelisted by Djaq. Postgresql has thousands of
 functions. About 350 of those are available in Djaq.
@@ -98,90 +88,44 @@ name:
 
 .. code:: shell
 
-   (b.name as title, b.price as price, Publisher.name as publisher)
-
-Next is the model alias declaration:
-
-.. code:: shell
-
-   Book b
+   name as title, price as price, publisher.name as publisher
 
 or if we want to filter and get only books over 50 in price:
 
 .. code:: shell
 
-   Book{b.price > 50} b
+   price > 50
 
-``Book`` is the Django Model name. ``b`` is an alias we can use as an
-abbreviation in the filter or returned column expressions. We put the
-filter in curly braces, ``{}``, between the model name and alias. Use
-Python syntax to express the filter. Also use Python syntax to express
-the data to return. You don’t have access to the Python Standard
-Library. This is basically the intersection of SQL and Python:
 
 The following filter:
 
 ::
 
-   {b.price > 50 and ilike(Publisher.name, 'A%')}
+   price > 50 and ilike(publisher.name, 'A%')
 
 will be translated to SQL:
 
 ::
 
-   b.price > 50 AND publisher.name ILIKE 'A%'
+   Book.price > 50 AND Publisher.name ILIKE 'A%'
 
 The expressions are fully parsed so they are not subject to SQL
 injection. Trying to do so will cause an exception.
-
-You might notice in the above examples, Publisher does not use an alias.
-If you wanted an alias for Publisher, you could use a more complicated
-syntax:
-
-.. code:: shell
-
-   (b.name, b.price) Book b
-   -> (p.name) Publisher.name p
-
-Notice, we use the ``->`` symbol to add another aliased relationship.
-This is one of three options: ``->``, ``<-``, ``<>`` that indicate you
-want to explicitly join via an SQL LEFT, RIGHT or INNER join
-respectively. But you don’t need to do this. LEFT joins will always be
-implicit. We did not even need to refer to the Publisher model directly.
-We could have done this:
-
-::
-
-   (b.name, b.price, b.publisher.name as publisher)
-   Book{p.price > 50} b
 
 Our example model also has an owner model called “Consortium” that is
 the owner of the publisher:
 
 .. code:: python
 
-   In [16]: print(list(DQ("(b.name, b.price, b.publisher.name, b.publisher.owner.name) Book b").limit(1).dicts()))
-   Out[16]: [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'b_publisher_name': 'Wright, Taylor and Fitzpatrick', 'b_publisher_owner_name': 'Publishers Group'}]
+   print(list(DQ("Book", "name, price, publisher.name, publisher.owner.name").limit(1).dicts()))
+   [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'b_publisher_name': 'Wright, Taylor and Fitzpatrick', 'b_publisher_owner_name': 'Publishers Group'}]
 
-To recap, there are three alternative patterns to follow to get the
-publisher name in the result set:
-
-.. code:: python
-
-   In [13]: print(list(DQ("(b.name, b.price) Book b -> (p.name)Publisher p").limit(1).dicts()))
-
-   In [14]: print(list(DQ("(b.name, b.price, Publisher.name) Book b").limit(1).dicts()))
-
-   In [15]: print(list(DQ("(b.name, b.price, b.publisher.name) Book b").limit(1).dicts()))
-
-Note that the above will each produce slightly different auto-generated
-output names unless you provide your own aliases.
 
 Signal that you want to summarise results using an aggregate function:
 
 .. code:: python
 
-   list(DQ("(b.publisher.name as publisher, count(b.id) as book_count) Book b").dicts())
+   list(DQ("Book", "publisher.name as publisher, count(id) as book_count").dicts())
 
    [
        {
@@ -197,19 +141,17 @@ Signal that you want to summarise results using an aggregate function:
 
 Order by name:
 
-::
+.. code:: python
 
-   (b.name, b.price, b.publisher.name as publisher)
-   Book{p.price > 50} b
-   order by (b.name)
-
-The parentheses around the order by expression are required.
+    DQ("Book", "name, price, publisher.name as publisher")
+    .where("price > 5)
+    .order_by("name")
 
 Get average, minimum and maximum prices:
 
 .. code:: python
 
-   list(DQ("(avg(b.price) as average, min(b.price) as minimum, max(b.price) as maximum) Book b").dicts())
+   list(DQ("Book", "avg(price) as average, min(price) as minimum, max(price) as maximum").dicts())
    [
       {
          "average": "18.5287169247794985",
@@ -222,29 +164,25 @@ Count all books:
 
 .. code:: python
 
-   list(DQ("(count(b.id)) Book b").dicts())
+   DQ("Book", "count(id)").value()
 
-   [
-       {
-           "countb_id": 149999
-       }
-   ]
+   1000
 
 You can qualify model names with the app name or registered app path:
 
-::
+.. code:: python
 
-   (b.name, b.publisher.name) books.Book b
+   DQ("books.Book", "name, publisher.name")
 
 You’ll need this if you have models from different apps with the same
 name.
 
-To pass parameters, use variables in your query, like ``'$(myvar)'``:
+To pass parameters, use variables in your query, like ``{myvar}``:
 
 .. code:: python 
 
    In [30]: oldest = '2018-12-20'
-       ...: list(DQ("(b.name, b.pubdate) Book{b.pubdate >= '$(oldest)'} b").context({"oldest": oldest}).limit(5).tuples())
+       ...: list(DQ("Book", "name, pubdate").where("pubdate >= {oldest}").context({"oldest": oldest}).limit(5).tuples())
    Out[30]:
    [('Available exactly blood.', datetime.date(2018, 12, 20)),
     ('Indicate Congress none always.', datetime.date(2018, 12, 24)),
@@ -252,4 +190,4 @@ To pass parameters, use variables in your query, like ``'$(myvar)'``:
     ('Oil onto mission.', datetime.date(2018, 12, 21)),
     ('Key same effect me.', datetime.date(2018, 12, 23))]
 
-Notice that the variable holder, ``$()``, *must* be in single quotes.
+Notice that variables are not f-string placeholders.

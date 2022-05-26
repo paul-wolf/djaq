@@ -21,9 +21,9 @@ Now you can call the Djaq API:
 
 .. code:: python
 
-    from djaq.query import DjangoQuery as DQ
+    from djaq import DjaqQuery as DQ
 
-    print(list(DQ("(b.name as title, b.publisher.name as publisher) Book b").dicts()))
+    print(list(DQ("Book", "name as title, publisher.name as publisher").dicts()))
 
     [{'title': 'Name grow along.', 'publisher': 'Long, Lewis and Wright'}, {'title': 'We pay single record.', 'publisher':\
     'Long, Lewis and Wright'}, {'title': 'Natural develop available manager.', 'publisher': 'Long, Lewis and Wright'}, {'\
@@ -80,8 +80,10 @@ api endpoint:
     {
         "queries": [
             {
-                "q": "(b.id,b.name,b.pages,b.price,b.rating,b.publisher,b.alt_publisher,b.pubdate,b.in_print,) books.Book b",
-                "context": {},
+                "model": "books.Book",
+                "output": "id,\nname,\npages,\nprice,\nrating,\npublisher,\nalt_publisher,\npubdate,\nin_print,\n",
+                "where": "",
+                "order_by": "",
                 "limit": "100",
                 "offset": "0"
             }
@@ -97,8 +99,10 @@ You can also create objects, update them and delete them:
     {
         "queries": [
             {
-                "q": "(b.id,b.name,b.pages,b.price,b.rating,b.publisher,b.alt_publisher,b.pubdate,b.in_print,) books.Book b",
-                "context": {},
+                "model": "books.Book",
+                "output": "id,\nname,\npages,\nprice,\nrating,\npublisher,\nalt_publisher,\npubdate,\nin_print,\n",
+                "where": "",
+                "order_by": "",
                 "limit": "100",
                 "offset": "0"
             }

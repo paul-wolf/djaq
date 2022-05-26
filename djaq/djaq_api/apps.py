@@ -1,5 +1,7 @@
 from django.apps import AppConfig
 
 
-class ApiConfig(AppConfig):
+class DjaqApiConfig(AppConfig):
     name = "api"
+    label = "djaq_api"
+

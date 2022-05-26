@@ -116,10 +116,10 @@ view function using a conditional expression like the following:
 .. code:: python
 
    c = (
-      B("regex(b.name, '$(name)')")
-      & B("b.pages > '$(pages)'")
-      & B("b.rating > '$(rating)'")
-      & B("b.price > '$(price)'")
+      B("regex(name, '$(name)')")
+      & B("pages > '$(pages)'")
+      & B("rating > '$(rating)'")
+      & B("price > '$(price)'")
    )
 
 to search for books based on the form input. 

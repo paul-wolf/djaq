@@ -6,6 +6,5 @@ same thing:
 
 ::
 
-   DQ("(Book.id)").count()
-
-   DQ("(count(Book.id)) Book").value()
+   DQ("Book").count()
+   DQ("Book", "count(id)").value()

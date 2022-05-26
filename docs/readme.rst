@@ -12,7 +12,7 @@ look like this:
 
 .. code:: shell
 
-   (b.name as title, b.publisher.name as publisher) Book b
+   DQ("Book", "name as title, publisher.name as publisher").go()
 
 This retrieves a list of book titles with book publisher. But you can
 formulate far more sophisticated queries, see below. You can send Djaq
@@ -95,7 +95,7 @@ Use:
 
    from djaq.query import DjangoQuery as DQ
 
-   print(list(DQ("(b.name as title, b.publisher.name as publisher) Book b").dicts()))
+   print(list(DQ("Book", "name as title, publisher.name as publisher").dicts()))
 
    [{'title': 'Name grow along.', 'publisher': 'Long, Lewis and Wright'}, {'title': 'We pay single record.', 'publisher': 'Long, Lewis and Wright'}, {'title': 'Natural develop available manager.', 'publisher': 'Long, Lewis and Wright'}, {'title': 'Fight task international.', 'publisher': 'Long, Lewis and Wright'}, {'title': 'Discover floor phone.', 'publisher': 'Long, Lewis and Wright'}]
 
@@ -378,7 +378,7 @@ you’ll want to parse once:
 
 .. code:: python
 
-   dq = DQ("(b.name) Book{ilike(b.name, '$(namestart)')} b")
+   dq = DQ("Book", "name").where("ilike(b.name, {namestart}")
    dq.parse()
    for vars in var_list:
        results = list(dq.context(vars).tuples())
@@ -426,20 +426,20 @@ and publisher name wherever the price is over 50.
 .. code:: python
 
    result = \
-     list(DQ("""(b.name,
-       b.price as price,
+     list(DQ("Book", """(name,
+       price as price,
        0.2 as discount,
-       b.price * 0.2 as discount_price,
-       b.price - (b.price*0.2) as diff,
-       Publisher.name
-     ) Book{b.price > 50} b""").dicts())
+       price * 0.2 as discount_price,
+       price - (price*0.2) as diff,
+       publisher.name
+     """).where("b.price > 5").dicts())
 
 ``result`` now contains a list of dicts each of which is a row in the
 result set. One example:
 
 .. code:: python
 
-   [{'b_name': 'Address such conference.',
+   [{'name': 'Address such conference.',
      'price': Decimal('99.01'),
      'discount': Decimal('0.2'),
      'discount_price': Decimal('19.802'),

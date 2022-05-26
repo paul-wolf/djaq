@@ -28,9 +28,12 @@ data you want to the client. And it is blazing fast.
 Djaq queries are strings. A query string for our example dataset might
 look like this:
 
-.. code:: shell
+.. code:: python
 
-   (b.name as title, b.publisher.name as publisher) Book b
+   from djaq import DjaqQuery as DQ
+
+   DQ("Book", "name as title, b.publisher.name as publisher").dicts()
+
 
 This retrieves a list of book titles with book publisher. But you can
 formulate far more sophisticated queries, see below. You can send Djaq
@@ -60,8 +63,7 @@ Djaq is a good fit if you want:
 
 Djaq sits on top of the Django ORM. It can happily be used alongside
 QuerySets and sometimes calling a Djaq query even locally might be
-preferable to constructing a Queryset, although Djaq is not a direct
-replacement for QuerySets. You can even combine Djaq queries and
+preferable to constructing a Queryset. You can even combine Djaq queries and
 Querysets.
 
 Features you might appreciate:
