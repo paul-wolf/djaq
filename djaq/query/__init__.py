@@ -466,6 +466,17 @@ class ExpressionParser(ast.NodeVisitor):
                     break
         return relation
 
+    def field_specific_attribute(self, field, relation, attribute_list):
+        """
+        Return the column expression.
+        
+        """
+        attr = attribute_list.pop()
+        if field.get_internal_type() == "DateField":
+            return f'date_part(\'{attr}\', "{relation.model._meta.db_table}"."{field.column}")'
+        elif field.get_internal_type() == "DateTimeField":
+            return f'date_part(\'{attr}\', "{relation.model._meta.db_table}"."{field.column}")'
+
     def push_attribute_relations(self, attribute_list, relation=None):
         """Return field to represent in context expression.
 
@@ -530,12 +541,19 @@ class ExpressionParser(ast.NodeVisitor):
             a = f'"{field.related_model._meta.db_table}"."{related_field.column}"'
             return a
         else:
+            # is_relation
             # this means attr is a foreign key
             related_model = field.related_model
             #  we do this to check it is in the whitelist
-            # ipdb.set_trace()
-            find_model_class(related_model._meta.label, whitelist=self.whitelist)
-            new_relation = self.add_relation(related_model, field_name=attr)
+            # 
+            if related_model:
+                find_model_class(related_model._meta.label, whitelist=self.whitelist)
+                new_relation = self.add_relation(related_model, field_name=attr)
+            else:
+                # probably an attribute of the field
+                # example: spend_date.year
+                # ipdb.set_trace()
+                return self.field_specific_attribute(field, relation, attribute_list)
 
         return self.push_attribute_relations(attribute_list, new_relation)
 

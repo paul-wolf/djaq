@@ -23,19 +23,20 @@
         <div class="blockheader">
             <a href=".">Djaq</a>
             <a href="https://djaq.readthedocs.io/" style="font-size: 80%"> (documentation)</a>
-            <div style="float:right">
-                <a class="delete is-medium" href="javascript:void(0);" onclick="$('#query').val('');">clear</a>
-            </div>
-        </div>
+                {% comment %} <div style="float:right">
+                    <a class="delete is-medium" href="javascript:void(0);" onclick="$('#query').val('');">clear</a>
+                    {% endcomment %}
+        </div> 
+        
         <label for="model">Model name</label>
-        <input id="model" placeholder="model name" />
+        <input id="model" placeholder="model name" class="input" />
         <textarea
             placeholder="Fields for output"
             id="output"
             class="textarea"
             style="width:100%;height:20%;"
         ></textarea>
-        <span class="hint">Comma separated list of fields. Leave blank for all.</span>
+        <span class="hint">Comma separated list of field expressions. Leave blank for all.</span>
         <textarea
             placeholder="Filter expression"
             id="where"
@@ -49,7 +50,7 @@
             class="textarea"
             style="width:100%;height:20%;"
         ></textarea>
-        <span class="hint">Comma separated list of fields to sort by or leave blank. Use minue, '-', to sort descending.</span>
+        <span class="hint">Comma separated list of field expressions to sort by or leave blank. Use minus, '-', to sort descending.</span>
     </div>
     <div class="myblock">
         <div class="blockheader">
