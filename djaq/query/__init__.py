@@ -525,7 +525,7 @@ class ExpressionParser(ast.NodeVisitor):
         # ipdb.set_trace()
         # if no given relation, we want the master relation
         relation = relation if relation else self.relations[0]
-        print(f"{relation=}")
+        # print(f"{relation=}")
         field = relation.model._meta.get_field(attr)
 
         if isinstance(field, ManyToManyField):

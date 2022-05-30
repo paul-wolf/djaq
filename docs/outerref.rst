@@ -11,7 +11,7 @@ The following do pretty much the same thing:
 
    # Djaq
    DQ("Publisher", "id", name='pubs')
-   DQ("Book", "book.name").where("publisher in '@pubs'")
+   DQ("Book", "name").where("publisher in '@pubs'")
 
 Obviously, in both cases, you would be filtering Publisher to make it
 actually useful, but the effect and verbosity can be extrapolated from
@@ -22,7 +22,7 @@ reference the outer scope:
 
 .. code:: python
 
-   DQ('(p.name, ["(count(b.id)) Book{Publisher.id == b.publisher} b"]) Publisher p')
+   DQ('(p.name, ["(count(id)) Book{Publisher.id == b.publisher} b"]) Publisher p')
 
 the subquery output expression references the outer scope. It evaluates
 to the following SQL:

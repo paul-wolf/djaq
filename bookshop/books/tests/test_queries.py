@@ -235,3 +235,4 @@ class TestDjaqQuery(TestCase):
     # test date operations like comparison
     DQ("Book", "pubdate").where("pubdate > '2021-01-01'").go()
     
+    # test year, month, day on date fields
