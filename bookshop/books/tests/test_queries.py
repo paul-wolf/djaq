@@ -1,4 +1,7 @@
+import dataclasses
 import json
+from dataclasses import dataclass
+from datetime import datetime
 import random
 from decimal import Decimal
 import unittest
@@ -22,7 +25,18 @@ USERNAME = "artemis"
 PASSWORD = "blah"
 EMAIL = "artemis@blah.com"
 
-
+@dataclass
+class BookEntity:
+    id: int
+    name: str
+    pages: int
+    price: Decimal
+    rating: int
+    publisher: int
+    alt_publisher: int
+    pubdate: datetime.date
+    in_print: bool
+    
 class TestDjaqQuery(TestCase):
     def setUp(self):
 
@@ -158,7 +172,7 @@ class TestDjaqQuery(TestCase):
         sum(iif(rating > 3, rating, 0)) as above_3)
         """
         )
-        list(v.tuples())
+        assert list(v.tuples())
 
     @unittest.skip("debug sub queries")
     def test_subquery_2(self):
@@ -233,6 +247,46 @@ class TestDjaqQuery(TestCase):
         
         
     # test date operations like comparison
-    DQ("Book", "pubdate").where("pubdate > '2021-01-01'").go()
+    def test_date_operation(self):
+        DQ("Book", "pubdate").where("pubdate > '2021-01-01'").go()
     
-    # test year, month, day on date fields
+    def test_map_dataclass(self):
+        for b in DQ("Book").map(BookEntity):
+            assert dataclasses.is_dataclass(b)
+            break
+        
+    def test_map_function(self):
+        def some_function(data):
+            return data['name']
+        for b in DQ("Book").map(some_function):
+            assert isinstance(b, str)
+            break
+            
+        
+    def test_date_attributes(self):
+        
+        for data in DQ("Book", "pubdate").where("pubdate.year < 2022 and pubdate.year > 2020").go():
+            assert data["pubdate"].year < 2022 and data["pubdate"].year > 2020 
+
+        for data in DQ("Book", "pubdate").where("pubdate.month == 10").go():
+            assert data["pubdate"].month == 10 
+    
+        for data in DQ("Book", "pubdate").where("pubdate.day == 2").go():
+            assert data["pubdate"].day == 2 
+    
+    def test_update_object(self):
+        # something likely to be unique
+        NEW_TITLE = "my new title0854836274"
+        
+        def my_update_function(book, data, save=True):
+            book.name = NEW_TITLE
+            if save:
+                book.save()
+            return book
+        
+        for book in DQ("Book").objs():
+            DQ("Book").update_object(book.id, my_update_function, dict())
+            break
+        
+        books = DQ("Book").where("name == {title}").context({"title": NEW_TITLE}).go()
+        assert books[0]["name"] == NEW_TITLE

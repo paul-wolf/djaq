@@ -1,4 +1,5 @@
 from typing import Dict, Optional, Union, List
+import dataclasses
 import csv
 import io
 import json
@@ -7,7 +8,7 @@ import ast
 from ast import AST, iter_fields
 import logging
 import functools
-
+import dataclasses
 from django.db import connections, models
 from django.db.models.query import QuerySet
 
@@ -27,6 +28,7 @@ from ..app_utils import (
     get_model_from_table,
     get_field_from_model,
     make_dataclass,
+    dataclass_mapper,
 )
 from ..functions import function_whitelist
 from djaq.exceptions import UnknownFunctionException
@@ -38,15 +40,48 @@ import ipdb
 
 logger = logging.getLogger(__name__)
 
-
-# PLACEHOLDER_PATTERN = re.compile(r"\'\$\(([\w]*)\)\'")
 PLACEHOLDER_PATTERN = re.compile(r"\{([\w]*)\}")
-
 
 @functools.lru_cache()
 def func_in_whitelist(funcname):
     return funcname.lower() in function_whitelist
 
+def concat(funcname, args):
+    """Return args spliced by sql concat operator."""
+    return " || ".join(args)
+
+def cast(funcname, args):
+    t = args[1].replace("'", "").replace("'", "")
+    r = f"{args[0]}::{t}"
+    return r
+
+
+def index_choice0(funcname, args):
+    """
+    index_choice(status, "live", "not-live", "decommissioned")
+    """
+
+    index = args.pop(0)
+    s = f"CASE {index} "
+    for i, a in enumerate(args):
+        s += f"WHEN {i} THEN {a} "
+    s += "END"
+    return s
+
+djaq_functions = {
+        "IIF": "CASE WHEN {} THEN {} ELSE {} END",
+        "LIKE": "{} LIKE {}",
+        "ILIKE": "{} ILIKE {}",
+        "CONTAINS": "{} ILIKE %{}%",
+        "REGEX": "{} ~ {}",
+        "CONCAT": concat,
+        "TODAY": "CURRENT_DATE",
+        "CAST": cast,
+        "POINTX": "ST_X({})",
+        "POINTY": "ST_Y({})",
+        "INDEX_CHOICE0": index_choice0,
+        "COUNTDISTINCT": "COUNT(DISTINCT {})",
+    }
 
 def has_context(expression: str, context: dict):
     """We check if the varname
@@ -137,28 +172,7 @@ class ContextValidator(object):
         return d
 
 
-def concat(funcname, args):
-    """Return args spliced by sql concat operator."""
-    return " || ".join(args)
 
-
-def cast(funcname, args):
-    t = args[1].replace("'", "").replace("'", "")
-    r = f"{args[0]}::{t}"
-    return r
-
-
-def index_choice0(funcname, args):
-    """
-    index_choice(status, "live", "not-live", "decommissioned")
-    """
-
-    index = args.pop(0)
-    s = f"CASE {index} "
-    for i, a in enumerate(args):
-        s += f"WHEN {i} THEN {a} "
-    s += "END"
-    return s
 
 
 class JoinRelation(object):
@@ -277,20 +291,6 @@ class ExpressionParser(ast.NodeVisitor):
     # keep a record of named instances
 
     directory = {}
-    functions = {
-        "IIF": "CASE WHEN {} THEN {} ELSE {} END",
-        "LIKE": "{} LIKE {}",
-        "ILIKE": "{} ILIKE {}",
-        "CONTAINS": "{} ILIKE %{}%",
-        "REGEX": "{} ~ {}",
-        "CONCAT": concat,
-        "TODAY": "CURRENT_DATE",
-        "CAST": cast,
-        "POINTX": "ST_X({})",
-        "POINTY": "ST_Y({})",
-        "INDEX_CHOICE0": index_choice0,
-        "COUNTDISTINCT": "COUNT(DISTINCT {})",
-    }
 
     aggregate_functions = {
         "unknown": ["avg", "count", "max", "min", "sum"],
@@ -511,14 +511,6 @@ class ExpressionParser(ast.NodeVisitor):
             field = model._meta.get_field(attr)
             a = f'"{model._meta.db_table}"."{field.column}"'
             return a
-        elif False and not relation and len(attribute_list):
-            # this happens when we have something like 'Book.name'
-            # therefore attr must be a model name or alias
-            relation = self.find_relation_from_alias(attr)
-            if not relation:
-                model = find_model_class(attr, whitelist=self.whitelist)
-                relation = self.add_relation(model=model)
-            return self.push_attribute_relations(attribute_list, relation)
 
         # if relation and attributes in list
         
@@ -679,7 +671,7 @@ class ExpressionParser(ast.NodeVisitor):
                 sql, sql_params = self.queryset_source(obj)
                 sql = self.mogrify(sql, sql_params)
             else:
-                raise Exception("Name not found: {}".format(name))
+                raise Exception(f"Name not found: {name}")
 
             self.emit(f"({sql})")
             return
@@ -712,9 +704,10 @@ class ExpressionParser(ast.NodeVisitor):
         fcall = self.fstack.pop()
         funcname = fcall["funcname"].upper()
 
-        if funcname in self.__class__.functions:
+        # if funcname in self.__class__.functions:
+        if funcname in djaq_functions:
             # Fill our custom SQL template with arguments
-            t = self.__class__.functions[funcname]
+            t = djaq_functions[funcname]
             if isinstance(t, str):
                 self.emit(t.format(*fcall["args"]))
             elif callable(t):
@@ -1307,6 +1300,10 @@ class DjaqQuery:
         """Return a single model instance whose primary key is pk_value."""
         return self.model.objects.get(pk=pk_value)
 
+    def update_object(self, pk_value: any, update_function: callable, data: Dict, save=True):
+        obj = self.get(pk_value)
+        return update_function(obj, data, save)
+        
     def distinct(self):
         self.parser.distinct = True
         return self
@@ -1343,10 +1340,10 @@ class DjaqQuery:
         self.parser._offset = offset
         return self
 
-    def context(self, context):
+    def context(self, context: Dict):
         """Update our context with dict context."""
         if not self.parser._context:
-            self.parser._context = {}
+            self.parser._context = dict()
         if context:
             self.parser.cursor = None  # cause the query to be re-evaluated
             self.parser._context.update(context)
@@ -1384,6 +1381,24 @@ class DjaqQuery:
 
     def go(self):
         return list(self.dicts())
+    
+    def map(self, result_type: Union[callable, dataclasses.dataclass], data=None):
+        """Either map to dataclass or call function to produce result.
+        if result_type is a function, the function will receive a dict as a single parameter.
+        """
+        self.construct()
+        if not self.parser.cursor:
+            self.parser.execute(data)
+        while True:
+            row = self.parser.cursor.fetchone()
+            if row is None:
+                break
+            row_dict = dict(zip(self.parser.column_headers, row))
+            if dataclasses.is_dataclass(result_type):
+                yield dataclass_mapper(result_type, row_dict)
+            elif callable(result_type):
+                yield result_type(row_dict)
+        
 
     @property
     def schema(self):
@@ -1395,6 +1410,18 @@ class DjaqQuery:
     
     def dataclass(self, defaults=False, base_class=None):
         make_dataclass(self.model, defaults, base_class)
+
+    def __iter__(self):
+        return self.dicts()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            pass
+        else:
+            pass
 
 # class Cursor:
 #     def __init__(self, values: Values):

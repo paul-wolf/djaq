@@ -220,3 +220,13 @@ def make_dataclass(model, defaults=False, base_class=None):
         print(f"    {f.name}: {map_type(f)}")
     print("")
 
+def dataclass_mapper(klass, result_dict):
+    """Create an instance of dataclass klass with data from result_dict."""
+    data = dict()
+    klass_keys = klass.__annotations__.keys()
+    for key in result_dict.keys():
+        if key in klass_keys:
+            data[key] = result_dict[key]
+    return klass(**data)
+
+        

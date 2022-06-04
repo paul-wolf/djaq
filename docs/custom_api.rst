@@ -9,15 +9,17 @@ for your data layer might look like with Djaq:
     @login_required
     def djaq_view(request):
         data = json.loads(request.body.decode("utf-8"))
-        query_string = data.get("model")
-        query_string = data.get("where")
-        query_string = data.get("order_by")
-        offset = int(data.get("offset", 0))
-        limit = int(data.get("limit", 0))
-        context = data.get("context", {})
+        model_name = data.get("model")
+        output_expressions = data.get("where")
+        order_by = data.get("order_by")
+        offset = int(data.get("offset", 0) or 0)
+        limit = int(data.get("limit", 0) or 0)
+        context = data.get("context", dict() or dict())
         return JsonResponse({
             "result": list(
-                DQ(query_string)
+                DQ(model_name, output_expressions)
+                .where(where)
+                .order_by(order_by)
                 .context(context)
                 .limit(limit)
                 .offset(offset)
@@ -46,7 +48,7 @@ For controlling access to models, use the whitelist parameter in constructing th
 
 .. code:: python
 
-    DQ(query_string, whitelist={"books": ["Book", "Publisher",],})
+    DQ(model_name, column_expressions, whitelist={"books": ["Book", "Publisher",],})
         .context(context)
         .limit(limit)
         .offset(offset)

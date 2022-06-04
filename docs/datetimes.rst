@@ -12,5 +12,10 @@ Get the difference between two dates:
 
 .. code:: python
 
-    now = timezone.now()
-    DQ("Book", "pubdate").where("{now}, pubdate").context({"now": now}).go()
+    DQ("Book", "pubdate, age({now}, pubdate) as age").context({"now": timezone.now()}).go()
+
+You can access fields of a date, like ``year``, ``month``, ``day``:
+
+.. code:: python
+
+    DQ("Book", "name, publisher.name, pubdate.year").where("pubdate.year < 2022").go()

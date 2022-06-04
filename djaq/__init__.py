@@ -3,6 +3,6 @@ __author__ = "Paul Wolf"
 __license__ = "MIT"
 
 from .result import DQResult
-from .query import DjaqQuery
+from .query import DjaqQuery, djaq_functions
 from .conditions import B
 

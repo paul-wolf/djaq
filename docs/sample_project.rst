@@ -13,12 +13,7 @@ project, clone the django repo:
 
 If you clone the repo and use the sample project, you don’t need to
 include Djaq as a requirement because it’s included as a module by a
-softlink. 
-
-   Note that we do nothing to secure this application. It is not intended to be
-   hosted for public access. You would need to undertake the usual steps to lock
-   down the application, use a secure key and database passwords that are
-   secure, etc. 
+softlink. Create the virtualenv:
 
 The module itself does not install Django and there are no further
 requirements. Make sure you are in the ``bookshop`` directory:
@@ -49,7 +44,6 @@ like this:
            'ENGINE': 'django.db.backends.postgresql_psycopg2',
            'NAME': 'bookshop',
        },
-   }
 
 So, it assumes peer authentication. Change to suit your needs. Now you
 can migrate. Make sure the virtualenv is activated!
@@ -66,30 +60,41 @@ We provide a script to create some sample data:
 
 This creates 2000 books and associated data.
 
-The example app comes with a management command to run queries:
+There's a management command to run queries from the command line:
 
 ::
 
-   ./manage.py djaq "(Publisher.name, max(Book.price) - round(avg(Book.price)) as diff) Book b"  --format json
+   ./manage.py djaq Book
 
 Output of the command should look like this:
 
 ::
 
-   ▶ ./manage.py djaq "(Publisher.name, max(Book.price) - round(avg(Book.price)) as diff) Book b"  --format json
-   SELECT books_publisher.name, (max(books_book.price) - round(avg(books_book.price))) FROM books_book LEFT JOIN books_publisher ON (books_book.publisher_id = books_publisher.id)  GROUP BY books_publisher.name LIMIT 10
-   {"publisher_name": "Avila, Garza and Ward", "diff": 14.0}
-   {"publisher_name": "Boyer-Clements", "diff": 16.0}
-   {"publisher_name": "Clark, Garza and York", "diff": 15.0}
-   {"publisher_name": "Clarke PLC", "diff": 14.0}
-   {"publisher_name": "Griffin-Blake", "diff": 16.0}
-   {"publisher_name": "Hampton-Davis", "diff": 13.0}
-   {"publisher_name": "Jones LLC", "diff": 15.0}
-   {"publisher_name": "Lane-Kim", "diff": 15.0}
-   {"publisher_name": "Norris-Bennett", "diff": 14.0}
-   {"publisher_name": "Singleton-King", "diff": 17.0}
-
-Notice the SQL used to retrieve data is printed first.
+   ❯ ./manage.py djaq Book
+   [
+      {
+         "id": 2,
+         "name": "Station many chair pressure.",
+         "pages": 414,
+         "price": "12.00",
+         "rating": 2.0,
+         "publisher": 99,
+         "alt_publisher": null,
+         "pubdate": "2016-11-30",
+         "in_print": true
+      },
+      {
+         "id": 3,
+         "name": "Able sense quickly.",
+         "pages": 408,
+         "price": "29.00",
+         "rating": 3.0,
+         "publisher": 40,
+         "alt_publisher": null,
+         "pubdate": "2001-07-27",
+         "in_print": true
+      },
+      ...
 
 The best approach now would be to trial various queries using the Djaq
 UI as explained above.
@@ -108,19 +113,3 @@ Run the server:
 Now the query UI should be available here:
 
 http://127.0.0.1:8000/dquery/
-
-
-There is a sample UI at http://localhost:8000/books/books/ that demonstrates a
-view function using a conditional expression like the following:
-
-.. code:: python
-
-   c = (
-      B("regex(name, '$(name)')")
-      & B("pages > '$(pages)'")
-      & B("rating > '$(rating)'")
-      & B("price > '$(price)'")
-   )
-
-to search for books based on the form input. 
-

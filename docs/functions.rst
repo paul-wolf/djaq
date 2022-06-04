@@ -1,10 +1,10 @@
 Functions
 ---------
 
-If a function is not defined by DjangoQuery, then the function name is
+If a function is not defined by DjaqQuery, then the function name is
 checked with a whitelist of functions. There are approximately 350
-functions available. These are currently on supported for Postgresql and
-only those will work that don’t use syntax that special to Postgresql.
+functions available. These are currently only supported for Postgresql and
+only those will work that don’t use syntax that is special to Postgresql.
 Additionally, the Postgis functions are only available if you have
 installed Postgis.
 
@@ -12,8 +12,9 @@ A user can define new functions at any time by adding to the custom
 functions. Here’s an example of adding a regex matching function:
 
 .. code:: python
-
-   DjangoQuery.functions["REGEX"] = "{} ~ {}"
+   
+   from djaq import djaq_functions
+   djaq_functions["REGEX"] = "{} ~ {}"
 
 Now find all book names starting with ‘B’:
 

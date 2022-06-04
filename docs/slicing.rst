@@ -12,7 +12,7 @@ Which will provide you with the first hundred results starting from the
 
 You cannot slice a DjaqQuery because this would frustrate a design
 goal of Djaq to provide the performance advantages of cursor-like
-behaviour.
+behaviour and explicit semantics.
 
 But you can slice the result of the QuerySet method:
 

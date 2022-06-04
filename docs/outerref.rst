@@ -22,7 +22,7 @@ reference the outer scope:
 
 .. code:: python
 
-   DQ('(p.name, ["(count(id)) Book{Publisher.id == b.publisher} b"]) Publisher p')
+   DQ("Book", '(name, ["(count(id)) Book{Publisher.id == b.publisher} b"]) Publisher p')
 
 the subquery output expression references the outer scope. It evaluates
 to the following SQL:

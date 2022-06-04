@@ -47,19 +47,19 @@ accommodate only those expressions that have data provided.
 
 .. code:: python
 
-    from djaq.conditions import B
+    from djaq import B
     def book_list(request):
 
         c = (
-            B("regex(b.name, '$(name)')")
-            & B("b.pages > '$(pages)'")
-            & B("b.rating > '$(rating)'")
-            & B("b.price > '$(price)'")
+            B("regex(name, {name})")
+            & B("pages > {pages}")
+            & B("rating > {rating}")
+            & B("price > {price}")
         )
 
         books = list(
-            DQ(
-                "(b.name as name, b.price as price, b.rating as rating, b.pages as pages, b.publisher.name as publisher) Book b",
+            DQ("Book",
+                "name as name, price as price, rating as rating, pages as pages, publisher.name as publisher",
             )
             .conditions(c)           # add our conditions here
             .context(request.POST)   # add our context data here
@@ -74,9 +74,9 @@ You can check how your conditional expressions will look depending on the contex
 
     In [1]: from djaq.query import render_conditions
     In [2]: from djaq.conditions import B
-    In [3]: c = B("regex(b.name, '$(name)')") & B("b.pages > '$(pages)'") & B("b.rating > '$(rating)'") & B("b.price > '$(price)'")
+    In [3]: c = B("regex(name, {name})") & B("pages > {pages}") & B("rating > {rating}") & B("price > '$(price)'")
     In [4]: ctx = {"name": "sample", "pages": 300}
     In [5]: render_conditions(c, ctx)
     ...:
-    Out[5]: "(((regex(b.name, '$(name)') and b.pages > '$(pages)')))"
+    Out[5]: "(((regex(b.name, {name}) and pages > {pages})))"
 

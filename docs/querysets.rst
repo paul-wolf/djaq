@@ -109,6 +109,7 @@ compared to QuerySet:
 
 .. code:: python
 
+   from django.db.models import Count, Q
    above_3 = Count('book', filter=Q(book__rating__gt=3))
    below_3 = Count('book', filter=Q(book__rating__lte=3))
    Publisher.objects.annotate(below_3=below_3).annotate(above_3=above_3)

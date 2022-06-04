@@ -71,12 +71,11 @@ Here is the structure of the syntax:
 .. code:: shell
 
    DjaqQuery([model_name|model], [<field_exp1>, ...])
-   .where(<field_exp1>, ...)
+   .where(<condition_expression>)
    .order_by(<field_exp1>, ...)
 
 Whitespace does not matter too much. You could put things on separate
 lines.
-
 
 The column expressions can be Django Model fields or arithmetic expressions
 or any expression supported by functions of your underlying database
