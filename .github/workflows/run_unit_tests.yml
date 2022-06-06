@@ -1,61 +1,51 @@
-name: Run tests
+name: NEW RUN TESTS
 
 on:
   push:
     branches: [main]
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: node:latest
-
-    strategy:
-      max-parallel: 4
-      matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9, 3.10]
 
     services:
+      # label used to access the service container
       postgres:
-        image: postgres
+        image: postgres:latest
         env:
           POSTGRES_DB: bookshop
           POSTGRES_PASSWORD: postgres
           POSTGRES_PORT: 5432
           POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        ports:
-          - 5432:5432
 
+    strategy:
+      max-parallel: 4
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10"]
+        # python-version: ["3.9", "3.10"]
+    name: Python ${{ matrix.python-version }} sample
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python
         uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-version }}
-      # - name: psycopg2 prerequisites
-      #   run: sudo apt update && apt install sudo libpq-dev
+          architecture: x64
+      - run: python --version
       - name: Install dependencies
         run: |
-          # sudo service postgresql start
           python -m pip install --upgrade pip
           pip install -r bookshop/requirements.txt
           pip install pytest-django
       - name: Run migrations
         run: |
-          sudo -u postgres createuser -d runner
-          sudo -u postgres createdb -O runner bookshop
           pushd bookshop && mkdir log && python manage.py migrate && popd
-        env:
-          POSTGRES_HOST: localhost
-          # POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }} # get randomly assigned published port
-          POSTGRES_PORT: 5432
-
       - name: Run tests
-        run: pushd bookshop && pytest
+        run: pushd bookshop && python manage.py test
