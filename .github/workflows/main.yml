@@ -42,14 +42,14 @@ jobs:
         run: sudo apt-get install libpq-dev
       - name: Install dependencies
         run: |
-          sudo service postgresql start
+          # sudo service postgresql start
           python -m pip install --upgrade pip
           pip install -r bookshop/requirements.txt
           pip install pytest-django
       - name: Run migrations
         run: |
-          sudo -u postgres createuser -d runner
-          sudo -u postgres createdb -O runner bookshop
+          sudo -u postgres -H postgres createuser -d runner
+          sudo -u postgres -H postgres createdb -O runner bookshop
           pushd bookshop && mkdir log && python manage.py migrate && popd
         env:
           POSTGRES_HOST: postgres
