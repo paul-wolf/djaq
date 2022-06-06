@@ -52,7 +52,7 @@ jobs:
           sudo -u postgres createdb -O runner bookshop
           pushd bookshop && mkdir log && python manage.py migrate && popd
         env:
-          POSTGRES_HOST: localhost
+          POSTGRES_HOST: postgres
           POSTGRES_PORT: ${{ job.services.postgres.ports[5432] }} # get randomly assigned published port
 
       - name: Run tests
