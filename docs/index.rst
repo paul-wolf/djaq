@@ -5,14 +5,14 @@ Djaq - pronounced “Jack” - is an alternative to the Django QuerySet API.
 
 What sets it apart: 
 
-* No need to import models 
-* Clearer, more natural query syntax
-* More powerful expressions for output
-* More powerful, easier-to-write filter expressions
-* More consistent query syntax without resorting to hacks like ``F()`` expressions, ``annotate()``, ``aggregate()`` 
-* Column expressions are entirely evaluated in the database
-* Extensible: you can write your own functions
-* Pandas: Easily turn a query into a Pandas Dataframe
+- No need to import models 
+- Clearer, more natural query syntax
+- More powerful expressions for output
+- More powerful, easier-to-write filter expressions
+- More consistent query syntax without resorting to hacks like ``F()`` expressions, ``annotate()``, ``aggregate()`` 
+- Column expressions are entirely evaluated in the database
+- Extensible: you can write your own functions
+- Pandas: Easily turn a query into a Pandas Dataframe
 
 There is also a JSON representation of queries, so you can send queries from a
 client. It's an instant API to your data. No need to write backend classes and

@@ -1,4 +1,4 @@
-name: NEW RUN TESTS
+name: RUN TESTS
 
 on:
   push:

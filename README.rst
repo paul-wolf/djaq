@@ -65,13 +65,14 @@ Here's an example comparison between Djaq and Django QuerySets:
 .. code:: python
 
    DQ("Book", """
-       sum(iif(rating < 3, rating, 0)) as below_3,
-       sum(iif(rating >= 3, rating, 0)) as above_3
+       sumif(rating < 3, rating, 0) as below_3,
+       sumif(rating >= 3, rating, 0) as above_3
        """)
 
 compared to QuerySet:
 
 .. code:: python
+   
    from django.db.models import Count, Q
    above_3 = Count('book', filter=Q(book__rating__gt=3))
    below_3 = Count('book', filter=Q(book__rating__lte=3))
