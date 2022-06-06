@@ -40,7 +40,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: psycopg2 prerequisites
-        run: sudo apt-get install libpq-dev
+        run: sudo apt update && apt install sudo libpq-dev
       - name: Install dependencies
         run: |
           # sudo service postgresql start
