@@ -47,3 +47,5 @@ jobs:
       - name: Run migrations
         run: |
           pushd bookshop && mkdir log && python manage.py migrate && popd
+      - name: Run tests
+        run: pushd bookshop && python manage.py test
