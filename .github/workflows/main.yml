@@ -10,6 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container: node:latest
 
     strategy:
       max-parallel: 4
