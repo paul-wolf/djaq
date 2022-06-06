@@ -7,3 +7,4 @@ django_extensions
 pytest
 sphinx
 sphinx_rtd_theme
+ipdb
