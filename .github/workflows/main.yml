@@ -39,8 +39,8 @@ jobs:
         uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-version }}
-      - name: psycopg2 prerequisites
-        run: sudo apt update && apt install sudo libpq-dev
+      # - name: psycopg2 prerequisites
+      #   run: sudo apt update && apt install sudo libpq-dev
       - name: Install dependencies
         run: |
           # sudo service postgresql start
