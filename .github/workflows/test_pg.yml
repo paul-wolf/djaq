@@ -26,6 +26,7 @@ jobs:
         run: |
           apt-get update
           apt-get install --yes postgresql-client
+          apt-get install sudo
 
       - name: Run migrations
         run: |
