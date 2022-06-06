@@ -29,7 +29,7 @@ at the same time.
 
 Note what is happening here:
 
-::
+.. code:: python
 
    name_search = 'Bar.*'
    DQ("Book", "id").where("regex(b.name, {name_search}").context(locals()).tuples()
@@ -73,7 +73,7 @@ Then add the validator:
 
 You can set your own validator class in Django settings:
 
-::
+.. code:: python
 
    DJAQ_VALIDATOR = MyValidator
 

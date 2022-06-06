@@ -7,7 +7,8 @@ What sets it apart:
 
 * No need to import models 
 * Clearer, more natural query syntax
-* More powerful expressions 
+* More powerful expressions for output
+* More powerful, easier-to-write filter expressions
 * More consistent query syntax without resorting to hacks like ``F()`` expressions, ``annotate()``, ``aggregate()`` 
 * Column expressions are entirely evaluated in the database
 * Extensible: you can write your own functions
@@ -24,12 +25,11 @@ look like this:
 
    DQ("Book", "name as title, publisher.name as publisher").go()
 
-This retrieves a list of book titles with book publisher. But you can
-formulate far more sophisticated queries; see below. You can send Djaq
-queries from any language, Java, Javascript, golang, etc. to a Django
-application and get results as JSON. In contrast to REST frameworks,
-like TastyPie or Django Rest Framework (DRF), you have natural access to
-the Django ORM from the client.
+This retrieves a list of book titles with book publisher. But you can formulate
+far more sophisticated queries; see below. You can send Djaq queries from any
+language, Java, Javascript, golang, etc. to a Django application and get results
+as JSON. In contrast to REST frameworks, you have natural access to the Django
+ORM from the client.
 
 Djaq sits on top of the Django ORM. It can happily be used alongside
 QuerySets.

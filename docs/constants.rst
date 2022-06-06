@@ -4,7 +4,7 @@ Constants
 ``None``, ``True``, ``False`` are replaced in SQL with ``NULL``,
 ``TRUE``, ``FALSE``. All of the following work:
 
-::
+.. code:: python
 
    DQ("Book", "id, name").where("in_print is True")
    DQ("Book", "id, name").where("in_print is not True")

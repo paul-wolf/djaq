@@ -15,7 +15,7 @@ from django.db.models.query import QuerySet
 from django.utils.text import slugify
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models.fields.related import ManyToOneRel, ManyToManyField
-
+from django.core.exceptions import FieldDoesNotExist
 
 from djaq.result import DQResult
 from ..astpp import parseprint, dump as node_string
@@ -81,7 +81,9 @@ djaq_functions = {
         "POINTY": "ST_Y({})",
         "INDEX_CHOICE0": index_choice0,
         "COUNTDISTINCT": "COUNT(DISTINCT {})",
+        "SUMIF": "SUM(CASE WHEN {} THEN {} ELSE {} END)",
     }
+   
 
 def has_context(expression: str, context: dict):
     """We check if the varname
@@ -170,9 +172,6 @@ class ContextValidator(object):
                 v = tuple(v)
             d[k] = self.get(k, v)
         return d
-
-
-
 
 
 class JoinRelation(object):
@@ -506,10 +505,15 @@ class ExpressionParser(ast.NodeVisitor):
             # attr is a stand-alone name
             if not self.relations:
                 relation = self.add_relation(model=self.model)
-            model = self.relations[0].model
-            # ipdb.set_trace()
+            model = self.relations[0].model            
             field = model._meta.get_field(attr)
-            a = f'"{model._meta.db_table}"."{field.column}"'
+            if field.auto_created and not field.concrete:
+                # this field represents probably a reverse relation to a fk in another model
+                self.add_relation(model=field.related_model)
+                a = f'"{field.related_model._meta.db_table}"."{field.get_joining_columns()[0][1]}"'
+            else:
+                a = f'"{model._meta.db_table}"."{field.column}"'
+            
             return a
 
         # if relation and attributes in list

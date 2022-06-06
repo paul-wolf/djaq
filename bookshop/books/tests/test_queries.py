@@ -290,3 +290,6 @@ class TestDjaqQuery(TestCase):
         
         books = DQ("Book").where("name == {title}").context({"title": NEW_TITLE}).go()
         assert books[0]["name"] == NEW_TITLE
+        
+    def test_reverse_relation(self):
+        DQ("Publisher", "name, count(book) as num_books").go()

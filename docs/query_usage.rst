@@ -77,6 +77,15 @@ Here is the structure of the syntax:
 Whitespace does not matter too much. You could put things on separate
 lines.
 
+Note as well that we usually in this tutorial use the `.go()` convenience
+method. The following two calls are pretty much equivalent:
+
+.. code:: shell
+
+   DQ("Book", "name").go()
+
+   list(DQ("Book", "name").dicts())
+
 The column expressions can be Django Model fields or arithmetic expressions
 or any expression supported by functions of your underlying database
 that are also whitelisted by Djaq. Postgresql has thousands of
@@ -87,36 +96,39 @@ name:
 
 .. code:: shell
 
-   name as title, price as price, publisher.name as publisher
+   DQ("Book", "name as title, price as price, publisher.name as publisher").go()
 
-or if we want to filter and get only books over 50 in price:
+or if we want to filter and get only books over 5 in price:
 
 .. code:: shell
 
-   price > 50
+   DQ("Book", "name as title, price as price, publisher.name as publisher") \
+      .where("price > 5") \
+      .go()
+
 
 
 The following filter:
 
-::
+.. code:: shell
 
-   price > 50 and ilike(publisher.name, 'A%')
+   DQ("Book").where("price > 5 and ilike(publisher.name, 'A%')").go()
 
 will be translated to SQL:
 
-::
+.. code:: sql
 
    Book.price > 50 AND Publisher.name ILIKE 'A%'
 
 The expressions are fully parsed so they are not subject to SQL
-injection. Trying to do so will cause an exception.
+injection.
 
 Our example model also has an owner model called “Consortium” that is
 the owner of the publisher:
 
 .. code:: python
 
-   print(list(DQ("Book", "name, price, publisher.name, publisher.owner.name").limit(1).dicts()))
+   DQ("Book", "name, price, publisher.name, publisher.owner.name").limit(1).go()
    [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'b_publisher_name': 'Wright, Taylor and Fitzpatrick', 'b_publisher_owner_name': 'Publishers Group'}]
 
 
@@ -124,7 +136,7 @@ Signal that you want to summarise results using an aggregate function:
 
 .. code:: python
 
-   list(DQ("Book", "publisher.name as publisher, count(id) as book_count").dicts())
+   DQ("Book", "publisher.name as publisher, count(id) as book_count").go()
 
    [
        {
@@ -142,15 +154,16 @@ Order by name:
 
 .. code:: python
 
-    DQ("Book", "name, price, publisher.name as publisher")
-    .where("price > 5)
-    .order_by("name")
+    DQ("Book", "name, price, publisher.name as publisher") \
+    .where("price > 5") \
+    .order_by("name") \
+    .go()
 
 Get average, minimum and maximum prices:
 
 .. code:: python
 
-   list(DQ("Book", "avg(price) as average, min(price) as minimum, max(price) as maximum").dicts())
+   DQ("Book", "avg(price) as average, min(price) as minimum, max(price) as maximum").go()
    [
       {
          "average": "18.5287169247794985",
@@ -189,4 +202,5 @@ To pass parameters, use variables in your query, like ``{myvar}``:
     ('Oil onto mission.', datetime.date(2018, 12, 21)),
     ('Key same effect me.', datetime.date(2018, 12, 23))]
 
-Notice that variables are not f-string placeholders.
+Notice that variables are not f-string placeholders! Avoid using f-strings to
+interpolate arguments as that puts you at risk of sql injection.

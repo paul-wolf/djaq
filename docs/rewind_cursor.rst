@@ -3,7 +3,7 @@ Rewind cursor
 
 You can rewind the cursor but this is just executing the SQL again:
 
-::
+.. code:: python
 
    list(dq.tuples())
 

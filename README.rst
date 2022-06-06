@@ -4,8 +4,8 @@ Djaq
 |Python tests| |RTD build| |Python versions| |PyPi version| 
 
 
-.. |Python tests| image:: https://github.com/paul-wolf/djaq/actions/workflows/main.yml/badge.svg
-   :target: https://github.com/paul-wolf/djaq/actions/workflows/main.yml
+.. |Python tests| image:: https://github.com/paul-wolf/djaq/actions/workflows/runs_unit_tests.yml/badge.svg
+   :target: https://github.com/paul-wolf/djaq/actions/workflows/runs_unit_tests.yml
    :alt: Unit test status
    
 .. |RTD build| image:: https://readthedocs.org/projects/djaq/badge/?version=latest

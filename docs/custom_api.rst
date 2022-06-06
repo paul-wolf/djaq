@@ -48,10 +48,10 @@ For controlling access to models, use the whitelist parameter in constructing th
 
 .. code:: python
 
-    DQ(model_name, column_expressions, whitelist={"books": ["Book", "Publisher",],})
-        .context(context)
-        .limit(limit)
-        .offset(offset)
+    DQ(model_name, column_expressions, whitelist={"books": ["Book", "Publisher",],}) \
+        .context(context) \
+        .limit(limit) \
+        .offset(offset) \
         .dicts()
 
 This restricts access to only the `book` app models, Book and Publish.

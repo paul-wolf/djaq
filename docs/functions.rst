@@ -20,7 +20,7 @@ Now find all book names starting with ‘B’:
 
 .. code:: python
 
-   DQ("Book", "name").where("regex(b.name, 'B.*'")
+   DQ("Book", "name").where("regex(name, 'B.*')").go()
 
 We always want to use upper case for the function name when defining the
 function. Usage of a function is then case-insensitive. You may wish to
@@ -37,7 +37,7 @@ In the following:
 
 .. code:: python
 
-   DQ("Book", "name").where("like(upper(name), upper({name_search})")
+   DQ("Book", "name").where("like(upper(name), upper({name_search}))").context({"name_search": name_search}).go()
 
 ``like()`` is a Djaq-defined function that is converted to
 ``field LIKE string``. Whereas ``upper()`` is sent to the underlying
@@ -68,7 +68,8 @@ We can create a ``SUMIF`` function like this:
 
 .. code:: python
 
-   DjaqQuery.functions['SUMIF'] = "SUM(CASE WHEN {} THEN {} ELSE {} END)"
+   from djaq import djaq_functions
+   djaq_functions['SUMIF'] = "SUM(CASE WHEN {} THEN {} ELSE {} END)"
 
 Now we can rewrite the above like this:
 

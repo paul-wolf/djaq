@@ -4,28 +4,27 @@ Comparing to Django QuerySets
 Djaq can be used in theory as a total replacement for `Django QuerySets
 <https://docs.djangoproject.com/en/3.1/ref/models/querysets/>`_
 
-However, a couple things should be kept in mind. Firstly, Querysets are highly
-integrated with Django and have been developed over 15 years by many developers.
-If you use the QuerySet API to access data via the Models you specified, you
-are working within the Django framework the way it was intended.
+Djaq has some important advantages over QuerySets. You will probably find Djaq
+  queries easier to write and understand. 
 
-That being said, Djaq has some important advantages over QuerySets: 
+Djaq queries are easier to understand because they don't make you jump around
+mentally parsing the difference between ``_`` and ``__`` and there are far fewer
+"special cases" where you need to use different classes and functions to overcome
+syntactical constraints of QuerySets.
 
-* If you are not thoroughly familiar with the QuerySet api, you might find Djaq
-  queries easier to understand and write. 
-  
-* You can send Djaq queries over the wire for a remote api with minimal effot, like
-  via a REST call, and receive JSON results. That's not possible with QuerySets.
+You can send Djaq queries over the wire for a remote api with minimal effort,
+like via a REST call, and receive JSON results. That's not possible with
+QuerySets.
 
-* Djaq is explicit about performance semantics. In contrast you need to have
-  knowledge of and use QuerySets carefully to avoid performance pitfalls. 
+Djaq is explicit about performance semantics. In contrast you need to have
+knowledge of and use QuerySets carefully to avoid performance pitfalls. 
 
 This section is intended to highlight differences for users with good
-familiarity with the ``QuerySet`` class for the purpose of understanding
-capabilities and limitations of the DjaqQuery.
+familiarity with the ``QuerySet`` class for the purpose of comparing
+``DjaqQuery`` and ``QuerySet``.
 
 Django provides significant options for adjusting query generation to
-fit a specific use case, ``only()``, ``select_related()``,
+fit different use cases, ``only()``, ``select_related()``,
 ``prefetch_related()`` are all useful for different cases. Here’s a
 point-by-point comparison with Djaq:
 
@@ -50,12 +49,20 @@ point-by-point comparison with Djaq:
    syntax.
 
 -  To aggregate with Querysets, you use ``aggregate()``, whereas Djaq
-   aggregates results implicitly whenever an aggregate function appears
-   in the column expressions.
+   aggregates results whenever an aggregate function appears
+   in a column expression.
 
--  Model instances with QuerySets exactly represent the corresponding
-   Django model. Djaq’s usual return formats, like ``dicts()``,
-   ``tuples()``, etc. are more akin to ``QuerySet.value_list()``.
+-  Model instances with QuerySets exactly represent the corresponding Django
+   model. Djaq’s usual return formats, like ``dicts()``, ``tuples()``, etc. are
+   more akin to ``QuerySet.values()`` and ``QuerySet.value_list()``.
+
+- Slicing: QuerySets can bet sliced: ``qs[100:150]`` whereas you use
+  ``limit()``, ``offset()`` with Djaq: ``dq.offset(100).limit(50)``
+
+- Caching: QuerySets will cache results in a rather sophisticated manner. With
+  Djaq, you need to rerun the query each time unless you are caching results
+  yourself. Djaq eschews caching as part of the query evaluation to keep
+  separation of concerns and unintended performance results.
 
 Let’s look at some direct query comparisons:
 
@@ -69,9 +76,9 @@ compared to QuerySet:
 
 .. code:: python
 
-   Book.objects.all().aggregate(Avg('price'))
+   Book.objects.aggregate(Avg('price'))
 
-Get the difference from the average off the maximum price:
+Get the difference from the average off the maximum price for each publisher: 
 
 .. code:: python
 
@@ -81,14 +88,14 @@ compared to QuerySet:
 
 .. code:: python
 
-   Book.objects.values("publisher__name")
+   Book.objects.values("publisher__name") \
       .annotate(price_diff=Max('price', output_field=FloatField()) - Avg('price', output_field=FloatField()))
 
 Count books per publisher:
 
 .. code:: python
 
-   DQ("Publisher", "name, count(books) as num_books")
+   DQ("Publisher", "name, count(book) as num_books")
 
 compared to QuerySet:
 
@@ -101,8 +108,8 @@ Count books with ratings up to and over a number:
 .. code:: python
 
    DQ("Book", """
-       sum(iif(rating < 3, rating, 0)) as below_3,
-       sum(iif(rating >= 3, rating, 0)) as above_3
+       sumif(rating < 3, rating, 0)) as below_3,
+       sumif(rating >= 3, rating, 0)) as above_3
        """)
 
 compared to QuerySet:
@@ -126,9 +133,8 @@ compared to QuerySet:
 
    Book.objects.aggregate(Avg('price'), Max('price'), Min('price'))
 
-
 Note that by default, you iterate using a generator. You cannot slice a
-generator.
+generator. Use ``limit()`` and ``offset()`` to page results
 
 Simple counts:
 

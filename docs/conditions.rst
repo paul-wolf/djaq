@@ -12,7 +12,7 @@ You then add the condition to a DjaqQuery:
 
 .. code:: python
 
-    DQ("Book", "my query..."").conditions(c)
+    DQ("Book", "my query...").conditions(c)
 
 If you are using variable substitution as in this example, you'll want to pass
 context data. This might be from a Django request object (though it can be from

@@ -48,8 +48,8 @@ Comparison as a boolean expression:
 
 .. code:: python
 
-   In [45]: DQ("Book", "2 > 3").limit(1).go()
-   Out[45]: [(False,)]
+   In [121]: DQ("Book", "2 > 3 as absurd").limit(1).go()
+   Out[121]: [{'absurd': False}]
 
 While the syntax has a superficial resemblance to Python, you do not
 have access to any functions of the Python Standard Libary.
