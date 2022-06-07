@@ -109,57 +109,18 @@ class TestDjaqQuery(TestCase):
         for r in v.dicts():
             self.assertTrue(isinstance(r, dict))
 
-    @unittest.skip("we don't suppport subqueries yet")
-    def test_dq_subquery_filter(self):
-        """This subquery is a DjangoQuery subquery."""
-        # import ipdb; ipdb.set_trace()
-        len1 = len(list(DQ(Book, "id, name").where("id in ['(id)']").dicts()))
-        len2 = len(list(DQ(Book, "id").dicts()))
-        self.assertEqual(len1, len2)
-
-    @unittest.skip("we don't support old syntax")
-    def test_dq_subquery_select(self):
-        q = """(
-            id as id,
-            name,
-            ["(count(id)) Book{b.publisher==Publisher.id} b"] as cnt
-        )
-        """
-        data = list(DQ(Book, "Publisher", q).dicts())
-        # one entry for each publisher
-        self.assertEqual(len(data), len(Publisher.objects.all()))
-
-        # now check each individual value by getting
-        # the same data with a different query
-        s = """(
-            count(id) as cnt
-        )
-        """
-        for rec in data:
-            v = DQ(Book, s).where("Publisher.id=='{pubid}'").context({"pubid": rec["id"]}).value()
-            self.assertEqual(v, rec["cnt"])
-
-    @unittest.skip("debug sub queries")
-    def test_subquery_DQ(self):
-        v_sub = DQ(Book, "id", name="v_sub").where("name == 'B*'")  # noqa: F841
-        list(DQ(Book, "name, price").where("id in '@v_sub'").tuples())
-
-    @unittest.skip("debug sub queries")
-    def test_subquery_queryset(self):
-        qs = Book.objects.all().only("id")
-        ids = [rec.id for rec in qs]
-        list(DQ(Book, "name, price", names={"qs_sub": ids}).where("id in '@qs_sub'").tuples())
-
     def test_parameter(self):
         v = DQ(Book, "name").where("regex(name, {mynamepattern})")
         for name in list(v.context({"mynamepattern": "B.*"}).tuples(flat=True)):
             assert name[0] == "B"
 
     def test_expression_grouping(self):
-        list(DQ(Book, "(id, name)").where("(id == 1 or id == 2) and id == 3").tuples())
+        # impossible condition
+        assert len(list(DQ(Book, "(id, name)").where("(id == 1 or id == 2) and id == 3").tuples())) == 0
+        
 
     def test_order_by(self):
-        list(DQ(Book, "name").order_by("-name, publisher, -id").dicts())
+        assert list(DQ(Book, "name").order_by("-name, publisher, -id").dicts())
 
     def test_implicit_model(self):
         v = DQ(Book, "name, id")
@@ -194,10 +155,14 @@ class TestDjaqQuery(TestCase):
         # make sure we got three of them
         self.assertEqual(len(r), 3)
 
+
+
+
+
     def test_sql(self):
         v = DQ(Book, "id, name")
         v = v.where("id in {ids}")
-        # print(v.sql())
+        assert v.sql()
 
     def test_complex2(self):
         discount = 0.2
@@ -305,3 +270,13 @@ class TestDjaqQuery(TestCase):
     # test context 
     
     # test conditions()
+
+    def test_subquery_DQ(self):
+        DQ(Book, "id", name="v_sub").where("regex(name, '.*b.*')").go()   # noqa: F841
+        assert len(DQ(Book, "name, price").where("id in '@v_sub'").go())
+
+    def test_suquery_with_parameter(self):
+        DQ("Book", "id", name="dq_sub").where("ilike(name, {spec})")
+        DQ("Book", "name, price").where("id in '@dq_sub'").context({"spec": "B%"}).go()
+    
+

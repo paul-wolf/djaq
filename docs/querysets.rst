@@ -91,7 +91,7 @@ with Djaq, you just do the obvious, change the operator:
 
 .. code:: python
 
-   DQ("Book").where("name == 'Bar*' or pubdate.year > 2020")
+   DQ("Book").where("ilike(name, 'Bar%') or pubdate.year > 2020")
 
 Both QuerySets and DjaqQuerys let you add conditions incrementally: 
 

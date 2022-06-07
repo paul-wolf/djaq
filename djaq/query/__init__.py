@@ -313,7 +313,9 @@ class ExpressionParser(ast.NodeVisitor):
     def __init__(
         self,
         model=None,  # django model  or string of model
-        source=None,
+        select_src=None,
+        where_src=None,
+        order_by_src=None,
         using="default",
         limit=None,
         offset=None,
@@ -337,6 +339,10 @@ class ExpressionParser(ast.NodeVisitor):
         # these can be names of other objects
         if names:
             self.__class__.directory.update(names)
+
+        self.select_src = select_src
+        self.where_src = where_src
+        self.order_by_src = order_by_src
         self.dest = ""
         self.using = using
         self.connection = connections[using]
@@ -344,10 +350,10 @@ class ExpressionParser(ast.NodeVisitor):
         self.whitelist = whitelist
         self.verbosity = verbosity
         self.relation_index = 0  # this is the relation being parsed currently
-        self.source = source
+        # self.source = source
         self._limit = limit
         self._offset = offset
-        self.order_by = order_by
+        # self.order_by = order_by
         self.sql = None
         self.cursor = None
         self.col_names = None
@@ -658,7 +664,7 @@ class ExpressionParser(ast.NodeVisitor):
 
         if node.s.strip().startswith("@"):
 
-            # A named DjangoQuery, QuerySet, List
+            # A named DjaqQuery, QuerySet, List
             # get source
             name = node.s[1:]
             obj = self.resolve_name(name)
@@ -669,7 +675,11 @@ class ExpressionParser(ast.NodeVisitor):
                 # TODO: not safe
                 # not even type checking is good here since strings
                 # can be sql expressions
+                if not self.local:
+                    raise Exception("Non-local attempt to use literal SQL")
                 sql = str(tuple(obj)).strip("(").strip(")")
+                
+                    
             elif isinstance(obj, QuerySet):
                 sql, sql_params = self.queryset_source(obj)
                 sql = self.mogrify(sql, sql_params)
@@ -774,6 +784,10 @@ class ExpressionParser(ast.NodeVisitor):
 
     def visit_In(self, node):
         self.emit(" IN ")
+        ast.NodeVisitor.generic_visit(self, node)
+
+    def visit_NotIn(self, node):
+        self.emit(" NOT IN ")
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_NotIn(self, node):
@@ -894,29 +908,6 @@ class ExpressionParser(ast.NodeVisitor):
             return 1, "<>", s[2:]
         else:
             return 0, None, s
-
-    def get_select(self, s):
-        """Return select string and then everything else.
-
-        Return string once parens are balanced.
-        First character needs to be an opening parens.
-
-        """
-        s = s.strip()
-        if not s.startswith("("):
-            # there is no select columns expression list
-            return 0, None, s
-        i = 0
-        in_parens = 0
-        select = ""
-        for i, c in enumerate(s):
-            select += c
-            if c == "(":
-                in_parens += 1
-            elif c == ")":
-                in_parens -= 1
-            if not in_parens:
-                return i, select, s[i + 1 :]
 
     def get_col(self, s):
         """Generator for returning column expressions
@@ -1134,6 +1125,53 @@ class ExpressionParser(ast.NodeVisitor):
             logger.debug(sql)
             self.cursor.execute(sql)
 
+    def query(self, context=None):
+        """Return source for djaqquery and parameters."""
+        self.context(context)
+        # ipdb.set_trace()
+        self.construct()
+        sql = self.sql
+        return sql, self.parameters
+
+    def where(self, node: Union[str, B]):
+        # ipdb.set_trace()
+        if isinstance(node, str):
+            node = B(node)
+        elif isinstance(node, B):
+            node = node
+        if self.condition_node:
+            self.condition_node &= node
+        else:
+            self.condition_node = node
+        return self
+
+    def order_by(self, source: Union[str, List]):
+        
+        if isinstance(source, str):
+            self.order_by_src = source.strip()
+        elif isinstance(source, list):
+            self.order_by_src = f"({', '.join(source)})"
+        else:
+            raise Exception("Expected str or list for order by source")
+
+    def construct(self):
+        """Build the final SQL into parser.sql"""
+        
+        self.where_src = ""
+        if self.condition_node:
+            if self.where_src:
+                self.where_src += " and "
+            else:
+                self.where_src = ""
+            self.where_src += render_conditions(
+                self.condition_node, self._context
+            )
+
+        self.parse_source(self.select_src, self.where_src, self.order_by_src)
+
+        self.build_sql_statement()
+
+
     def dicts(self, data=None):
         if not self.cursor:
             self.execute(data)
@@ -1201,7 +1239,7 @@ class ExpressionParser(ast.NodeVisitor):
         return self.cursor.fetchone()[0]
 
     def __repr__(self):
-        return f"{self.__class__.__name__}: {self.source}"
+        return f"{self.__class__.__name__}"
 
     def __str__(self):
         my_list = []
@@ -1230,6 +1268,7 @@ class DjaqQuery:
         model_source: Union[models.Model, str],
         select_source: Union[str, List, None] = None,
         name: str = None,
+        names: Union[Dict, None] = None,
         whitelist=None,
     ):
         if isinstance(model_source, models.base.ModelBase):
@@ -1241,7 +1280,7 @@ class DjaqQuery:
                 f"Type not supported for model source: {type(model_source)}"
             )
 
-        self.parser = ExpressionParser(model=model, whitelist=whitelist)
+        self.parser = ExpressionParser(model=model, whitelist=whitelist, name=name)
 
         if not select_source or select_source == "*":
             select_source = ", ".join(
@@ -1251,10 +1290,8 @@ class DjaqQuery:
             select_source = model._meta.pk.name
 
         self.model = model
-        self.parser.name = name
-        self.where_src = None
-        self.order_by_src = None
-        self.condition_node = None
+
+        # self.condition_node = None
         if isinstance(select_source, str):
             select_source = select_source.strip()
             if not select_source.startswith("("):
@@ -1263,43 +1300,17 @@ class DjaqQuery:
             select_source = f"({', '.join(select_source)})"
         else:
             raise Exception("Expected str or list for select source")
-        self.select_src = select_source
+        self.parser.select_src = select_source
 
     def construct(self):
-        """Build the final SQL into parser.sql"""
-
-        self.where_src = ""
-        if self.condition_node:
-            if self.where_src:
-                self.where_src += " and "
-            else:
-                self.where_src = ""
-            self.where_src += render_conditions(
-                self.condition_node, self.parser._context
-            )
-
-        self.parser.parse_source(self.select_src, self.where_src, self.order_by_src)
-
-        self.parser.build_sql_statement()
+        self.parser.construct()
 
     def order_by(self, source: Union[str, List]):
-        if isinstance(source, str):
-            self.order_by_src = source.strip()
-        elif isinstance(source, list):
-            self.order_by_src = f"({', '.join(source)})"
-        else:
-            raise Exception("Expected str or list for order by source")
+        self.parser.order_by(source)
         return self
 
     def where(self, node: Union[str, B]):
-        if isinstance(node, str):
-            node = B(node)
-        elif isinstance(node, B):
-            node = node
-        if self.condition_node:
-            self.condition_node &= node
-        else:
-            self.condition_node = node
+        self.parser.where(node)
         return self
 
     def get(self, pk_value: any):
