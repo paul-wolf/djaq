@@ -31,14 +31,14 @@ example:
 These examples use auto-generated titles and names and we have a
 slightly more complicated set of models than shown above.
 
-The first thing you want to do is import the DjangoQuery class which we do with an alias:
+The first thing you want to do is import the DjaqQuery class which we do with an alias:
 
 .. code:: python
 
-   from djaq import DjangoQuery as DQ
+   from djaq import DjaqQuery as DQ
 
 Let’s get book title (name), price, discounted price, amount of discount
-and publisher name wherever the price is over 50.
+and publisher name wherever the price is over 5.
 
 
 .. code:: python
@@ -90,6 +90,40 @@ or any expression supported by functions of your underlying database
 that are also whitelisted by Djaq. Postgresql has thousands of
 functions. About 350 of those are available in Djaq.
 
+The syntax is similar to Python. Fields are identifiers that must be like Python identifiers, which they will be since we are referencing Django Models.
+
+- ``select source``: a comma seperated list column expressions. This can as well
+  be a ``list`` of column expressions.
+
+- ``where``: an expression that evaluates to a boolean value; the same as Django
+  ``QuerySet.filter()`` but with Djaq syntax
+
+- ``order_by``: a comma seperated list of column expressions, each of which can be
+  prepended with minus, ``-``, to indicate descending order rather than the
+  default ascending order. This can as well be a ``list`` of column expressions.
+
+Column expressions can be composed of multiple nested parenthetical expressions and conjoining boolean operators:
+
+- ``and``
+
+- ``or``
+
+Comparisons:
+
+``>``, ``<``, ``<>``, ``<=``, ``>=``
+
+Equality:
+
+``==``, ``!=``
+
+List membership:
+
+``in``, ``not in``
+
+Identity:
+
+``is``, ``is not``
+
 Columns are automatically given names. But you can give them your own
 name:
 
@@ -130,6 +164,12 @@ the owner of the publisher:
    DQ("Book", "name, price, publisher.name, publisher.owner.name").limit(1).go()
    [{'b_name': 'Range total author impact.', 'b_price': Decimal('12.00'), 'b_publisher_name': 'Wright, Taylor and Fitzpatrick', 'b_publisher_owner_name': 'Publishers Group'}]
 
+Check what SQL is generated: 
+
+.. code:: python
+
+   In [20]:    DQ("Book", "name, price, publisher.name, publisher.owner.name").limit(1).sql()
+   Out[20]: 'SELECT "books_book"."name", "books_book"."price", "books_publisher"."name", "books_consortium"."name" FROM books_book LEFT JOIN books_publisher  ON ("books_book"."publisher_id" = "books_publisher"."id")  LEFT JOIN books_consortium  ON ("books_publisher"."owner_id" = "books_consortium"."id")  LIMIT 1'
 
 Signal that you want to summarise results using an aggregate function:
 
@@ -210,5 +250,7 @@ To pass parameters, use variables in your query, like ``{myvar}``:
 
 Notice that variables are not f-string placeholders! Avoid using f-strings to
 interpolate arguments as that puts you at risk of sql injection.
+
+
 
 

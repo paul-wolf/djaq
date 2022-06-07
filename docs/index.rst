@@ -42,6 +42,8 @@ QuerySets.
    installation
    settings
    query_usage
+   api_reference
+   management_command
    results
    pandas
    conditions

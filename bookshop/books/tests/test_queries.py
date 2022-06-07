@@ -303,3 +303,5 @@ class TestDjaqQuery(TestCase):
     # test validators
     
     # test context 
+    
+    # test conditions()
