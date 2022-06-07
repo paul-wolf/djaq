@@ -541,7 +541,6 @@ class ExpressionParser(ast.NodeVisitor):
             # this means attr is a foreign key
             related_model = field.related_model
             #  we do this to check it is in the whitelist
-            # 
             if related_model:
                 find_model_class(related_model._meta.label, whitelist=self.whitelist)
                 new_relation = self.add_relation(related_model, field_name=attr)
@@ -796,7 +795,7 @@ class ExpressionParser(ast.NodeVisitor):
         elif node.value is None:
             self.emit("NULL")
         else:
-            raise Exception("Unknown value: {}".format(node.value))
+            raise Exception(f"Unknown value: {node.value}")
 
     def visit_Set(self, node):
         self.emit("{" + node.elts[0].id + "}")
@@ -1019,7 +1018,10 @@ class ExpressionParser(ast.NodeVisitor):
             if r.select:
                 select = f"{select}, {r.select}"
 
-        s = f"SELECT {select} FROM {master_relation.model_table}"
+        if self.distinct:
+            s = f"SELECT DISTINCT {select} FROM {master_relation.model_table}"
+        else:
+            s = f"SELECT {select} FROM {master_relation.model_table}"
 
         ## FROM JOINS
         if not outer_scope:
@@ -1110,13 +1112,13 @@ class ExpressionParser(ast.NodeVisitor):
         self.context(context)
 
         sql = self.sql
-
+        # ipdb.set_trace()
+        
         self.cursor = self.connection.cursor()
 
         if count:
             sql = f"SELECT COUNT(*) FROM ({sql}) c"
-        if self.distinct:
-            sql = f"SELECT DISTINCT * FROM ({sql}) u"
+
         if len(self._context):
             context = self.context_validator_class(self, self._context).context()
             if self.verbosity:

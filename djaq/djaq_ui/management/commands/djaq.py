@@ -42,6 +42,19 @@ class Command(BaseCommand):
             "--offset", default=0, action="store", dest="offset", type=int
         )
 
+        parser.add_argument("--distinct",
+                            action="store_true",
+                            default=False,
+                            )
+        
+        parser.add_argument("--sql",
+                            action="store_true",
+                            default=False,
+                            )
+        parser.add_argument("--count",
+                            action="store_true",
+                            default=False,
+                            )
         # parser.add_argument(
         #     "--verbosity", default=0, action="store", dest="verbosity", type=int
         # )
@@ -72,6 +85,15 @@ class Command(BaseCommand):
         q = q.limit(options.get("limit"))
 
         q = q.offset(options.get("offset"))
+        if options.get("distinct"):
+            q = q.distinct()
+
+        if options.get("sql"):
+            print(q.sql())
+            return
+        if options.get("count"):
+            print(q.count())
+            return
 
         if options.get("format") == "dicts":
             print(json.dumps(list(q.dicts()), cls=DjangoJSONEncoder, indent=4))

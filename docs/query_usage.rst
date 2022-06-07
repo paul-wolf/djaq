@@ -41,7 +41,6 @@ Let’s get book title (name), price, discounted price, amount of discount
 and publisher name wherever the price is over 50.
 
 
-
 .. code:: python
 
    result = \
@@ -180,6 +179,13 @@ Count all books:
 
    1000
 
+
+Get unique results with ``distinct()``:
+
+.. code:: python
+
+   DQ("Book", "pubdate.year").where("regex(name, 'B.*') and pubdate.year > 2013").distinct().order_by("-pubdate.year").go()
+
 You can qualify model names with the app name or registered app path:
 
 .. code:: python
@@ -204,3 +210,5 @@ To pass parameters, use variables in your query, like ``{myvar}``:
 
 Notice that variables are not f-string placeholders! Avoid using f-strings to
 interpolate arguments as that puts you at risk of sql injection.
+
+

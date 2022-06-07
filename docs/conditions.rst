@@ -33,13 +33,18 @@ into the filter part of the query:
 
 .. code:: python
 
+    rating = 2
+    price = 10
+    pages = 700
+    name = "Dr.*"
     DQ("Book", """name as name, 
     price as price, 
     rating as rating, 
     pages as pages, 
     publisher.name as publisher
-    """)
-    .where("regex(name, {name} and pages > {pages} and rating > {rating} and price > {price}")
+    """) \
+    .where("regex(name, {name}) and pages > {pages} and rating > {rating} and price > {price}")  \
+    .context({"rating": rating, "price": price, "pages": pages, "name": name})
 
 In the following example, it is not required to provide data for all fields,
 name, pages, rating, price. The conditional expressions will be refactored to

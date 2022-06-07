@@ -4,8 +4,9 @@ Comparing to Django QuerySets
 Djaq can be used in theory as a total replacement for `Django QuerySets
 <https://docs.djangoproject.com/en/3.1/ref/models/querysets/>`_
 
+
 Djaq has some important advantages over QuerySets. You will probably find Djaq
-  queries easier to write and understand. 
+queries easier to write and understand. 
 
 Djaq queries are easier to understand because they don't make you jump around
 mentally parsing the difference between ``_`` and ``__`` and there are far fewer
@@ -48,9 +49,9 @@ point-by-point comparison with Djaq:
    Djaq lets you write these directly and naturally as part of its
    syntax.
 
--  To aggregate with Querysets, you use ``aggregate()``, whereas Djaq
+-  To aggregate with Querysets, you use ``aggregate()``, or ``annotate()`` whereas Djaq
    aggregates results whenever an aggregate function appears
-   in a column expression.
+   in a column expression, just like you would expect it to.
 
 -  Model instances with QuerySets exactly represent the corresponding Django
    model. Djaq’s usual return formats, like ``dicts()``, ``tuples()``, etc. are
@@ -61,8 +62,46 @@ point-by-point comparison with Djaq:
 
 - Caching: QuerySets will cache results in a rather sophisticated manner. With
   Djaq, you need to rerun the query each time unless you are caching results
-  yourself. Djaq eschews caching as part of the query evaluation to keep
-  separation of concerns and unintended performance results.
+  yourself. Djaq eschews caching as part of the query evaluation to encourage
+  separation of concerns and prevent unintended performance results.
+
+Filter expressions in Djaq have a single expression paradigm, unlike QuerySets.
+When you filter a QuerySet, because you are assigning values to a series of
+parameters, the only way to construct the final SQL WHERE is to logically
+conjoin the boolean assertions. 
+
+.. code:: python
+
+   Book.objects.filter(name_startswith="Bar", pubdate__year__gt='2020') 
+
+means ``name ILIKE 'Bar%' AND date_part("year", pubdate) > 2020``. Whereas Djaq is explicit:
+
+.. code:: python
+
+   DQ("Book").where("ilike(name, 'Bar*') and pubdate.year > 2020")
+
+If you want to change your query to ``OR`` with querysets, you have to change how you construct the filter:
+
+.. code:: python
+
+   from django.db.models import Q
+   Book.objects.filter(Q(name_startswith="Bar") | Q(pubdate__year__gt=2020)) 
+
+with Djaq, you just do the obvious, change the operator:
+
+.. code:: python
+
+   DQ("Book").where("name == 'Bar*' or pubdate.year > 2020")
+
+Both QuerySets and DjaqQuerys let you add conditions incrementally: 
+
+.. code:: python
+
+   DQ("Book").where("regex(name, 'B.*')").where("pubdate.year > 2020")
+
+   Book.objects.filter(name__startswith="B").filter(pubdate__year__gt='2020')
+
+The presumption is to conjoin the two conditions with "AND" in both cases.
 
 Let’s look at some direct query comparisons:
 
@@ -88,6 +127,7 @@ compared to QuerySet:
 
 .. code:: python
 
+   from django.db.models import Avg, Max, FloatField
    Book.objects.values("publisher__name") \
       .annotate(price_diff=Max('price', output_field=FloatField()) - Avg('price', output_field=FloatField()))
 

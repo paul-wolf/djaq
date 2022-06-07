@@ -294,3 +294,12 @@ class TestDjaqQuery(TestCase):
     def test_reverse_relation(self):
         publishers = DQ("Publisher", "name, count(book) as num_books").go()
         assert publishers[0]["num_books"] > 0
+        
+        
+    # concatenate where clauses
+    
+    # test `not` operator
+    
+    # test validators
+    
+    # test context 
