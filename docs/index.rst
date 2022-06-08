@@ -58,11 +58,11 @@ QuerySets.
    rewind_cursor
    schema
    querysets
-   outerref
+   .. outerref
    context_validators
    query_ui
    custom_api
-   other_frameworks
+   .. other_frameworks
    limitations
    performance
    sample_project

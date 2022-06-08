@@ -135,27 +135,6 @@ class TestDjaqQuery(TestCase):
         )
         assert list(v.tuples())
 
-    @unittest.skip("debug sub queries")
-    def test_subquery_2(self):
-        pubs = DQ("Publisher", "id", name="pubs")  # noqa: F841
-        list(DQ(Book, "name").where("publisher in '@pubs'").tuples())
-
-    def test_in_list(self):
-        """Test that IN (list) works."""
-
-        # get available ids
-        ids = list(DQ(Book, "id").tuples())
-        ids = [id[0] for id in ids]
-
-        # take just three of them
-        c = {"ids": ids[:3]}
-        v = DQ(Book, "id, name")        
-        v = v.where("id in {ids}")
-        r = list(v.context(c).dicts())
-        # make sure we got three of them
-        self.assertEqual(len(r), 3)
-
-
 
 
 
@@ -260,6 +239,22 @@ class TestDjaqQuery(TestCase):
         publishers = DQ("Publisher", "name, count(book) as num_books").go()
         assert publishers[0]["num_books"] > 0
         
+    def test_in_list(self):
+        """Test that IN (list) works."""
+
+        # get available ids
+        ids = list(DQ(Book, "id").tuples())
+        ids = [id[0] for id in ids]
+
+        # take just three of them
+        c = {"ids": ids[:3]}
+        v = DQ(Book, "id, name")        
+        v = v.where("id in {ids}")
+        r = list(v.context(c).dicts())
+        # make sure we got three of them
+        self.assertEqual(len(r), 3)
+
+
         
     # concatenate where clauses
     

@@ -1,5 +1,99 @@
-Custom API
+Remote API
 ==========
+
+If you install the djaq_api app in INSTALLED_APPS, you have a remote api installed. 
+
+You POST requests to the endpoint, which by default is ``/djaq/api/request/``
+
+All requests have this overall structure:
+
+.. code:: python
+
+    {
+        "queries": [],
+        "updates": [],
+        "deletes": [],
+        "creates": []
+    }
+
+Any section can be left away.
+
+Remote Queries
+--------------
+
+Provide at least ``model`` as an argument:
+
+.. code:: python
+
+    {
+        "queries": [
+            {
+                "model": "Book",
+                "output": "id, name, price",
+                "where": "id==3",
+                "limit": 1,
+            } 
+        ]
+    }
+
+This will provide id, name, price for a Book with id of 3. 
+
+Remote Updates
+--------------
+
+Provide ``model`` and ``pk`` as arguments and then a set of field name/values:
+
+
+.. code:: python
+
+    {
+        "updates": [
+            {
+                "model": "books.Book", 
+                "pk": 3,
+                "fields": {
+                    "price": 3.99
+                }
+            }
+        ]
+    }
+
+Remote Creates
+--------------
+
+.. code:: python
+
+    {
+        "creates": [
+            {
+                "model": "books.Book", 
+                "fields": {
+                    "name": "My great american novel",
+                    "publisher_id": 10,
+                    "price": 3.99
+                }
+            }
+        ]
+    }
+
+Remote Deletes
+--------------
+
+Specify the model and primary key:
+
+.. code:: python
+
+    {
+        "updates": [
+            {
+                "model": "books.Book", 
+                "pk": 3,
+            }
+        ]
+    }
+
+Custom API
+----------
 
 You can write your own custom API endpoint. Here is what a view function
 for your data layer might look like with Djaq:

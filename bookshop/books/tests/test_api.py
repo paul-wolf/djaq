@@ -107,48 +107,57 @@ class TestDjaqAPI(TestCase):
         with self.assertRaises(ModelNotFoundException):
             DQ("Book", "publisher.name", whitelist=wl).where("ilike(name, 'A%')").construct()
 
-    @unittest.skip
+
     def test_updates(self):
         SPECIAL_PRICE = 12345.01
-        results = queries([{"q": "(Book.id, Book.name, Book.price)", "limit": 1}])
+        results = queries({
+            "queries": [
+                {
+                    "model": "Book",
+                    "output": "id, name, price, pubdate",
+                    "limit": "1",
+                    "offset": "0",
+                }
+            ]
+        })
         book = results[0][0]
-        book_id = book["book_id"]
-        book_price = float(book["book_price"])
+        book_id = book["id"]
+        book_price = float(book["price"])
         results = updates(
-            [{"_model": "books.Book", "_pk": book_id, "price": SPECIAL_PRICE}]
+            [{"model": "books.Book", "pk": book_id, "fields":{"price": SPECIAL_PRICE}}]
         )
         self.assertEqual(results[0], 1)
         c = {"special_price": SPECIAL_PRICE, "book_id": book_id}
         results = queries(
-            [
+            {"queries": [
                 {
-                    "q": "(Book.id, Book.name, Book.price) Book{id=='$(book_id)'}",
+                    "model": "Book",
+                    "output": "id, name, price",
+                    "where": f"id=={book_id}",
                     "limit": 1,
                     "context": c,
                 }
-            ]
+            ]}
         )
         book = results[0][0]
-        book_price = book["book_price"]
+        book_price = book["price"]
         self.assertEqual(float(book_price), SPECIAL_PRICE)
 
-    @unittest.skip
     def test_deletes(self):
         #  import ipdb; ipdb.set_trace()
-        book_count = DQ("(count(Book.id)) Book").value()
-        book_id = DQ("(Book.id)").limit(1).value()
-        data = {"_model": "books.Book", "_pk": book_id}
+        book_count = DQ("Book", "count(id)").value()
+        book_id = DQ("Book", "id").limit(1).value()
+        data = {"model": "books.Book", "pk": book_id}
         deletes([data])
-        book_count_new = DQ("(count(Book.id)) Book").value()
+        book_count_new = DQ("Book", "count(id)").value()
         self.assertEqual(book_count, book_count_new + 1)
 
-    @unittest.skip
     def test_remote_query(self):
         data = {
             "queries": [
                 {
-                    "q": "(Book.id, Book.name, Book.price, Book.pubdate)",
-                    "context": {},
+                    "model": "Book",
+                    "output": "(id, name, price, pubdate)",
                     "limit": "100",
                     "offset": "0",
                 }
@@ -173,14 +182,15 @@ class TestDjaqAPI(TestCase):
 
         self.assertEqual(len(result.get("queries")[0]), 10)
 
-    @unittest.skip
     def test_remote_create(self):
         data = {
             "creates": [
                 {
-                    "_model": "books.Author",
-                    "name": "joseph conrad",
-                    "age": 31,
+                    "model": "books.Author",
+                    "fields": {
+                        "name": "joseph conrad",
+                        "age": 31,
+                    }
                 }
             ]
         }
@@ -199,14 +209,15 @@ class TestDjaqAPI(TestCase):
         a = Author.objects.get(name="joseph conrad")
         self.assertEquals(pk, a.id)
 
-    @unittest.skip
     def test_remote_update(self):
         data = {
             "creates": [
                 {
-                    "_model": "books.Author",
-                    "name": "joseph conrad",
-                    "age": 31,
+                    "model": "books.Author",
+                    "fields": {
+                        "name": "joseph conrad",
+                        "age": 31,
+                    }
                 }
             ]
         }

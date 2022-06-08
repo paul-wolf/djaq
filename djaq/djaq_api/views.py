@@ -108,8 +108,8 @@ def creates(creates_list, whitelist=None):
         return list()
     responses = list()
     for data in creates_list:
-        model = app_utils.find_model_class(data.pop("_model"), whitelist=whitelist)
-        instance = model.objects.create(**data)
+        model = app_utils.find_model_class(data.pop("model"), whitelist=whitelist)
+        instance = model.objects.create(**data["fields"])
         responses.append(instance.pk)
     return responses
 
@@ -121,8 +121,8 @@ def updates(updates_list, whitelist=None):
         return []
     responses = []
     for data in updates_list:
-        model = app_utils.find_model_class(data.pop("_model"), whitelist=whitelist)
-        cnt = model.objects.filter(pk=data.pop("_pk")).update(**data)
+        model = app_utils.find_model_class(data.pop("model"), whitelist=whitelist)
+        cnt = model.objects.filter(pk=data.pop("pk")).update(**data["fields"])
         responses.append(cnt)
     return responses
 
@@ -134,8 +134,8 @@ def deletes(deletes_list, whitelist=None):
         return list()
     responses = list()
     for data in deletes_list:
-        model = app_utils.find_model_class(data.pop("_model"), whitelist=whitelist)
-        cnt = model.objects.filter(pk=data.pop("_pk")).delete()
+        model = app_utils.find_model_class(data.pop("model"), whitelist=whitelist)
+        cnt = model.objects.filter(pk=data.pop("pk")).delete()
         responses.append(cnt)
     return responses
 
@@ -158,7 +158,9 @@ def djaq_request_view(request):
 
     request_data = json.loads(request.body.decode("utf-8"))
 
+    print("-"*60)
     print(request_data)
+    print("^"*60)
 
     if not is_user_allowed(request.user):
         return HttpResponse("Djaq unauthorized", status=401)

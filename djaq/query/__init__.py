@@ -1134,6 +1134,8 @@ class ExpressionParser(ast.NodeVisitor):
         return sql, self.parameters
 
     def where(self, node: Union[str, B]):
+        if not node:
+            return
         # ipdb.set_trace()
         if isinstance(node, str):
             node = B(node)
@@ -1146,7 +1148,8 @@ class ExpressionParser(ast.NodeVisitor):
         return self
 
     def order_by(self, source: Union[str, List]):
-        
+        if not source:
+            return
         if isinstance(source, str):
             self.order_by_src = source.strip()
         elif isinstance(source, list):

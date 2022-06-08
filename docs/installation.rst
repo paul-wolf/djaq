@@ -109,21 +109,25 @@ You can also create objects, update them and delete them:
         ],
         "creates": [
             {
-                "_model": "Book",
-                "name": "my new book"
+                "model": "Book",
+                "fields": {
+                    "name": "my new book"
+                }
             }
         ],
         "updates": [
             {
-                "_model": "Book",
-                "_pk": 37,
-                "name": "my new title"
+                "model": "Book",
+                "pk": 37,
+                "fields": {
+                    "name": "my new title"
+                }
             }
         ],
         "deletes": [
             {
-                "_model": "Book",
-                "_pk": 37
+                "model": "Book",
+                "pk": 37
             }
         ]
     }

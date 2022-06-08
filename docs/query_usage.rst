@@ -153,9 +153,6 @@ will be translated to SQL:
 
    Book.price > 50 AND Publisher.name ILIKE 'A%'
 
-The expressions are fully parsed so they are not subject to SQL
-injection.
-
 Our example model also has an owner model called “Consortium” that is
 the owner of the publisher:
 
