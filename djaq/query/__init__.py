@@ -84,6 +84,15 @@ djaq_functions = {
         "SUMIF": "SUM(CASE WHEN {} THEN {} ELSE {} END)",
     }
    
+# which functions signal that we need to group by all columns that are not aggregate functions
+# we have to include as well our custom functions that use aggregate functions
+
+aggregate_functions = {
+    "unknown": ["avg", "count", "max", "min", "sum"],
+    "sqlite": ["avg", "count", "group_concat", "max", "min", "sum", "total"],
+    "postgresql": ["avg", "count", "max", "min", "sum", "stddev", "variance", "sumif"],
+}
+
 
 def has_context(expression: str, context: dict):
     """We check if the varname
@@ -291,12 +300,6 @@ class ExpressionParser(ast.NodeVisitor):
 
     directory = {}
 
-    aggregate_functions = {
-        "unknown": ["avg", "count", "max", "min", "sum"],
-        "sqlite": ["avg", "count", "group_concat", "max", "min", "sum", "total"],
-        "postgresql": ["avg", "count", "max", "min", "sum", "stddev", "variance"],
-    }
-
     def find_relation_from_alias(self, alias):
         for relation in self.relations:
             if alias == relation.alias:
@@ -304,7 +307,7 @@ class ExpressionParser(ast.NodeVisitor):
 
     def is_aggregate_expression(self, exp):
         """Return True if exp is an aggregate expression like
-        `avg(Book.price+Book.price*0.2)`
+        `avg(price+price*0.2)`
         """
         s = exp.lower().strip("(").split("(")[0]
         return s in self.vendor_aggregate_functions
@@ -380,12 +383,12 @@ class ExpressionParser(ast.NodeVisitor):
         # a set of conditions defined by B nodes
         self.condition_node: Optional[B] = None
 
-        if self.vendor in self.__class__.aggregate_functions:
-            self.vendor_aggregate_functions = self.__class__.aggregate_functions[
+        if self.vendor in aggregate_functions:
+            self.vendor_aggregate_functions = aggregate_functions[
                 self.vendor
             ]
         else:
-            self.vendor_aggregate_functions = self.__class__.aggregate_functions[
+            self.vendor_aggregate_functions = aggregate_functions[
                 "unknown"
             ]
         self.column_headers = list()
@@ -489,7 +492,7 @@ class ExpressionParser(ast.NodeVisitor):
 
         We receive this:
 
-            ['name', 'publisher', 'Book']
+            ['name', 'publisher']
 
         """
 
@@ -526,6 +529,7 @@ class ExpressionParser(ast.NodeVisitor):
         
         # ipdb.set_trace()
         # if no given relation, we want the master relation
+        
         relation = relation if relation else self.relations[0]
         # print(f"{relation=}")
         field = relation.model._meta.get_field(attr)
@@ -704,7 +708,7 @@ class ExpressionParser(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_Call(self, node):
-        if node.func.id.lower() in self.__class__.aggregate_functions[self.vendor]:
+        if node.func.id.lower() in aggregate_functions[self.vendor]:
             self.aggregate()
 
         last_context = self.expression_context
@@ -992,22 +996,24 @@ class ExpressionParser(ast.NodeVisitor):
         No model lookups are done here.
 
         `outerscope` is the relation enclosing us if we are a subquery.
+        
+        self.sql is assigned to
 
         """
 
-        self.relations.reverse()
-        master_relation = self.relations.pop()
-        self.relations.reverse()
-
-        if self.verbosity > 2:
-            master_relation.dump()
+        # self.relations.reverse()
+        # master_relation = self.relations.pop()
+        # self.relations.reverse()
+        master_relation = self.relations[0]
 
         ## SELECT EXPRESSIONS
         select = master_relation.select
 
-        for r in self.relations:
-            if r.select:
-                select = f"{select}, {r.select}"
+        
+        if len(self.relations) > 1:
+            for r in self.relations[1:]:
+                if r.select:
+                    select = f"{select}, {r.select}"
 
         if self.distinct:
             s = f"SELECT DISTINCT {select} FROM {master_relation.model_table}"
@@ -1016,14 +1022,14 @@ class ExpressionParser(ast.NodeVisitor):
 
         ## FROM JOINS
         if not outer_scope:
-            for relation in self.relations:
+            for relation in self.relations[1:]:
                 s += f" {relation.join_operator} {relation.model_table} {relation.alias or ''} ON {relation.join_condition_expression} "
 
         ## WHERE
         where = ""
         if master_relation.where:
             where += f" WHERE {master_relation.where}"
-        for relation in self.relations:
+        for relation in self.relations[1:]:
             if relation.where:
                 if where:
                     where += " AND "
@@ -1042,7 +1048,7 @@ class ExpressionParser(ast.NodeVisitor):
         order = ""
         if master_relation.order_by:
             order += f" ORDER BY {master_relation.order_by}"
-        for relation in self.relations:
+        for relation in self.relations[1:]:
             if relation.order_by:
                 if not order:
                     order = " ORDER BY "
@@ -1070,6 +1076,7 @@ class ExpressionParser(ast.NodeVisitor):
         The next time a generator method is called,
         the query will be executed again.
         """
+        # self.relations = list()
         self.cursor = None
         return self
 
@@ -1159,7 +1166,6 @@ class ExpressionParser(ast.NodeVisitor):
 
     def construct(self):
         """Build the final SQL into parser.sql"""
-        
         self.where_src = ""
         if self.condition_node:
             if self.where_src:
@@ -1170,8 +1176,13 @@ class ExpressionParser(ast.NodeVisitor):
                 self.condition_node, self._context
             )
 
+
+        # need to completely rebuild
+        self.relations = list()
+        self.add_relation(model=self.model)
         self.parse_source(self.select_src, self.where_src, self.order_by_src)
 
+        # TODO: This mutates self.relations
         self.build_sql_statement()
 
 
@@ -1400,7 +1411,7 @@ class DjaqQuery:
         return self.parser.model.objects.raw(self.sql(), self.parser._context)
 
     def go(self):
-        return list(self.dicts())
+        return list(self.rewind().dicts())
     
     def map(self, result_type: Union[callable, dataclasses.dataclass], data=None):
         """Either map to dataclass or call function to produce result.

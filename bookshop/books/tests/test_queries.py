@@ -14,6 +14,9 @@ import factory
 from faker import Faker
 
 from djaq import DjaqQuery as DQ
+from django.db.models import Count, Q
+from django.db.models import DecimalField, Avg, Max
+
 
 
 from books.models import Author, Publisher, Book, Store, Profile
@@ -88,11 +91,17 @@ class TestDjaqQuery(TestCase):
         results = list(DQ("User", "username, email, profile.company").tuples())
         self.assertTrue(results[0][0] == "artemis")
 
+    def test_rewind(self):
+        v = DQ("Book", "id, publisher.name")
+        assert v.go()
+        assert v.rewind().go()
+
     def test_group_by(self):
-        v = DQ(Book, "avg(price)")
-        self.assertEqual(len([t for t in v.tuples()]), 1)
+        v = DQ(Book, "publisher.name, avg(price)")
+        publisher_count = DQ("Publisher", "count(id)").value()
+        assert len([t for t in v.tuples()]) == publisher_count
         for t in v.rewind().tuples():
-            self.assertTrue(isinstance(t[0], Decimal))
+            self.assertTrue(isinstance(t[1], Decimal))
 
     def test_csv(self):
         v = DQ(Book, "id, name")
@@ -127,10 +136,11 @@ class TestDjaqQuery(TestCase):
         self.assertEquals(v.count(), 10)
 
     def test_custom_functions(self):
+        """Also, prove we can group by all fields."""
         v = DQ(Book,
-            """
-        (sum(iif(rating >= 3, rating, 0)) as below_3,
-        sum(iif(rating > 3, rating, 0)) as above_3)
+            """name,
+        sumif(rating >= 3, rating, 0) as below_3,
+        sumif(rating > 3, rating, 0) as above_3
         """
         )
         assert list(v.tuples())
@@ -254,12 +264,8 @@ class TestDjaqQuery(TestCase):
         # make sure we got three of them
         self.assertEqual(len(r), 3)
 
-
-        
     # concatenate where clauses
-    
-    # test `not` operator
-    
+        
     # test validators
     
     # test context 
@@ -274,4 +280,30 @@ class TestDjaqQuery(TestCase):
         DQ("Book", "id", name="dq_sub").where("ilike(name, {spec})")
         DQ("Book", "name, price").where("id in '@dq_sub'").context({"spec": "B%"}).go()
     
+    def test_queryset_vs_djaq(self):
+        """"Get exactly equivalent queries and compare.
+        There should be no difference."""
+        d = DQ("Book", """publisher.id,
+            sumif(rating < 3, 1, 0) as below_3,
+            sumif(rating >= 3, 1, 0) as above_3
+            """).order_by("publisher.id")
 
+        below_3 = Count('book', filter=Q(book__rating__lt=3))
+        above_3 = Count('book', filter=Q(book__rating__gte=3))
+        q = Publisher.objects.order_by("id").annotate(below_3=below_3).annotate(above_3=above_3)
+        for b in list(zip(q, d.rewind())):
+            assert b[0].below_3 == b[1]["below_3"]
+            
+    def test_queryset_vs_djaq(self):
+        d = DQ("Book", "publisher.name, max(price) - avg(price) as price_diff")
+
+        q = Book.objects.values("publisher__name") \
+            .annotate(price_diff=Max('price', output_field=DecimalField()) - Avg('price', output_field=DecimalField()))
+
+        for b in zip(q, d.rewind()):
+            assert b[0]["price_diff"] == b[1]["price_diff"]
+            
+    def test_in_op_boolean(self):
+        assert DQ("Book").where("in_print is True").count() == DQ("Book").count()
+        
+        assert DQ("Book").where("in_print is not True").count() == 0

@@ -16,13 +16,17 @@ example:
        name = models.CharField(max_length=300)
 
    class Book(models.Model):
-       name = models.CharField(max_length=300)
-       pages = models.IntegerField()
-       price = models.DecimalField(max_digits=10, decimal_places=2)
-       rating = models.FloatField()
-       authors = models.ManyToManyField(Author)
-       publisher = models.ForeignKey(Publisher, on_delete=models.CASCADE)
-       pubdate = models.DateField()
+    name = models.CharField(max_length=300)
+    pages = models.IntegerField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    rating = models.FloatField()
+    authors = models.ManyToManyField(Author)
+    publisher = models.ForeignKey(Publisher, on_delete=models.CASCADE)
+    alt_publisher = models.ForeignKey(
+        Publisher, related_name="alt_publisher", on_delete=models.CASCADE, null=True
+    )
+    pubdate = models.DateField()
+    in_print = models.BooleanField(default=True)
 
    class Store(models.Model):
        name = models.CharField(max_length=300)
@@ -83,7 +87,7 @@ method. The following two calls are pretty much equivalent:
 
    DQ("Book", "name").go()
 
-   list(DQ("Book", "name").dicts())
+   list(DQ("Book", "name").rewind().dicts())
 
 The column expressions can be Django Model fields or arithmetic expressions
 or any expression supported by functions of your underlying database
@@ -124,6 +128,26 @@ Identity:
 
 ``is``, ``is not``
 
+these can only be used with boolean values:
+
+.. code:: python
+
+   "in_print is True"
+   "in_print is not True"
+
+We do not support this usage of ``not``:
+
+.. code:: python
+
+   # Does not work
+   "not id == 3"
+
+For which use:
+
+.. code:: python
+
+   "id != 3"
+
 Columns are automatically given names. But you can give them your own
 name:
 
@@ -138,7 +162,6 @@ or if we want to filter and get only books over 5 in price:
    DQ("Book", "name as title, price as price, publisher.name as publisher") \
       .where("price > 5") \
       .go()
-
 
 
 The following filter:

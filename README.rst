@@ -26,7 +26,8 @@ What sets it apart:
 * No need to import models 
 * Clearer, more natural query syntax
 * More powerful expressions 
-* More consistent query syntax without resorting to hacks like ``F()`` expressions, ``annotate()``, ``aggregate()`` 
+* More consistent query syntax without resorting to idiosyncratic methods like 
+  ``F()`` expressions, ``annotate()``, ``aggregate()`` 
 * Column expressions are entirely evaluated in the database
 * Extensible: you can write your own functions
 * Pandas: Easily turn a query into Pandas Dataframe
@@ -60,13 +61,15 @@ QuerySets.
 -  `Sample
    Project <https://djaq.readthedocs.io/en/latest/sample_project.html>`__
 
-Here's an example comparison between Djaq and Django QuerySets:
+Here's an example comparison between Djaq and Django QuerySets that gets every
+publisher and counts the books for each that are above and below a rating
+threshold.
 
 .. code:: python
 
-   DQ("Book", """
-       sumif(rating < 3, rating, 0) as below_3,
-       sumif(rating >= 3, rating, 0) as above_3
+   DQ("Book", """publisher.name,
+       sumif(rating < 3, 1, 0) as below_3,
+       sumif(rating >= 3, 1, 0) as above_3
        """)
 
 compared to QuerySet:
@@ -90,7 +93,7 @@ compared to QuerySet:
 
    Book.objects.aggregate(Avg('price'), Max('price'), Min('price'))
 
-Get the difference from the average off the maximum price:
+Get the difference from the average off the maximum price for each publisher:
 
 .. code:: python
 
@@ -100,6 +103,6 @@ compared to QuerySet:
 
 .. code:: python
 
-   from django.db.models import FloatField, Avg, Max
-   Book.objects.values("publisher__name")
-      .annotate(price_diff=Max('price', output_field=FloatField()) - Avg('price', output_field=FloatField()))
+   from django.db.models import DecimalField, Avg, Max
+   Book.objects.values("publisher__name") \
+      .annotate(price_diff=Max('price', output_field=DecimalField()) - Avg('price', output_field=DecimalField()))
