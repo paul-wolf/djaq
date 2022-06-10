@@ -103,6 +103,6 @@ compared to QuerySet:
 
 .. code:: python
 
-   from django.db.models import DecimalField, Avg, Max
+   from django.db.models import Avg, Max
    Book.objects.values("publisher__name") \
-      .annotate(price_diff=Max('price', output_field=DecimalField()) - Avg('price', output_field=DecimalField()))
+      .annotate(price_diff=Max('price') - Avg('price'))
