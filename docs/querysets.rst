@@ -127,9 +127,8 @@ compared to QuerySet:
 
 .. code:: python
 
-   from django.db.models import Avg, Max, FloatField
-   Book.objects.values("publisher__name") \
-      .annotate(price_diff=Max('price', output_field=FloatField()) - Avg('price', output_field=FloatField()))
+   from django.db.models import Avg, Max
+   Book.objects.values("publisher__name").annotate(price_diff=Max('price') - Avg('price'))
 
 Count books per publisher:
 

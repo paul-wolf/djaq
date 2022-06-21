@@ -1,3 +1,4 @@
+import random
 import dataclasses
 import json
 from dataclasses import dataclass
@@ -16,7 +17,7 @@ from faker import Faker
 from djaq import DjaqQuery as DQ
 from django.db.models import Count, Q
 from django.db.models import DecimalField, Avg, Max
-
+from books.models import GENRE_CHOICES
 
 
 from books.models import Author, Publisher, Book, Store, Profile
@@ -27,6 +28,9 @@ fake = Faker()
 USERNAME = "artemis"
 PASSWORD = "blah"
 EMAIL = "artemis@blah.com"
+
+def get_random_genre():
+    return GENRE_CHOICES[random.randint(0, len(GENRE_CHOICES)-1)][0]
 
 @dataclass
 class BookEntity:
@@ -64,6 +68,7 @@ class TestDjaqQuery(TestCase):
                 rating=random.choice(range(5)),
                 publisher=Publisher.objects.all().order_by("?")[0],
                 pubdate=fake.date_this_century(before_today=True, after_today=False),
+                genre=get_random_genre(),
             )
             book.authors.add(Author.objects.all().order_by("?")[0])
             book.save()
@@ -307,3 +312,7 @@ class TestDjaqQuery(TestCase):
         assert DQ("Book").where("in_print is True").count() == DQ("Book").count()
         
         assert DQ("Book").where("in_print is not True").count() == 0
+        
+    def test_display_choices(self):
+        for book in DQ("Book", "genre_display").dicts():
+            assert book["genre_display"] in [g[1] for g in GENRE_CHOICES]

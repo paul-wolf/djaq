@@ -183,6 +183,17 @@ class ContextValidator(object):
         return d
 
 
+def build_case_statement_from_choices(field_exp, choices):
+    cases = ""
+    for c in choices:
+        cases += f"WHEN ({field_exp} = '{c[0]}') THEN '{c[1]}' "
+    return f"""
+        CASE
+        {cases}
+        END
+        """
+
+
 class JoinRelation(object):
     JOIN_TYPES = {"->": "LEFT JOIN", "<-": "RIGHT JOIN", "<>": "INNER JOIN"}
 
@@ -505,25 +516,58 @@ class ExpressionParser(ast.NodeVisitor):
                 relation = self.add_relation(model=self.model)
             return self.push_attribute_relations(attribute_list, relation)
 
+
+        # if relation and not len(attribute_list):
+        #     # attr is the terminal attribute
+        #     field = relation.model._meta.get_field(attr)
+        #     a = f'"{relation.model._meta.db_table}"."{field.column}"'
+        #     return a
+        # elif not relation and not len(attribute_list):
+        #     # attr is a stand-alone name
+        #     if not self.relations:
+        #         relation = self.add_relation(model=self.model)
+        #     model = self.relations[0].model
+        #     field = model._meta.get_field(attr)
+        #     if field.auto_created and not field.concrete:
+        #         # this field represents probably a reverse relation to a fk in another model
+        #         self.add_relation(model=field.related_model)
+        #         a = f'"{field.related_model._meta.db_table}"."{field.get_joining_columns()[0][1]}"'
+        #     else:
+        #         a = f'"{model._meta.db_table}"."{field.column}"'
+
+        #     return a
+
+        
         if relation and not len(attribute_list):
-            # attr is the terminal attribute
+            # attr is the terminal attribute            
+            if attr.endswith("_display"):
+                field = relation.model._meta.get_field(attr[:-8])
+                field_exp = f'"{relation.model._meta.db_table}"."{field.column}"'
+                if field.choices:
+                    return build_case_statement_from_choices(field_exp, field.choices)
             field = relation.model._meta.get_field(attr)
-            a = f'"{relation.model._meta.db_table}"."{field.column}"'
-            return a
+            return f'"{relation.model._meta.db_table}"."{field.column}"'
         elif not relation and not len(attribute_list):
             # attr is a stand-alone name
             if not self.relations:
                 relation = self.add_relation(model=self.model)
             model = self.relations[0].model            
-            field = model._meta.get_field(attr)
+                
+            if attr.endswith("_display"):
+                # ipdb.set_trace()
+                field = model._meta.get_field(attr[:-8])
+            else:
+                field = model._meta.get_field(attr)
             if field.auto_created and not field.concrete:
                 # this field represents probably a reverse relation to a fk in another model
                 self.add_relation(model=field.related_model)
-                a = f'"{field.related_model._meta.db_table}"."{field.get_joining_columns()[0][1]}"'
+                return f'"{field.related_model._meta.db_table}"."{field.get_joining_columns()[0][1]}"'
             else:
-                a = f'"{model._meta.db_table}"."{field.column}"'
+                field_exp = f'"{model._meta.db_table}"."{field.column}"'
+                if attr.endswith("_display") and field.choices:
+                    return build_case_statement_from_choices(field_exp, field.choices)
+                return field_exp
             
-            return a
 
         # if relation and attributes in list
         
@@ -1453,6 +1497,10 @@ class DjaqQuery:
             pass
         else:
             pass
+        
+    def __repr__(self):
+        return str(self.limit(5).go()) + "..." 
+
 
 # class Cursor:
 #     def __init__(self, values: Values):

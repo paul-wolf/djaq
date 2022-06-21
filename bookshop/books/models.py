@@ -30,6 +30,21 @@ class Publisher(models.Model):
     def __str__(self):
         return self.name
 
+CATEGORY_CHOICES = (
+    ("F", "Fiction"),
+    ("N", "Non-fiction"),
+)
+
+GENRE_CHOICES = (
+    ("O", "Other"),
+    ("F", "Fantasy"),
+    ("A", "Adventure"),
+    ("R", "Romance"),
+    ("M", "Mystery"),
+    ("H", "Horror"),
+    ("T", "Thriller"),
+    ("S", "Science fiction"),
+)
 
 class Book(models.Model):
 
@@ -44,7 +59,9 @@ class Book(models.Model):
     )
     pubdate = models.DateField()
     in_print = models.BooleanField(default=True)
-
+    category = models.CharField(max_length=1, choices=CATEGORY_CHOICES, default="N")
+    genre = models.CharField(max_length=1, choices=GENRE_CHOICES, default="O")
+    
     def __str__(self):
         return self.name
 
