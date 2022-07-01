@@ -13,26 +13,38 @@ class Command(BaseCommand):
     help = "Interpret string"
 
     def add_arguments(self, parser):
-        parser.add_argument("model", type=str, help="The model name; can be fully qualified")
-        parser.add_argument("--output", type=str, help="Comma-separated list of field expressions")
-        parser.add_argument("--where", type=str, help="A boolean expression that narrows results")
-        parser.add_argument("--order_by", type=str, help="Comma-separated list of field expression for ordering the results")
+        parser.add_argument(
+            "model", type=str, help="The model name; can be fully qualified"
+        )
+        parser.add_argument(
+            "--output", type=str, help="Comma-separated list of field expressions"
+        )
+        parser.add_argument(
+            "--where", type=str, help="A boolean expression that narrows results"
+        )
+        parser.add_argument(
+            "--order_by",
+            type=str,
+            help="Comma-separated list of field expression for ordering the results",
+        )
         parser.add_argument(
             "--format",
             default="dicts",  # dicts, tuples, json, csv
             action="store",
             dest="format",
             type=str,
-            help="one of: dicts, tuples, json, csv" 
+            help="one of: dicts, tuples, json, csv",
         )
-        parser.add_argument("--schema",
-                            action="store_true",
-                            default=False,
-                            )
-        parser.add_argument("--dataclass",
-                            action="store_true",
-                            default=False,
-                            )
+        parser.add_argument(
+            "--schema",
+            action="store_true",
+            default=False,
+        )
+        parser.add_argument(
+            "--dataclass",
+            action="store_true",
+            default=False,
+        )
 
         parser.add_argument(
             "--limit", default=10, action="store", dest="limit", type=int
@@ -42,19 +54,22 @@ class Command(BaseCommand):
             "--offset", default=0, action="store", dest="offset", type=int
         )
 
-        parser.add_argument("--distinct",
-                            action="store_true",
-                            default=False,
-                            )
-        
-        parser.add_argument("--sql",
-                            action="store_true",
-                            default=False,
-                            )
-        parser.add_argument("--count",
-                            action="store_true",
-                            default=False,
-                            )
+        parser.add_argument(
+            "--distinct",
+            action="store_true",
+            default=False,
+        )
+
+        parser.add_argument(
+            "--sql",
+            action="store_true",
+            default=False,
+        )
+        parser.add_argument(
+            "--count",
+            action="store_true",
+            default=False,
+        )
         # parser.add_argument(
         #     "--verbosity", default=0, action="store", dest="verbosity", type=int
         # )
@@ -62,16 +77,20 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if options.get("schema"):
             if options.get("model"):
-                print(json.dumps(DQ(options.get("model")).schema, cls=DjangoJSONEncoder, indent=4))
+                print(
+                    json.dumps(
+                        DQ(options.get("model")).schema, cls=DjangoJSONEncoder, indent=4
+                    )
+                )
                 return
             print(json.dumps(DQ.schema_all(), cls=DjangoJSONEncoder, indent=4))
-            return 
-        
+            return
+
         if options.get("dataclass"):
             if options.get("model"):
                 make_dataclass(options.get("model"))
-            return 
-            
+            return
+
         q = DQ(
             options.get("model"),
             options.get("output"),

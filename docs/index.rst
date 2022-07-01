@@ -55,7 +55,6 @@ QuerySets.
    datetimes
    count
    slicing
-   rewind_cursor
    schema
    querysets
    .. outerref

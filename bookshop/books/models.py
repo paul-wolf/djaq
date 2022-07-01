@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
 
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
@@ -61,10 +63,33 @@ class Book(models.Model):
     in_print = models.BooleanField(default=True)
     category = models.CharField(max_length=1, choices=CATEGORY_CHOICES, default="N")
     genre = models.CharField(max_length=1, choices=GENRE_CHOICES, default="O")
-    
+
+    # def save(self, *args, **kwargs):
+    #     try:
+    #         ISBN.objects.get(book=self)
+    #     except ISBN.DoesNotExist:
+    #         ISBN.objects.create(book=self)
+    #     super().save(*args, **kwargs)
+
     def __str__(self):
         return self.name
 
+@receiver(post_save, sender=Book)
+def create_ISBN(sender, instance, created, **kwargs):
+    try:
+        ISBN.objects.get(book=instance)
+    except ISBN.DoesNotExist:
+        ISBN.objects.create(book=instance)
+
+
+class ISBN(models.Model):
+    code = models.CharField(max_length=20)
+    book = models.OneToOneField(Book, on_delete=models.CASCADE)
+    def save(self, *args, **kwargs):
+        if not self.code:
+            # not unique, we don't care
+            self.code = "978-3-16-148410-0"
+        super().save(*args, **kwargs)
 
 class Store(models.Model):
     name = models.CharField(max_length=300)

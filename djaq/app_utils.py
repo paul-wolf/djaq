@@ -48,7 +48,10 @@ def find_model_class(model_label, whitelist=None):
             continue
         for model_name, model_class in a.models.items():
             if whitelist and a.label in whitelist:
-                if whitelist[a.label] and model_class.__name__ not in whitelist[a.label]:
+                if (
+                    whitelist[a.label]
+                    and model_class.__name__ not in whitelist[a.label]
+                ):
                     continue
             if class_name == model_class.__name__:
                 return model_class
@@ -105,7 +108,7 @@ def field_ref(ref):
 def get_field_details(f, connection):
     """Return dict of field properties, json serialisable."""
     d = {}
-    
+
     d["name"] = f.name
     d["unique"] = f.unique
     d["primary_key"] = f.primary_key
@@ -192,22 +195,23 @@ def get_whitelist(whitelist=None):
 
 
 TYPE_MAP = {
-    'AutoField': "int",
-    'CharField': "str",
-    'IntegerField': "int",
-    'DecimalField': "Decimal",
-    'FloatField': "int",
-    'ForeignKey': "int",
-    'DateField': "datetime.date",
-    'DateTimeField': "datetime.datetime",
-    'BooleanField': "bool",
-    'TextField': "str",
-    'PositiveSmallIntegerField': "int",
-    'OneToOneField': "int",
+    "AutoField": "int",
+    "CharField": "str",
+    "IntegerField": "int",
+    "DecimalField": "Decimal",
+    "FloatField": "int",
+    "ForeignKey": "int",
+    "DateField": "datetime.date",
+    "DateTimeField": "datetime.datetime",
+    "BooleanField": "bool",
+    "TextField": "str",
+    "PositiveSmallIntegerField": "int",
+    "OneToOneField": "int",
 }
+
+
 def map_type(field):
-    """
-    """
+    """ """
     return TYPE_MAP[field.get_internal_type()]
 
 
@@ -220,6 +224,7 @@ def make_dataclass(model, defaults=False, base_class=None):
         print(f"    {f.name}: {map_type(f)}")
     print("")
 
+
 def dataclass_mapper(klass, result_dict):
     """Create an instance of dataclass klass with data from result_dict."""
     data = dict()
@@ -228,5 +233,3 @@ def dataclass_mapper(klass, result_dict):
         if key in klass_keys:
             data[key] = result_dict[key]
     return klass(**data)
-
-        

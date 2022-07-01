@@ -71,7 +71,7 @@ result set. One example:
 
 Here is the structure of the syntax:
 
-.. code:: shell
+.. code:: python
 
    DjaqQuery([model_name|model], [<field_exp1>, ...])
    .where(<condition_expression>)
@@ -83,11 +83,11 @@ lines.
 Note as well that we usually in this tutorial use the `.go()` convenience
 method. The following two calls are pretty much equivalent:
 
-.. code:: shell
+.. code:: python
 
    DQ("Book", "name").go()
 
-   list(DQ("Book", "name").rewind().dicts())
+   list(DQ("Book", "name").dicts())
 
 The column expressions can be Django Model fields or arithmetic expressions
 or any expression supported by functions of your underlying database
@@ -168,13 +168,14 @@ The following filter:
 
 .. code:: shell
 
-   DQ("Book").where("price > 5 and ilike(publisher.name, 'A%')").go()
+   DQ("Book", "publisher.name as publisher" ).where("price > 5 and ilike(publisher.name, 'A%')").go()
 
 will be translated to SQL:
 
 .. code:: sql
 
-   Book.price > 50 AND Publisher.name ILIKE 'A%'
+   SELECT "books_publisher"."name" FROM books_book LEFT JOIN books_publisher  ON ("books_book"."publisher_id" = "books_publisher"."id") 
+    WHERE ("books_book"."price" > 5 AND "books_publisher"."name" ILIKE \'A%\')'
 
 Our example model also has an owner model called “Consortium” that is
 the owner of the publisher:
@@ -246,7 +247,7 @@ Get unique results with ``distinct()``:
 
    DQ("Book", "pubdate.year").where("regex(name, 'B.*') and pubdate.year > 2013").distinct().order_by("-pubdate.year").go()
 
-You can qualify model names with the app name or registered app path:
+You can qualify model names with the app name or label used in `apps.py`:
 
 .. code:: python
 
@@ -269,7 +270,7 @@ To pass parameters, use variables in your query, like ``{myvar}``:
     ('Key same effect me.', datetime.date(2018, 12, 23))]
 
 Notice that variables are not f-string placeholders! Avoid using f-strings to
-interpolate arguments as that puts you at risk of sql injection.
+interpolate arguments.
 
 
 

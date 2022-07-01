@@ -60,10 +60,11 @@ point-by-point comparison with Djaq:
 - Slicing: QuerySets can bet sliced: ``qs[100:150]`` whereas you use
   ``limit()``, ``offset()`` with Djaq: ``dq.offset(100).limit(50)``
 
-- Caching: QuerySets will cache results in a rather sophisticated manner. With
-  Djaq, you need to rerun the query each time unless you are caching results
-  yourself. Djaq eschews caching as part of the query evaluation to encourage
-  separation of concerns and prevent unintended performance results.
+- Caching: QuerySets will cache results in a rather sophisticated manner to
+  support slicing (above). With Djaq, you need to rerun the query each time
+  unless you are caching results yourself. Djaq eschews caching as part of the
+  query evaluation to encourage separation of concerns and prevent unintended
+  performance results.
 
 Filter expressions in Djaq have a single expression paradigm, unlike QuerySets.
 When you filter a QuerySet, because you are assigning values to a series of
@@ -103,7 +104,7 @@ Both QuerySets and DjaqQuerys let you add conditions incrementally:
 
 The presumption is to conjoin the two conditions with "AND" in both cases.
 
-Let’s look at some direct query comparisons:
+Let’s look at some more query comparisons:
 
 Get the average price of books:
 
@@ -134,7 +135,7 @@ Count books per publisher:
 
 .. code:: python
 
-   DQ("Publisher", "name, count(book) as num_books")
+   DQ("Publisher", "name as publisher, count(book) as num_books")
 
 compared to QuerySet:
 
@@ -146,18 +147,18 @@ Count books with ratings up to and over a number:
 
 .. code:: python
 
-   DQ("Book", """
-       sumif(rating < 3, rating, 0)) as below_3,
-       sumif(rating >= 3, rating, 0)) as above_3
-       """)
+   DQ("Book", """publisher.name,
+       sumif(rating <= 3, rating, 0) as below_3,
+       sumif(rating > 3, rating, 0) as above_3
+       """).go()
 
 compared to QuerySet:
 
 .. code:: python
 
    from django.db.models import Count, Q
-   above_3 = Count('book', filter=Q(book__rating__gt=3))
    below_3 = Count('book', filter=Q(book__rating__lte=3))
+   above_3 = Count('book', filter=Q(book__rating__gt=3))
    Publisher.objects.annotate(below_3=below_3).annotate(above_3=above_3)
 
 Get average, maximum, minimum price of books:

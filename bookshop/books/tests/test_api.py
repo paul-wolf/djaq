@@ -39,7 +39,7 @@ USERNAME = "artemis"
 PASSWORD = "blah"
 EMAIL = "artemis@blah.com"
 
-
+BOOK_COUNT = 10
 
 class TestDjaqAPI(TestCase):
     def setUp(self):
@@ -58,7 +58,7 @@ class TestDjaqAPI(TestCase):
         Publisher.objects.create(name="Simon and Bloober")
         Publisher.objects.create(name="Alternative press")
         title = factory.Faker("sentence", nb_words=4)
-        for i in range(10):
+        for i in range(BOOK_COUNT):
             book = Book.objects.create(
                 name=factory.Faker("sentence", nb_words=4),
                 pages=random.choice(range(100, 800)),

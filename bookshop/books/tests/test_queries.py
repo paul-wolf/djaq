@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import random
 from decimal import Decimal
+from traceback import print_tb
 import unittest
 
 from django.test import TestCase
@@ -20,7 +21,7 @@ from django.db.models import DecimalField, Avg, Max
 from books.models import GENRE_CHOICES
 
 
-from books.models import Author, Publisher, Book, Store, Profile
+from books.models import Author, Publisher, Book, Store, Profile, Consortium
 
 import ipdb
 fake = Faker()
@@ -28,6 +29,7 @@ fake = Faker()
 USERNAME = "artemis"
 PASSWORD = "blah"
 EMAIL = "artemis@blah.com"
+BOOK_COUNT = 10
 
 def get_random_genre():
     return GENRE_CHOICES[random.randint(0, len(GENRE_CHOICES)-1)][0]
@@ -57,10 +59,13 @@ class TestDjaqQuery(TestCase):
         Author.objects.create(name="Sue", age=33)
         Author.objects.create(name="Sue", age=33)
 
-        Publisher.objects.create(name="Simon and Bloober")
-        Publisher.objects.create(name="Alternative press")
+        c = Consortium.objects.create(name="Allpub", marketcap=1000000)
+
+        Publisher.objects.create(name="Simon and Bloober", owner=c)
+        Publisher.objects.create(name="Alternative press", owner=c)
+        
         factory.Faker("sentence", nb_words=4)
-        for i in range(10):
+        for i in range(BOOK_COUNT):
             book = Book.objects.create(
                 name=fake.sentence(),
                 pages=random.choice(range(100, 800)),
@@ -150,10 +155,8 @@ class TestDjaqQuery(TestCase):
         )
         assert list(v.tuples())
 
-
-
-
     def test_sql(self):
+        # ipdb.set_trace()
         v = DQ(Book, "id, name")
         v = v.where("id in {ids}")
         assert v.sql()
@@ -188,7 +191,9 @@ class TestDjaqQuery(TestCase):
         DQ(Book).get(id)
         
     def test_attribute_nesting(self):
-        assert list(DQ("Book", "publisher.owner.name").dicts())
+        for d in DQ("Book", "publisher.owner.name as owner").dicts():
+            assert d.get("owner")
+            break
         
     
     def test_limit(self):
@@ -257,7 +262,7 @@ class TestDjaqQuery(TestCase):
     def test_in_list(self):
         """Test that IN (list) works."""
 
-        # get available ids
+        # ipdb.set_trace()
         ids = list(DQ(Book, "id").tuples())
         ids = [id[0] for id in ids]
 
@@ -267,6 +272,7 @@ class TestDjaqQuery(TestCase):
         v = v.where("id in {ids}")
         r = list(v.context(c).dicts())
         # make sure we got three of them
+        # ipdb.set_trace()
         self.assertEqual(len(r), 3)
 
     # concatenate where clauses
@@ -316,3 +322,37 @@ class TestDjaqQuery(TestCase):
     def test_display_choices(self):
         for book in DQ("Book", "genre_display").dicts():
             assert book["genre_display"] in [g[1] for g in GENRE_CHOICES]
+            
+    def test_limit(self):
+        dq = DQ("Book")
+        assert len(list(dq.limit(1).dicts())) == 1
+        # check we did not mutate the object
+        assert len(list(dq.dicts())) == BOOK_COUNT
+        
+    def test_no_mutate(self):
+        dq = DQ("Book")
+        assert len(list(dq.where("in_print is not True").dicts())) == 0
+        # check we did not mutate the object
+        assert len(list(dq.rewind().dicts())) == BOOK_COUNT
+        
+    def test_rewind_len(self):
+        dq = DQ("Book")
+        assert len(dq) == len(dq)
+
+    def test_rewind_dicts(self):
+        dq = DQ("Book")
+        assert len(list(dq.dicts())) == len(list(dq.dicts()))
+        
+    def test_len(self):
+        assert len(DQ("Book")) == 10
+        
+    #    order by won't work on aliased names
+    
+    # test for not null or is null or empty
+    
+    
+    # exclude
+    
+    # OneToOne rel fields
+    
+    # datetime to date

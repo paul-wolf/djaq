@@ -1,12 +1,12 @@
 from typing import Dict, Optional, Union, List
 import dataclasses
 import csv
+import copy
 import io
 import json
 import re
 import ast
-from ast import AST, iter_fields
-import logging
+from ast import AST
 import functools
 import dataclasses
 from django.db import connections, models
@@ -14,7 +14,7 @@ from django.db.models.query import QuerySet
 
 from django.utils.text import slugify
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db.models.fields.related import ManyToOneRel, ManyToManyField
+from django.db.models.fields.related import ManyToOneRel, ManyToManyField, OneToOneRel, OneToOneField
 from django.core.exceptions import FieldDoesNotExist
 
 from djaq.result import DQResult
@@ -36,19 +36,19 @@ from djaq.conditions import B
 
 import ipdb
 
-# from djaq import app_utils
-
-logger = logging.getLogger(__name__)
 
 PLACEHOLDER_PATTERN = re.compile(r"\{([\w]*)\}")
+
 
 @functools.lru_cache()
 def func_in_whitelist(funcname):
     return funcname.lower() in function_whitelist
 
+
 def concat(funcname, args):
     """Return args spliced by sql concat operator."""
     return " || ".join(args)
+
 
 def cast(funcname, args):
     t = args[1].replace("'", "").replace("'", "")
@@ -68,22 +68,23 @@ def index_choice0(funcname, args):
     s += "END"
     return s
 
+
 djaq_functions = {
-        "IIF": "CASE WHEN {} THEN {} ELSE {} END",
-        "LIKE": "{} LIKE {}",
-        "ILIKE": "{} ILIKE {}",
-        "CONTAINS": "{} ILIKE %{}%",
-        "REGEX": "{} ~ {}",
-        "CONCAT": concat,
-        "TODAY": "CURRENT_DATE",
-        "CAST": cast,
-        "POINTX": "ST_X({})",
-        "POINTY": "ST_Y({})",
-        "INDEX_CHOICE0": index_choice0,
-        "COUNTDISTINCT": "COUNT(DISTINCT {})",
-        "SUMIF": "SUM(CASE WHEN {} THEN {} ELSE {} END)",
-    }
-   
+    "IIF": "CASE WHEN {} THEN {} ELSE {} END",
+    "LIKE": "{} LIKE {}",
+    "ILIKE": "{} ILIKE {}",
+    # "CONTAINS": "{} ILIKE '%%{}%%'",
+    "REGEX": "{} ~ {}",
+    "CONCAT": concat,
+    "TODAY": "CURRENT_DATE",
+    "CAST": cast,
+    "POINTX": "ST_X({})",
+    "POINTY": "ST_Y({})",
+    "INDEX_CHOICE0": index_choice0,
+    "COUNTDISTINCT": "COUNT(DISTINCT {})",
+    "SUMIF": "SUM(CASE WHEN {} THEN {} ELSE {} END)",
+}
+
 # which functions signal that we need to group by all columns that are not aggregate functions
 # we have to include as well our custom functions that use aggregate functions
 
@@ -120,17 +121,17 @@ def has_context(expression: str, context: dict):
     return bool(value)
 
 
-def render_conditions(node, ctx) -> str:
+def render_conditions_drop_empty(node, ctx) -> str:
     """Produce a string repesenting all expressions
     in the node tree as a single expression.
     If a B() node expression references a parameter,
-    '$(somevariable)', we check if the context can supply that variable.
+    {somevariable}, we check if the context can supply that variable.
     if not we drop that node from the final expression.
     """
     if isinstance(node, str):
         return node if has_context(node, ctx) else ""
     elif isinstance(node, list):
-        expressions = [render_conditions(n, ctx) for n in node]
+        expressions = [render_conditions_drop_empty(n, ctx) for n in node]
         expressions = [e for e in expressions if e]
         if not expressions:
             return ""
@@ -139,7 +140,7 @@ def render_conditions(node, ctx) -> str:
     elif isinstance(node.x, str):
         return node.x if has_context(node.x, ctx) else ""
     elif isinstance(node.x, list):
-        expressions = [render_conditions(n, ctx) for n in node.x]
+        expressions = [render_conditions_drop_empty(n, ctx) for n in node.x]
         expressions = [e for e in expressions if e]
         if not expressions:
             return ""
@@ -147,6 +148,29 @@ def render_conditions(node, ctx) -> str:
         return f"({s})"
     raise Exception(f"Received unexpected type: {type(node)}")
 
+def render_conditions(node, ctx) -> str:
+    """Produce a string repesenting all expressions
+    in the node tree as a single expression.
+    """
+    if isinstance(node, str):
+        return node
+    elif isinstance(node, list):
+        expressions = [render_conditions(n, ctx) for n in node]
+        expressions = [e for e in expressions if e]
+        if not expressions:
+            return ""
+        s = " and ".join(expressions)
+        return f"({s})"
+    elif isinstance(node.x, str):
+        return node.x
+    elif isinstance(node.x, list):
+        expressions = [render_conditions(n, ctx) for n in node.x]
+        expressions = [e for e in expressions if e]
+        if not expressions:
+            return ""
+        s = f" {node.conjunction} ".join(expressions)
+        return f"({s})"
+    raise Exception(f"Received unexpected type: {type(node)}")
 
 class ContextValidator(object):
     """Base class for validating context data.
@@ -199,13 +223,13 @@ class JoinRelation(object):
 
     def __init__(
         self,
-        model,
-        xquery,
-        fk_relation=None,
+        model: models.Model,
+        xquery: "ExpressionParser",
+        fk_relation: "JoinRelation" = None,
         fk_field=None,
         related_field=None,
-        join_type="->",
-        alias=None,
+        join_type: str = "->",
+        alias: str = None,
     ):
 
         self.model = model
@@ -235,6 +259,9 @@ class JoinRelation(object):
         print(f"   order_by     : {r.order_by}")
         print(f"   order_by_dir : {r.order_by_direction}")
         print(f"   alias        : {r.alias}")
+
+    def clone(self):
+        return copy.deepcopy(self)
 
     @property
     def model_table(self):
@@ -326,24 +353,24 @@ class ExpressionParser(ast.NodeVisitor):
     # the ExpressionParser init()
     def __init__(
         self,
-        model=None,  # django model  or string of model
-        select_src=None,
-        where_src=None,
-        order_by_src=None,
-        using="default",
-        limit=None,
-        offset=None,
-        order_by=None,
-        name=None,
-        context=None,
-        names=None,
+        model: models.Model = None,  # django model  or string of model
+        select_src: str = None,
+        where_src: str = None,
+        order_by_src: str = None,
+        using: str = "default",
+        limit: int = None,
+        offset: int = None,
+        # name given to this object for lookup later
+        name: str = None,
+        context: Dict = None,
+        names: List[str] = None,
         verbosity=0,
         whitelist=None,
-        local=False,
+        local: bool = False,
+        drop_empty: bool = False
     ):
-        # main relation
+        # main relation, type is models.Model
         self.model = model
-        
 
         self._context = context
 
@@ -357,7 +384,6 @@ class ExpressionParser(ast.NodeVisitor):
         self.select_src = select_src
         self.where_src = where_src
         self.order_by_src = order_by_src
-        self.dest = ""
         self.using = using
         self.connection = connections[using]
         self.vendor = self.connection.vendor
@@ -370,24 +396,20 @@ class ExpressionParser(ast.NodeVisitor):
         # self.order_by = order_by
         self.sql = None
         self.cursor = None
-        self.col_names = None
-        self.code = ""
         self.stack = list()
-        self.names = list()
+        self.names: List[str] = list()
         self.column_expressions = list()
         self.relations = list()
-        self.parsed = False
         self.expression_context = "select"  # change to 'where' or 'func' later
-        self.function_context = ""
         self.fstack = list()  # function stack
         self.parameters = list()  # query parameters
-        self.where_marker = 0
         self.context_validator_class = ContextValidator
         self.local = local
         self.unary_stack = list()
         # this tracks when to aggregate a relation potentially before the relations exist
         self.deferred_aggregations = list()
         self.distinct = False
+        self.drop_empty = drop_empty
         
         self.add_relation(model=self.model)
 
@@ -395,14 +417,31 @@ class ExpressionParser(ast.NodeVisitor):
         self.condition_node: Optional[B] = None
 
         if self.vendor in aggregate_functions:
-            self.vendor_aggregate_functions = aggregate_functions[
-                self.vendor
-            ]
+            self.vendor_aggregate_functions = aggregate_functions[self.vendor]
         else:
-            self.vendor_aggregate_functions = aggregate_functions[
-                "unknown"
-            ]
+            self.vendor_aggregate_functions = aggregate_functions["unknown"]
         self.column_headers = list()
+
+    def clone(self):
+        p = ExpressionParser(
+            self.model,
+            select_src=self.select_src,
+            where_src=self.where_src,
+            order_by_src=self.order_by_src,
+            using=self.using,
+            limit=self._limit,
+            offset=self._offset,
+            context=copy.deepcopy(self._context),
+            verbosity=self.verbosity,
+            whitelist=self.whitelist,
+            local=self.local,
+            drop_empty=self.drop_empty,
+        )
+        p.condition_node = copy.deepcopy(self.condition_node)
+        p.relations = list()
+        p.sql = None
+        p.cursor = None
+        return p
 
     def mogrify(self, sql, parameters):
         """Create completed sql with list of parameters.
@@ -488,12 +527,14 @@ class ExpressionParser(ast.NodeVisitor):
     def field_specific_attribute(self, field, relation, attribute_list):
         """
         Return the column expression.
-        
+
         """
         attr = attribute_list.pop()
         if field.get_internal_type() == "DateField":
             return f'date_part(\'{attr}\', "{relation.model._meta.db_table}"."{field.column}")'
         elif field.get_internal_type() == "DateTimeField":
+            if attr.lower() == "date":
+                return f'DATE("{relation.model._meta.db_table}"."{field.column}")'
             return f'date_part(\'{attr}\', "{relation.model._meta.db_table}"."{field.column}")'
 
     def push_attribute_relations(self, attribute_list, relation=None):
@@ -516,43 +557,26 @@ class ExpressionParser(ast.NodeVisitor):
                 relation = self.add_relation(model=self.model)
             return self.push_attribute_relations(attribute_list, relation)
 
-
-        # if relation and not len(attribute_list):
-        #     # attr is the terminal attribute
-        #     field = relation.model._meta.get_field(attr)
-        #     a = f'"{relation.model._meta.db_table}"."{field.column}"'
-        #     return a
-        # elif not relation and not len(attribute_list):
-        #     # attr is a stand-alone name
-        #     if not self.relations:
-        #         relation = self.add_relation(model=self.model)
-        #     model = self.relations[0].model
-        #     field = model._meta.get_field(attr)
-        #     if field.auto_created and not field.concrete:
-        #         # this field represents probably a reverse relation to a fk in another model
-        #         self.add_relation(model=field.related_model)
-        #         a = f'"{field.related_model._meta.db_table}"."{field.get_joining_columns()[0][1]}"'
-        #     else:
-        #         a = f'"{model._meta.db_table}"."{field.column}"'
-
-        #     return a
-
-        
         if relation and not len(attribute_list):
-            # attr is the terminal attribute            
+            # attr is the terminal attribute
             if attr.endswith("_display"):
                 field = relation.model._meta.get_field(attr[:-8])
                 field_exp = f'"{relation.model._meta.db_table}"."{field.column}"'
                 if field.choices:
                     return build_case_statement_from_choices(field_exp, field.choices)
             field = relation.model._meta.get_field(attr)
+            if isinstance(field, OneToOneRel):
+                # ipdb.set_trace()
+                # the case if we reference a onetoone but no single field
+                raise Exception("Specify a field name in the related model")
+
             return f'"{relation.model._meta.db_table}"."{field.column}"'
         elif not relation and not len(attribute_list):
             # attr is a stand-alone name
             if not self.relations:
                 relation = self.add_relation(model=self.model)
-            model = self.relations[0].model            
-                
+            model = self.relations[0].model
+
             if attr.endswith("_display"):
                 # ipdb.set_trace()
                 field = model._meta.get_field(attr[:-8])
@@ -567,13 +591,12 @@ class ExpressionParser(ast.NodeVisitor):
                 if attr.endswith("_display") and field.choices:
                     return build_case_statement_from_choices(field_exp, field.choices)
                 return field_exp
-            
 
         # if relation and attributes in list
-        
+
         # ipdb.set_trace()
         # if no given relation, we want the master relation
-        
+
         relation = relation if relation else self.relations[0]
         # print(f"{relation=}")
         field = relation.model._meta.get_field(attr)
@@ -726,8 +749,7 @@ class ExpressionParser(ast.NodeVisitor):
                 if not self.local:
                     raise Exception("Non-local attempt to use literal SQL")
                 sql = str(tuple(obj)).strip("(").strip(")")
-                
-                    
+
             elif isinstance(obj, QuerySet):
                 sql, sql_params = self.queryset_source(obj)
                 sql = self.mogrify(sql, sql_params)
@@ -842,6 +864,10 @@ class ExpressionParser(ast.NodeVisitor):
         self.emit(" NOT IN ")
         ast.NodeVisitor.generic_visit(self, node)
 
+    def visit_Not(self, node):
+        self.emit(" NOT ")
+        ast.NodeVisitor.generic_visit(self, node)
+
     def visit_BinOp(self, node):
         self.emit("(")
         ast.NodeVisitor.visit(self, node.left)
@@ -884,11 +910,9 @@ class ExpressionParser(ast.NodeVisitor):
         self.emit(")")
 
     def visit_And(self, node):
-        self.where_marker = len(self.relations[self.relation_index].where)
         self.emit(" AND ")
 
     def visit_Or(self, node):
-        self.where_marker = len(self.relations[self.relation_index].where)
         self.emit(" OR ")
 
     def visit_Tuple(self, node):
@@ -913,7 +937,7 @@ class ExpressionParser(ast.NodeVisitor):
         ast.NodeVisitor.generic_visit(self, node)
 
     def visit_Attribute(self, node):
-        logger.debug(node_string(node))
+
         self.stack.append(node.attr)
         for child in ast.iter_child_nodes(node):
             if isinstance(child, ast.Attribute):
@@ -1040,7 +1064,7 @@ class ExpressionParser(ast.NodeVisitor):
         No model lookups are done here.
 
         `outerscope` is the relation enclosing us if we are a subquery.
-        
+
         self.sql is assigned to
 
         """
@@ -1053,7 +1077,6 @@ class ExpressionParser(ast.NodeVisitor):
         ## SELECT EXPRESSIONS
         select = master_relation.select
 
-        
         if len(self.relations) > 1:
             for r in self.relations[1:]:
                 if r.select:
@@ -1070,7 +1093,7 @@ class ExpressionParser(ast.NodeVisitor):
                 s += f" {relation.join_operator} {relation.model_table} {relation.alias or ''} ON {relation.join_condition_expression} "
 
         ## WHERE
-        where = ""
+        where = "\n"
         if master_relation.where:
             where += f" WHERE {master_relation.where}"
         for relation in self.relations[1:]:
@@ -1080,7 +1103,7 @@ class ExpressionParser(ast.NodeVisitor):
                 else:
                     where += "WHERE "
                 where += relation.where
-        s += where
+        s += where + "\n"
 
         ## GROUP BY
         if master_relation.group_by:
@@ -1155,7 +1178,7 @@ class ExpressionParser(ast.NodeVisitor):
 
         sql = self.sql
         # ipdb.set_trace()
-        
+
         self.cursor = self.connection.cursor()
 
         if count:
@@ -1166,14 +1189,14 @@ class ExpressionParser(ast.NodeVisitor):
             if self.verbosity:
                 conn = connections[self.using]
                 cursor = conn.cursor()
-                logger.debug(cursor.mogrify(sql, context))
+
                 if self.verbosity:
                     print(f"sql={sql}, params={context}")
             self.cursor.execute(sql, context)
         else:
             if self.verbosity:
                 print(f"sql={sql}")
-            logger.debug(sql)
+
             self.cursor.execute(sql)
 
     def query(self, context=None):
@@ -1210,27 +1233,25 @@ class ExpressionParser(ast.NodeVisitor):
 
     def construct(self):
         """Build the final SQL into parser.sql"""
-        self.where_src = ""
+        src = self.where_src
         if self.condition_node:
             if self.where_src:
-                self.where_src += " and "
+                src += " and "
             else:
-                self.where_src = ""
-            self.where_src += render_conditions(
-                self.condition_node, self._context
-            )
-
-
+                src = ""
+            if self.drop_empty:
+                src += render_conditions_drop_empty(self.condition_node, self._context)
+            else:
+                src += render_conditions(self.condition_node, self._context)
         # need to completely rebuild
         self.relations = list()
         self.add_relation(model=self.model)
-        self.parse_source(self.select_src, self.where_src, self.order_by_src)
-
-        # TODO: This mutates self.relations
+        self.parse_source(self.select_src, src, self.order_by_src)
         self.build_sql_statement()
 
-
     def dicts(self, data=None):
+        if not self.sql:
+            self.construct()
         if not self.cursor:
             self.execute(data)
         while True:
@@ -1239,9 +1260,12 @@ class ExpressionParser(ast.NodeVisitor):
                 break
             row_dict = dict(zip(self.column_headers, row))
             yield row_dict
-        return
+        self.cursor = None
+        
 
     def tuples(self, data=None, flat=False):
+        if not self.sql:
+            self.construct()
         row = None
         if not self.cursor:
             self.execute(data)
@@ -1253,13 +1277,17 @@ class ExpressionParser(ast.NodeVisitor):
                 yield row[0]
             else:
                 yield row
-        return
+        self.cursor = None
+        
 
     def json(self, data=None, encoder=DjangoJSONEncoder):
         for d in self.dicts(data):
             yield json.dumps(d, cls=encoder)
+        self.cursor = None
 
     def objs(self, data=None):
+        if not self.sql:
+            self.construct()
         if not self.cursor:
             self.execute(data)
         while True:
@@ -1268,8 +1296,11 @@ class ExpressionParser(ast.NodeVisitor):
                 break
             row_dict = dict(zip(self.column_headers, row))
             yield DQResult(row_dict, dq=self)
+        self.cursor = None
 
     def next(self, data=None):
+        if not self.sql:
+            self.construct()
         if not self.cursor:
             self.execute(data)
         row = self.cursor.fetchone()
@@ -1277,6 +1308,8 @@ class ExpressionParser(ast.NodeVisitor):
         return DQResult(row_dict, dq=self)
 
     def csv(self, data=None):
+        if not self.sql:
+            self.construct()
         if not self.cursor:
             self.execute(data)
         while True:
@@ -1287,12 +1320,15 @@ class ExpressionParser(ast.NodeVisitor):
             writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC)
             writer.writerow(row)
             yield output.getvalue()
+        self.cursor = None
 
     def value(self, data=None):
         for t in self.tuples(data=data):
             return t[0]
 
     def count(self, data=None):
+        if not self.sql:
+            self.construct()
         self.execute(data, count=True)
         return self.cursor.fetchone()[0]
 
@@ -1360,39 +1396,51 @@ class DjaqQuery:
             raise Exception("Expected str or list for select source")
         self.parser.select_src = select_source
 
+    def clone(self):
+        c = DjaqQuery(self.model)
+        c.parser = self.parser.clone()
+        return c
+
     def construct(self):
         self.parser.construct()
 
     def order_by(self, source: Union[str, List]):
-        self.parser.order_by(source)
-        return self
+        c = self.clone()
+        c.parser.order_by(source)
+        return c
+        
 
     def where(self, node: Union[str, B]):
-        self.parser.where(node)
-        return self
+        c = self.clone()
+        c.parser.where(node)
+        return c
+        
 
     def get(self, pk_value: any):
         """Return a single model instance whose primary key is pk_value."""
         return self.model.objects.get(pk=pk_value)
 
-    def update_object(self, pk_value: any, update_function: callable, data: Dict, save=True):
+    def update_object(
+        self, pk_value: any, update_function: callable, data: Dict, save=True
+    ):
         obj = self.get(pk_value)
         return update_function(obj, data, save)
-        
+
     def distinct(self):
-        self.parser.distinct = True
-        return self
+        c = self.clone()
+        c.parser.distinct = True
+        return c
 
     def dicts(self, data=None):
-        self.construct()
+        # self.construct()
         return self.parser.dicts(data=data)
 
     def tuples(self, data=None, flat=False):
-        self.construct()
+        # self.construct()
         return self.parser.tuples(data=data, flat=flat)
 
     def count(self, data=None):
-        self.construct()
+        # self.construct()
         return self.parser.count(data)
 
     def sql(self):
@@ -1400,40 +1448,46 @@ class DjaqQuery:
         return self.parser.sql
 
     def rewind(self):
-        self.parser.rewind()
-        return self
+        c = self.clone()
+        c.parser.rewind()
+        return c
 
     def csv(self, data=None):
-        self.construct()
+        # self.construct()
         return self.parser.csv(data)
 
     def limit(self, limit):
-        self.parser._limit = limit
-        return self
+        c = self.clone()
+        c.parser._limit = limit
+        return c
 
     def offset(self, offset):
-        self.parser._offset = offset
-        return self
+        c = self.clone()
+        c.parser._offset = offset
+        return c
 
-    def context(self, context: Dict):
+    def context(self, context: Dict, drop_empty=False):
         """Update our context with dict context."""
-        if not self.parser._context:
-            self.parser._context = dict()
+        c = self.clone()
+        # ipdb.set_trace()
+        if not c.parser._context:
+            c.parser._context = dict()
         if context:
-            self.parser.cursor = None  # cause the query to be re-evaluated
-            self.parser._context.update(context)
-        return self
+            c.parser.cursor = None  # cause the query to be re-evaluated
+            c.parser._context.update(context)
+        c.parser.drop_empty = drop_empty
+        return c
 
     def json(self, data=None, encoder=DjangoJSONEncoder):
-        self.construct()
+        # self.construct()
         return self.parser.json(data, encoder)
 
     def objs(self, data=None):
-        self.construct()
+        # self.construct()
         return self.parser.objs(data)
 
     def value(self, data=None):
-        self.construct()
+        # self.construct()
         return self.parser.value(data)
 
     def dataframe(self, context=None):
@@ -1452,11 +1506,12 @@ class DjaqQuery:
         return df
 
     def qs(self):
+        self.construct()
         return self.parser.model.objects.raw(self.sql(), self.parser._context)
 
     def go(self):
         return list(self.rewind().dicts())
-    
+
     def map(self, result_type: Union[callable, dataclasses.dataclass], data=None):
         """Either map to dataclass or call function to produce result.
         if result_type is a function, the function will receive a dict as a single parameter.
@@ -1473,7 +1528,6 @@ class DjaqQuery:
                 yield dataclass_mapper(result_type, row_dict)
             elif callable(result_type):
                 yield result_type(row_dict)
-        
 
     @property
     def schema(self):
@@ -1482,9 +1536,12 @@ class DjaqQuery:
     @classmethod
     def schema_all(cls, connection=None):
         return get_schema(connection)
-    
+
     def dataclass(self, defaults=False, base_class=None):
         make_dataclass(self.model, defaults, base_class)
+
+    def __len__(self):
+        return self.count()
 
     def __iter__(self):
         return self.dicts()
@@ -1497,51 +1554,6 @@ class DjaqQuery:
             pass
         else:
             pass
-        
+
     def __repr__(self):
-        return str(self.limit(5).go()) + "..." 
-
-
-# class Cursor:
-#     def __init__(self, values: Values):
-#         self.values = values
-#         self.verbosity = values.parser.verbosity
-#         self.cursor = None
-
-#     def execute(self, context=None, count=False):
-#         """Create a cursor and execute the sql."""
-
-#         self.values.parser.context(context)
-
-
-#         sql = self.values.parser.parse_values(self.values.aliases)
-
-#         self.cursor = self.values.parser.connection.cursor()
-
-#         if count:
-#             sql = f"SELECT COUNT(*) FROM ({sql}) c"
-#         if len(self.values.parser._context):
-#             context = self.values.parser.context_validator_class(self, self.values.parser._context).context()
-#             if self.verbosity:
-#                 conn = connections[self.values.parser.using]
-#                 cursor = conn.cursor()
-#                 logger.debug(cursor.mogrify(sql, context))
-#                 if self.verbosity:
-#                     print(f"sql={sql}, params={context}")
-#             self.cursor.execute(sql, context)
-#         else:
-#             if self.verbosity:
-#                 print(f"sql={sql}")
-#             logger.debug(sql)
-#             self.cursor.execute(sql)
-
-#     def dicts(self, data=None):
-#         if not self.cursor:
-#             self.execute(data)
-#         while True:
-#             row = self.cursor.fetchone()
-#             if row is None:
-#                 break
-#             row_dict = dict(zip(self.values.parser.column_headers, row))
-#             yield row_dict
-#         return
+        return str(self.limit(5).go()) + "..."

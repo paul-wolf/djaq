@@ -158,9 +158,9 @@ def djaq_request_view(request):
 
     request_data = json.loads(request.body.decode("utf-8"))
 
-    print("-"*60)
-    print(request_data)
-    print("^"*60)
+    # print("-"*60)
+    # print(request_data)
+    # print("^"*60)
 
     if not is_user_allowed(request.user):
         return HttpResponse("Djaq unauthorized", status=401)

@@ -15,3 +15,13 @@ class TestConditions(TestCase):
         n = a & (b | c)
         condition_string = render_conditions(n, {"pub_id": 1})
         assert "book.id" in condition_string
+
+
+    def test_booleans1(self):
+        a = B("a")
+        b = B("b")
+        c = B("c")
+        
+        assert str(b & c | a) == '((b and c) or a)'
+        
+        assert str(b | (c & a & c)) == '(b or ((c and a) and c))'
