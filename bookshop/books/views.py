@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class PriceEngine:
-    def get_average_price():
+    def get_average_price(self):
         price_data = Book.objects.all().aggregate(Avg("price"))
         return float(price_data["price__avg"])
 

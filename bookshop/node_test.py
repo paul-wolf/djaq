@@ -10,10 +10,10 @@ class Node:
         self.conjunction = conjunction
 
     def __str__(self):
-        return render(self)
+        return render(self, {})
 
     def __repr__(self):
-        return f"{self.__class__.__name__}: {render(self)}"
+        return f"{self.__class__.__name__}: {render(self, {})}"
 
     def __and__(self, n):
         if isinstance(n, Node):
@@ -24,9 +24,6 @@ class Node:
         if isinstance(n, Node):
             return Node([self.x, n.x], conjunction="or")
         raise ValueError("Must be Node class")
-
-
-
 
 
 def has_context(expression: str, context: dict):

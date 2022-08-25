@@ -7,16 +7,29 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('books', '0006_book_category_book_genre'),
+        ("books", "0006_book_category_book_genre"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='ISBN',
+            name="ISBN",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=20)),
-                ('book', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='books.book')),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("code", models.CharField(max_length=20)),
+                (
+                    "book",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE, to="books.book"
+                    ),
+                ),
             ],
         ),
     ]

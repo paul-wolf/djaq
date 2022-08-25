@@ -41,6 +41,7 @@ EMAIL = "artemis@blah.com"
 
 BOOK_COUNT = 10
 
+
 class TestDjaqAPI(TestCase):
     def setUp(self):
 
@@ -80,7 +81,6 @@ class TestDjaqAPI(TestCase):
     def tearDown(self):
         pass
 
-
     def test_whitelist(self):
 
         # make sure it lets us in
@@ -88,7 +88,7 @@ class TestDjaqAPI(TestCase):
         schema = get_schema(connections["default"], whitelist=wl)
         self.assertIn("books.Book", schema)
         self.assertEqual(len(schema.keys()), 1)
-        
+
         DQ("Book", "name", whitelist=wl).where("ilike(name, 'A%')").construct()
 
         # make sure it keeps us out
@@ -105,46 +105,51 @@ class TestDjaqAPI(TestCase):
         #  it also needs to refuse related models
         wl = {"books": ["Book"]}
         with self.assertRaises(ModelNotFoundException):
-            DQ("Book", "publisher.name", whitelist=wl).where("ilike(name, 'A%')").construct()
-
+            DQ("Book", "publisher.name", whitelist=wl).where(
+                "ilike(name, 'A%')"
+            ).construct()
 
     def test_updates(self):
         SPECIAL_PRICE = 12345.01
-        results = queries({
-            "queries": [
-                {
-                    "model": "Book",
-                    "output": "id, name, price, pubdate",
-                    "limit": "1",
-                    "offset": "0",
-                }
-            ]
-        })
+        results = queries(
+            {
+                "queries": [
+                    {
+                        "model": "Book",
+                        "output": "id, name, price, pubdate",
+                        "limit": "1",
+                        "offset": "0",
+                    }
+                ]
+            }
+        )
         book = results[0][0]
         book_id = book["id"]
         book_price = float(book["price"])
         results = updates(
-            [{"model": "books.Book", "pk": book_id, "fields":{"price": SPECIAL_PRICE}}]
+            [{"model": "books.Book", "pk": book_id, "fields": {"price": SPECIAL_PRICE}}]
         )
         self.assertEqual(results[0], 1)
         c = {"special_price": SPECIAL_PRICE, "book_id": book_id}
         results = queries(
-            {"queries": [
-                {
-                    "model": "Book",
-                    "output": "id, name, price",
-                    "where": f"id=={book_id}",
-                    "limit": 1,
-                    "context": c,
-                }
-            ]}
+            {
+                "queries": [
+                    {
+                        "model": "Book",
+                        "output": "id, name, price",
+                        "where": f"id=={book_id}",
+                        "limit": 1,
+                        "context": c,
+                    }
+                ]
+            }
         )
         book = results[0][0]
         book_price = book["price"]
         self.assertEqual(float(book_price), SPECIAL_PRICE)
 
     def test_deletes(self):
-        #  import ipdb; ipdb.set_trace()
+
         book_count = DQ("Book", "count(id)").value()
         book_id = DQ("Book", "id").limit(1).value()
         data = {"model": "books.Book", "pk": book_id}
@@ -190,7 +195,7 @@ class TestDjaqAPI(TestCase):
                     "fields": {
                         "name": "joseph conrad",
                         "age": 31,
-                    }
+                    },
                 }
             ]
         }
@@ -217,7 +222,7 @@ class TestDjaqAPI(TestCase):
                     "fields": {
                         "name": "joseph conrad",
                         "age": 31,
-                    }
+                    },
                 }
             ]
         }

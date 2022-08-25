@@ -14,7 +14,12 @@ from django.db.models.query import QuerySet
 
 from django.utils.text import slugify
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db.models.fields.related import ManyToOneRel, ManyToManyField, OneToOneRel, OneToOneField
+from django.db.models.fields.related import (
+    ManyToOneRel,
+    ManyToManyField,
+    OneToOneRel,
+    OneToOneField,
+)
 from django.core.exceptions import FieldDoesNotExist
 
 from djaq.result import DQResult
@@ -34,7 +39,7 @@ from ..functions import function_whitelist
 from djaq.exceptions import UnknownFunctionException
 from djaq.conditions import B
 
-import ipdb
+import pdb
 
 
 PLACEHOLDER_PATTERN = re.compile(r"\{([\w]*)\}")
@@ -148,6 +153,7 @@ def render_conditions_drop_empty(node, ctx) -> str:
         return f"({s})"
     raise Exception(f"Received unexpected type: {type(node)}")
 
+
 def render_conditions(node, ctx) -> str:
     """Produce a string repesenting all expressions
     in the node tree as a single expression.
@@ -171,6 +177,7 @@ def render_conditions(node, ctx) -> str:
         s = f" {node.conjunction} ".join(expressions)
         return f"({s})"
     raise Exception(f"Received unexpected type: {type(node)}")
+
 
 class ContextValidator(object):
     """Base class for validating context data.
@@ -367,7 +374,7 @@ class ExpressionParser(ast.NodeVisitor):
         verbosity=0,
         whitelist=None,
         local: bool = False,
-        drop_empty: bool = False
+        drop_empty: bool = False,
     ):
         # main relation, type is models.Model
         self.model = model
@@ -410,7 +417,7 @@ class ExpressionParser(ast.NodeVisitor):
         self.deferred_aggregations = list()
         self.distinct = False
         self.drop_empty = drop_empty
-        
+
         self.add_relation(model=self.model)
 
         # a set of conditions defined by B nodes
@@ -566,7 +573,7 @@ class ExpressionParser(ast.NodeVisitor):
                     return build_case_statement_from_choices(field_exp, field.choices)
             field = relation.model._meta.get_field(attr)
             if isinstance(field, OneToOneRel):
-                # ipdb.set_trace()
+                
                 # the case if we reference a onetoone but no single field
                 raise Exception("Specify a field name in the related model")
 
@@ -578,7 +585,7 @@ class ExpressionParser(ast.NodeVisitor):
             model = self.relations[0].model
 
             if attr.endswith("_display"):
-                # ipdb.set_trace()
+                
                 field = model._meta.get_field(attr[:-8])
             else:
                 field = model._meta.get_field(attr)
@@ -594,7 +601,7 @@ class ExpressionParser(ast.NodeVisitor):
 
         # if relation and attributes in list
 
-        # ipdb.set_trace()
+        
         # if no given relation, we want the master relation
 
         relation = relation if relation else self.relations[0]
@@ -624,7 +631,7 @@ class ExpressionParser(ast.NodeVisitor):
             else:
                 # probably an attribute of the field
                 # example: spend_date.year
-                # ipdb.set_trace()
+                
                 return self.field_specific_attribute(field, relation, attribute_list)
 
         return self.push_attribute_relations(attribute_list, new_relation)
@@ -1177,7 +1184,7 @@ class ExpressionParser(ast.NodeVisitor):
         self.context(context)
 
         sql = self.sql
-        # ipdb.set_trace()
+        
 
         self.cursor = self.connection.cursor()
 
@@ -1202,7 +1209,7 @@ class ExpressionParser(ast.NodeVisitor):
     def query(self, context=None):
         """Return source for djaqquery and parameters."""
         self.context(context)
-        # ipdb.set_trace()
+        
         self.construct()
         sql = self.sql
         return sql, self.parameters
@@ -1210,11 +1217,12 @@ class ExpressionParser(ast.NodeVisitor):
     def where(self, node: Union[str, B]):
         if not node:
             return
-        # ipdb.set_trace()
+        
         if isinstance(node, str):
             node = B(node)
         elif isinstance(node, B):
-            node = node
+            # no need to do anything
+            pass
         if self.condition_node:
             self.condition_node &= node
         else:
@@ -1240,6 +1248,7 @@ class ExpressionParser(ast.NodeVisitor):
             else:
                 src = ""
             if self.drop_empty:
+                
                 src += render_conditions_drop_empty(self.condition_node, self._context)
             else:
                 src += render_conditions(self.condition_node, self._context)
@@ -1261,7 +1270,6 @@ class ExpressionParser(ast.NodeVisitor):
             row_dict = dict(zip(self.column_headers, row))
             yield row_dict
         self.cursor = None
-        
 
     def tuples(self, data=None, flat=False):
         if not self.sql:
@@ -1278,7 +1286,6 @@ class ExpressionParser(ast.NodeVisitor):
             else:
                 yield row
         self.cursor = None
-        
 
     def json(self, data=None, encoder=DjangoJSONEncoder):
         for d in self.dicts(data):
@@ -1408,13 +1415,11 @@ class DjaqQuery:
         c = self.clone()
         c.parser.order_by(source)
         return c
-        
 
     def where(self, node: Union[str, B]):
         c = self.clone()
         c.parser.where(node)
         return c
-        
 
     def get(self, pk_value: any):
         """Return a single model instance whose primary key is pk_value."""
@@ -1469,7 +1474,7 @@ class DjaqQuery:
     def context(self, context: Dict, drop_empty=False):
         """Update our context with dict context."""
         c = self.clone()
-        # ipdb.set_trace()
+        
         if not c.parser._context:
             c.parser._context = dict()
         if context:

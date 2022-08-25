@@ -80,7 +80,9 @@ DATABASES = {
 
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -134,7 +136,9 @@ LOGGING = {
 }
 
 DJAQ_WHITELIST = {
-    "django.contrib.auth": ["User",],
+    "django.contrib.auth": [
+        "User",
+    ],
     "django.contrib.sessions": ["Session"],
     "books": [
         "Profile",

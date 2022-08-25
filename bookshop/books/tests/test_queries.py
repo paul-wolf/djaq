@@ -23,7 +23,7 @@ from books.models import GENRE_CHOICES
 
 from books.models import Author, Publisher, Book, Store, Profile, Consortium
 
-import ipdb
+
 fake = Faker()
 
 USERNAME = "artemis"
@@ -31,8 +31,10 @@ PASSWORD = "blah"
 EMAIL = "artemis@blah.com"
 BOOK_COUNT = 10
 
+
 def get_random_genre():
-    return GENRE_CHOICES[random.randint(0, len(GENRE_CHOICES)-1)][0]
+    return GENRE_CHOICES[random.randint(0, len(GENRE_CHOICES) - 1)][0]
+
 
 @dataclass
 class BookEntity:
@@ -45,11 +47,14 @@ class BookEntity:
     alt_publisher: int
     pubdate: datetime.date
     in_print: bool
-    
+
+
 class TestDjaqQuery(TestCase):
     def setUp(self):
 
-        user = User.objects.create_user(username=USERNAME, email=EMAIL, password=PASSWORD)
+        user = User.objects.create_user(
+            username=USERNAME, email=EMAIL, password=PASSWORD
+        )
 
         self.user = user
         Profile.objects.create(user=user, company="whatever")
@@ -63,7 +68,7 @@ class TestDjaqQuery(TestCase):
 
         Publisher.objects.create(name="Simon and Bloober", owner=c)
         Publisher.objects.create(name="Alternative press", owner=c)
-        
+
         factory.Faker("sentence", nb_words=4)
         for i in range(BOOK_COUNT):
             book = Book.objects.create(
@@ -135,8 +140,16 @@ class TestDjaqQuery(TestCase):
 
     def test_expression_grouping(self):
         # impossible condition
-        assert len(list(DQ(Book, "(id, name)").where("(id == 1 or id == 2) and id == 3").tuples())) == 0
-        
+        assert (
+            len(
+                list(
+                    DQ(Book, "(id, name)")
+                    .where("(id == 1 or id == 2) and id == 3")
+                    .tuples()
+                )
+            )
+            == 0
+        )
 
     def test_order_by(self):
         assert list(DQ(Book, "name").order_by("-name, publisher, -id").dicts())
@@ -147,55 +160,62 @@ class TestDjaqQuery(TestCase):
 
     def test_custom_functions(self):
         """Also, prove we can group by all fields."""
-        v = DQ(Book,
+        v = DQ(
+            Book,
             """name,
         sumif(rating >= 3, rating, 0) as below_3,
         sumif(rating > 3, rating, 0) as above_3
-        """
+        """,
         )
         assert list(v.tuples())
 
     def test_sql(self):
-        # ipdb.set_trace()
+
         v = DQ(Book, "id, name")
         v = v.where("id in {ids}")
         assert v.sql()
 
     def test_complex2(self):
         discount = 0.2
-        v = DQ(Book,
-            """name,
+        v = (
+            DQ(
+                Book,
+                """name,
         price as price,
         {discount} as discount,
         price * {discount} as discount_price,
         price - (price * {discount}) as diff,
         publisher.name as publisher
-        """
-        ).context({"discount": discount}).where("price > 7")
+        """,
+            )
+            .context({"discount": discount})
+            .where("price > 7")
+        )
 
         for d in v.json():
             json.loads(d)
 
     def test_distinct(self):
-        assert len(list(DQ(Author, "name").distinct().tuples(flat=True))) == len(set(DQ(Author, "name").tuples(flat=True)))
-        
+        assert len(list(DQ(Author, "name").distinct().tuples(flat=True))) == len(
+            set(DQ(Author, "name").tuples(flat=True))
+        )
+
     def test_default_fields(self):
         for book in DQ("Book").dicts():
-            assert len(book.keys()) 
+            assert len(book.keys())
             break
-        
+
     def test_get(self):
         for book in DQ("Book").dicts():
             id = book["id"]
             break
         DQ(Book).get(id)
-        
+
     def test_attribute_nesting(self):
         for d in DQ("Book", "publisher.owner.name as owner").dicts():
             assert d.get("owner")
             break
-        
-    
+
     def test_limit(self):
         #  we have 10 books
         assert len(list(DQ("Book").offset(0).limit(4).dicts())) == 4
@@ -203,138 +223,148 @@ class TestDjaqQuery(TestCase):
     def test_offset(self):
         #  we have 10 books
         assert len(list(DQ("Book").offset(7).dicts())) == 3
-        
-        
+
     # test qs()
     def test_queryset(self):
         assert len(DQ("Book").qs()) == 10
-        
-        
+
     # test date operations like comparison
     def test_date_operation(self):
         DQ("Book", "pubdate").where("pubdate > '2021-01-01'").go()
-    
+
     def test_map_dataclass(self):
         for b in DQ("Book").map(BookEntity):
             assert dataclasses.is_dataclass(b)
             break
-        
+
     def test_map_function(self):
         def some_function(data):
-            return data['name']
+            return data["name"]
+
         for b in DQ("Book").map(some_function):
             assert isinstance(b, str)
             break
-            
-        
+
     def test_date_attributes(self):
-        
-        for data in DQ("Book", "pubdate").where("pubdate.year < 2022 and pubdate.year > 2020").go():
-            assert data["pubdate"].year < 2022 and data["pubdate"].year > 2020 
+
+        for data in (
+            DQ("Book", "pubdate")
+            .where("pubdate.year < 2022 and pubdate.year > 2020")
+            .go()
+        ):
+            assert data["pubdate"].year < 2022 and data["pubdate"].year > 2020
 
         for data in DQ("Book", "pubdate").where("pubdate.month == 10").go():
-            assert data["pubdate"].month == 10 
-    
+            assert data["pubdate"].month == 10
+
         for data in DQ("Book", "pubdate").where("pubdate.day == 2").go():
-            assert data["pubdate"].day == 2 
-    
+            assert data["pubdate"].day == 2
+
     def test_update_object(self):
         # something likely to be unique
         NEW_TITLE = "my new title0854836274"
-        
+
         def my_update_function(book, data, save=True):
             book.name = NEW_TITLE
             if save:
                 book.save()
             return book
-        
+
         for book in DQ("Book").objs():
             DQ("Book").update_object(book.id, my_update_function, dict())
             break
-        
+
         books = DQ("Book").where("name == {title}").context({"title": NEW_TITLE}).go()
         assert books[0]["name"] == NEW_TITLE
-        
+
     def test_reverse_relation(self):
         publishers = DQ("Publisher", "name, count(book) as num_books").go()
         assert publishers[0]["num_books"] > 0
-        
+
     def test_in_list(self):
         """Test that IN (list) works."""
 
-        # ipdb.set_trace()
         ids = list(DQ(Book, "id").tuples())
         ids = [id[0] for id in ids]
 
         # take just three of them
         c = {"ids": ids[:3]}
-        v = DQ(Book, "id, name")        
+        v = DQ(Book, "id, name")
         v = v.where("id in {ids}")
         r = list(v.context(c).dicts())
         # make sure we got three of them
-        # ipdb.set_trace()
+
         self.assertEqual(len(r), 3)
 
     # concatenate where clauses
-        
+
     # test validators
-    
-    # test context 
-    
+
+    # test context
+
     # test conditions()
 
     def test_subquery_DQ(self):
-        DQ(Book, "id", name="v_sub").where("regex(name, '.*b.*')").go()   # noqa: F841
+        DQ(Book, "id", name="v_sub").where("regex(name, '.*b.*')").go()  # noqa: F841
         assert len(DQ(Book, "name, price").where("id in '@v_sub'").go())
 
     def test_suquery_with_parameter(self):
         DQ("Book", "id", name="dq_sub").where("ilike(name, {spec})")
         DQ("Book", "name, price").where("id in '@dq_sub'").context({"spec": "B%"}).go()
-    
+
     def test_queryset_vs_djaq(self):
-        """"Get exactly equivalent queries and compare.
+        """ "Get exactly equivalent queries and compare.
         There should be no difference."""
-        d = DQ("Book", """publisher.id,
+        d = DQ(
+            "Book",
+            """publisher.id,
             sumif(rating < 3, 1, 0) as below_3,
             sumif(rating >= 3, 1, 0) as above_3
-            """).order_by("publisher.id")
+            """,
+        ).order_by("publisher.id")
 
-        below_3 = Count('book', filter=Q(book__rating__lt=3))
-        above_3 = Count('book', filter=Q(book__rating__gte=3))
-        q = Publisher.objects.order_by("id").annotate(below_3=below_3).annotate(above_3=above_3)
+        below_3 = Count("book", filter=Q(book__rating__lt=3))
+        above_3 = Count("book", filter=Q(book__rating__gte=3))
+        q = (
+            Publisher.objects.order_by("id")
+            .annotate(below_3=below_3)
+            .annotate(above_3=above_3)
+        )
         for b in list(zip(q, d.rewind())):
             assert b[0].below_3 == b[1]["below_3"]
-            
+
     def test_queryset_vs_djaq(self):
         d = DQ("Book", "publisher.name, max(price) - avg(price) as price_diff")
 
-        q = Book.objects.values("publisher__name") \
-            .annotate(price_diff=Max('price', output_field=DecimalField()) - Avg('price', output_field=DecimalField()))
+        q = Book.objects.values("publisher__name").annotate(
+            price_diff=Max("price", output_field=DecimalField())
+            - Avg("price", output_field=DecimalField())
+        )
 
         for b in zip(q, d.rewind()):
             assert b[0]["price_diff"] == b[1]["price_diff"]
-            
+
     def test_in_op_boolean(self):
         assert DQ("Book").where("in_print is True").count() == DQ("Book").count()
-        
+
         assert DQ("Book").where("in_print is not True").count() == 0
-        
+
     def test_display_choices(self):
         for book in DQ("Book", "genre_display").dicts():
             assert book["genre_display"] in [g[1] for g in GENRE_CHOICES]
-            
+
     def test_limit(self):
         dq = DQ("Book")
         assert len(list(dq.limit(1).dicts())) == 1
         # check we did not mutate the object
         assert len(list(dq.dicts())) == BOOK_COUNT
-        
+
     def test_no_mutate(self):
         dq = DQ("Book")
         assert len(list(dq.where("in_print is not True").dicts())) == 0
         # check we did not mutate the object
         assert len(list(dq.rewind().dicts())) == BOOK_COUNT
-        
+
     def test_rewind_len(self):
         dq = DQ("Book")
         assert len(dq) == len(dq)
@@ -342,17 +372,16 @@ class TestDjaqQuery(TestCase):
     def test_rewind_dicts(self):
         dq = DQ("Book")
         assert len(list(dq.dicts())) == len(list(dq.dicts()))
-        
+
     def test_len(self):
         assert len(DQ("Book")) == 10
-        
+
     #    order by won't work on aliased names
-    
+
     # test for not null or is null or empty
-    
-    
+
     # exclude
-    
+
     # OneToOne rel fields
-    
+
     # datetime to date

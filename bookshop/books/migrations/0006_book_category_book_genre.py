@@ -6,18 +6,35 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('books', '0005_profile'),
+        ("books", "0005_profile"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='book',
-            name='category',
-            field=models.CharField(choices=[('F', 'Fiction'), ('N', 'Non-fiction')], default='N', max_length=1),
+            model_name="book",
+            name="category",
+            field=models.CharField(
+                choices=[("F", "Fiction"), ("N", "Non-fiction")],
+                default="N",
+                max_length=1,
+            ),
         ),
         migrations.AddField(
-            model_name='book',
-            name='genre',
-            field=models.CharField(choices=[('O', 'Other'), ('F', 'Fantasy'), ('A', 'Adventure'), ('R', 'Romance'), ('M', 'Mystery'), ('H', 'Horror'), ('T', 'Thriller'), ('S', 'Science fiction')], default='O', max_length=1),
+            model_name="book",
+            name="genre",
+            field=models.CharField(
+                choices=[
+                    ("O", "Other"),
+                    ("F", "Fantasy"),
+                    ("A", "Adventure"),
+                    ("R", "Romance"),
+                    ("M", "Mystery"),
+                    ("H", "Horror"),
+                    ("T", "Thriller"),
+                    ("S", "Science fiction"),
+                ],
+                default="O",
+                max_length=1,
+            ),
         ),
     ]

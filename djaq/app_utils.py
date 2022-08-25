@@ -30,7 +30,7 @@ def find_model_class(model_label, whitelist=None):
     is an app specifier
 
     """
-    #  import ipdb; ipdb.set_trace()
+    #  import pdb; pdb.set_trace()
     if "." in model_label:
         class_name = model_label.split(".")[-1]
         model_label = ".".join(model_label.split(".")[:-1])
@@ -166,7 +166,7 @@ def get_model_classes(app_name=None, whitelist=None):
 def get_schema(connection=None, whitelist=None):
     """Return json that represents all whitelisted app models."""
     connection = connection if connection else connections["default"]
-    #  import ipdb; ipdb.set_trace()
+    #  import pdb; pdb.set_trace()
     classes = get_model_classes(whitelist=whitelist)
     model_data = {}
 

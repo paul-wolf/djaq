@@ -118,4 +118,3 @@ class XTestUtils(TestCase):
     def test_get_schema(self):
         schema = get_schema(connections["default"])
         self.assertTrue("books.Book" in schema)
-

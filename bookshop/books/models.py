@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
     company = models.CharField(max_length=64, null=True, blank=True)
@@ -32,6 +33,7 @@ class Publisher(models.Model):
     def __str__(self):
         return self.name
 
+
 CATEGORY_CHOICES = (
     ("F", "Fiction"),
     ("N", "Non-fiction"),
@@ -47,6 +49,7 @@ GENRE_CHOICES = (
     ("T", "Thriller"),
     ("S", "Science fiction"),
 )
+
 
 class Book(models.Model):
 
@@ -74,6 +77,7 @@ class Book(models.Model):
     def __str__(self):
         return self.name
 
+
 @receiver(post_save, sender=Book)
 def create_ISBN(sender, instance, created, **kwargs):
     try:
@@ -85,11 +89,13 @@ def create_ISBN(sender, instance, created, **kwargs):
 class ISBN(models.Model):
     code = models.CharField(max_length=20)
     book = models.OneToOneField(Book, on_delete=models.CASCADE)
+
     def save(self, *args, **kwargs):
         if not self.code:
             # not unique, we don't care
             self.code = "978-3-16-148410-0"
         super().save(*args, **kwargs)
+
 
 class Store(models.Model):
     name = models.CharField(max_length=300)

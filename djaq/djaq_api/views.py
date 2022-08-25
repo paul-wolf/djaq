@@ -18,11 +18,11 @@ from django.apps import apps
 from djaq import DjaqQuery as DQ
 from djaq import app_utils
 
-import ipdb
+import pdb
 
 logger = logging.getLogger(__name__)
 
-#  import ipdb
+#  import pdb
 
 """
 settings:

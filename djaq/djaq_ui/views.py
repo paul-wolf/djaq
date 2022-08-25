@@ -29,7 +29,7 @@ from djaq.app_utils import (
     get_model_details,
     get_whitelist,
 )
-import ipdb
+import pdb
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,7 @@ def get_params(data):
 def query_view(request):
 
     if request.method == "POST":
-        ipdb.set_trace()
+        pdb.set_trace()
 
         model, output, where, order_by = get_params(request.POST.get("queries")[0])
         limit = request.POST.get("limit", 10)
@@ -104,7 +104,7 @@ def query_view(request):
 @login_required
 @csrf_exempt
 def sql_view(request):
-    # ipdb.set_trace()
+    # pdb.set_trace()
     print(request.body)
     request_data = json.loads(request.body.decode("utf-8"))
     print(request_data)

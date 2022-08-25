@@ -300,7 +300,7 @@ def q_conditional_sum_queryset(**kwargs):
 
 
 def run(options):
-    """Run all functions in this module starting with 'q_'. """
+    """Run all functions in this module starting with 'q_'."""
 
     m = importlib.import_module(__name__)
 
