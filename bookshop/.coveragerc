@@ -1,4 +1,12 @@
-[run]
-source=.    
-omit=*.venv*
+[testenv]
+deps =
+    coverage
+commands =
+    coverage run ./manage.py test
+    coverage.xml
+
+[coverage:run]
+relative_files = True
+branch = True
+omit = *migrations*, *tests*, *.venv*
 

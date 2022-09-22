@@ -23,7 +23,7 @@ from django.db.models.fields.related import (
 from django.core.exceptions import FieldDoesNotExist
 
 from djaq.result import DQResult
-from ..astpp import parseprint, dump as node_string
+
 from ..app_utils import (
     get_model_details,
     get_model_classes,
@@ -47,7 +47,7 @@ PLACEHOLDER_PATTERN = re.compile(r"\{([\w]*)\}")
 
 @functools.lru_cache()
 def func_in_whitelist(funcname):
-    return funcname.lower() in function_whitelist
+    return funcname.upper() in function_whitelist
 
 
 def concat(funcname, args):
@@ -805,8 +805,6 @@ class ExpressionParser(ast.NodeVisitor):
             else:
                 raise Exception(f"Cannot mutate function: {funcname}")
         else:
-
-            # check with whitelist of functions
             if not func_in_whitelist(funcname):
                 raise UnknownFunctionException(f"Function '{funcname}' not known")
 
