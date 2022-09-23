@@ -1,3 +1,4 @@
+from email.errors import CloseBoundaryNotFoundDefect
 from typing import Dict, Optional, Union, List
 import dataclasses
 import csv
@@ -38,8 +39,6 @@ from ..app_utils import (
 from ..functions import function_whitelist
 from djaq.exceptions import UnknownFunctionException
 from djaq.conditions import B
-
-import pdb
 
 
 PLACEHOLDER_PATTERN = re.compile(r"\{([\w]*)\}")
@@ -448,6 +447,7 @@ class ExpressionParser(ast.NodeVisitor):
         p.relations = list()
         p.sql = None
         p.cursor = None
+        
         return p
 
     def mogrify(self, sql, parameters):
@@ -746,8 +746,12 @@ class ExpressionParser(ast.NodeVisitor):
             # get source
             name = node.s[1:]
             obj = self.resolve_name(name)
+            
             if isinstance(obj, self.__class__):
+                # if obj has _context, we need to inherit that
+                self.context(obj._context)
                 sql, sql_params = obj.query()
+                
                 self.parameters.extend(sql_params)
             elif isinstance(obj, list):
                 # TODO: not safe
@@ -865,9 +869,9 @@ class ExpressionParser(ast.NodeVisitor):
         self.emit(" NOT IN ")
         ast.NodeVisitor.generic_visit(self, node)
 
-    def visit_NotIn(self, node):
-        self.emit(" NOT IN ")
-        ast.NodeVisitor.generic_visit(self, node)
+    # def visit_NotIn(self, node):
+    #     self.emit(" NOT IN ")
+    #     ast.NodeVisitor.generic_visit(self, node)
 
     def visit_Not(self, node):
         self.emit(" NOT ")
@@ -1189,6 +1193,7 @@ class ExpressionParser(ast.NodeVisitor):
         if count:
             sql = f"SELECT COUNT(*) FROM ({sql}) c"
 
+        
         if len(self._context):
             context = self.context_validator_class(self, self._context).context()
             if self.verbosity:
@@ -1197,6 +1202,7 @@ class ExpressionParser(ast.NodeVisitor):
 
                 if self.verbosity:
                     print(f"sql={sql}, params={context}")
+            
             self.cursor.execute(sql, context)
         else:
             if self.verbosity:
@@ -1378,7 +1384,7 @@ class DjaqQuery:
             raise Exception(
                 f"Type not supported for model source: {type(model_source)}"
             )
-
+        self.name = name
         self.parser = ExpressionParser(model=model, whitelist=whitelist, name=name)
 
         if not select_source or select_source == "*":
@@ -1401,9 +1407,17 @@ class DjaqQuery:
             raise Exception("Expected str or list for select source")
         self.parser.select_src = select_source
 
+    def update_name_directory(self, cloned_parser):
+        """Update the class variable that tracks names of objects for use in subqueries, etc."""
+        if self.name in ExpressionParser.directory:
+            ExpressionParser.directory[self.name] = cloned_parser
+    
     def clone(self):
-        c = DjaqQuery(self.model)
+        c = DjaqQuery(self.model, name=self.name)
         c.parser = self.parser.clone()
+        # make sure the new parser has the latest copy of ourselves
+        self.update_name_directory(cloned_parser=c.parser)
+
         return c
 
     def construct(self):
@@ -1503,6 +1517,7 @@ class DjaqQuery:
         self.construct()
         self.context(context)
         constructed_sql = self.parser.sql
+        
         sql = self.parser.mogrify(constructed_sql, self.parser._context)
         df = pd.read_sql(sql, self.parser.connection)
         df.columns = self.parser.column_headers
