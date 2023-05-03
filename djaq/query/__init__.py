@@ -459,7 +459,10 @@ class ExpressionParser(ast.NodeVisitor):
 
         conn = connections[self.using]
         cursor = conn.cursor()
-        return cursor.mogrify(sql, parameters).decode()
+        mogrified = cursor.mogrify(sql, parameters)
+        if isinstance(mogrified, bytes):
+            return mogrified.decode()
+        return mogrified
 
     def dump(self):
         for k, v in self.__dict__.items():
