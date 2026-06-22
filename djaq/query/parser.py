@@ -72,6 +72,7 @@ class ExpressionParser:
         self.sql = None
         self.cursor = None
         self.parameters = list()  # populated by the generator in construct()
+        self._extra_named = {}  # IN-list params expanded into named placeholders
         self.context_validator_class = ContextValidator
         self.local = local
         self.distinct = False
@@ -183,17 +184,20 @@ class ExpressionParser:
         if count:
             sql = f"SELECT COUNT(*) FROM ({sql}) c"
 
-        
-        if len(self._context):
-            context = self.context_validator_class(self, self._context).context()
+        if self._context or self._extra_named:
+            context = (
+                self.context_validator_class(self, self._context).context()
+                if self._context
+                else {}
+            )
+            # IN-list parameters were expanded into indexed named placeholders.
+            context.update(self._extra_named)
             if self.verbosity:
                 print(f"sql={sql}, params={context}")
-
             self.cursor.execute(sql, context)
         else:
             if self.verbosity:
                 print(f"sql={sql}")
-
             self.cursor.execute(sql)
 
     def query(self, context=None):
@@ -281,7 +285,8 @@ class ExpressionParser:
         generator = SQLGenerator(
             get_dialect(self.vendor), named_resolver=self._resolve_named
         )
-        self.sql, self.parameters = generator.generate(resolved)
+        self.sql, self.parameters = generator.generate(resolved, context=self._context)
+        self._extra_named = generator.extra_named
 
     def dicts(self, data=None):
         if not self.sql:

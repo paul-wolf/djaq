@@ -95,10 +95,13 @@ class SQLGenerator:
         self.d = dialect
         # callback: name -> (sql, params) for @named references; injected at wiring
         self.named_resolver = named_resolver
+        self.extra_named: dict = {}
 
     # ------------------------------------------------------------------ query
-    def generate(self, q: ir.ResolvedQuery):
+    def generate(self, q: ir.ResolvedQuery, context=None):
         self.params: list = []
+        self.extra_named = {}
+        self.context = context or {}
         root = q.relations[0]
 
         select = ", ".join(self.render(p.expr) for p in q.projections)
@@ -145,6 +148,22 @@ class SQLGenerator:
             raise Exception(f"Cannot derive join condition from {jf!r}")
         return "(" + " AND ".join(parts) + ")"
 
+    def _expand_in_list(self, name):
+        """Expand an IN-list parameter into N named placeholders.
+
+        ``ids`` with value ``[1, 2, 3]`` becomes ``%(ids__0)s, %(ids__1)s,
+        %(ids__2)s`` and records those values in ``extra_named`` for binding.
+        Returns ``None`` when the value isn't a known list (e.g. a ``sql()``
+        preview with no context), so the caller falls back to normal rendering.
+        """
+        value = self.context.get(name)
+        if not isinstance(value, (list, tuple)):
+            return None
+        keys = [f"{name}__{i}" for i in range(len(value))]
+        for k, v in zip(keys, value):
+            self.extra_named[k] = v
+        return ", ".join(self.d.placeholder(k) for k in keys)
+
     # ------------------------------------------------------------ expressions
     def render(self, e: ir.Expr) -> str:
         if isinstance(e, ir.FieldRef):
@@ -167,6 +186,10 @@ class SQLGenerator:
             return f"CASE {whens}{default} END"
 
         if isinstance(e, ir.BinaryOp):
+            if e.op in (ir.Op.IN, ir.Op.NOT_IN) and isinstance(e.right, ir.Param):
+                expanded = self._expand_in_list(e.right.name)
+                if expanded is not None:
+                    return f"{self.render(e.left)} {e.op.value} ({expanded})"
             left, right = self.render(e.left), self.render(e.right)
             if e.op in ARITHMETIC:
                 return f"({left} {e.op.value} {right})"

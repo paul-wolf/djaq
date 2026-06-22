@@ -138,7 +138,6 @@ class TestDjaqQuery(TestCase):
         for r in v.dicts():
             self.assertTrue(isinstance(r, dict))
 
-    @expected_dialect_gap("sqlite", reason="regex() maps to the Postgres '~' operator")
     def test_parameter(self):
         v = DQ(Book, "name").where("regex(name, {mynamepattern})")
         for name in list(v.context({"mynamepattern": "B.*"}).tuples(flat=True)):
@@ -197,7 +196,6 @@ class TestDjaqQuery(TestCase):
         distinct_names = len(set(DQ(Author, "name").tuples(flat=True)))
         self.assertEqual(n, distinct_names)
 
-    @expected_dialect_gap("sqlite", reason="cast() uses the Postgres '::' cast syntax")
     def test_cast(self):
         """cast() coerces a column's type."""
         for r in DQ(Book, "cast(price, 'int') as p").dicts():
@@ -270,7 +268,6 @@ class TestDjaqQuery(TestCase):
         #  we have 10 books
         assert len(list(DQ("Book").offset(0).limit(4).dicts())) == 4
 
-    @expected_dialect_gap("sqlite", reason="OFFSET emitted without a LIMIT is illegal on SQLite")
     def test_offset(self):
         #  we have 10 books
         assert len(list(DQ("Book").offset(7).dicts())) == 3
@@ -296,7 +293,6 @@ class TestDjaqQuery(TestCase):
             assert isinstance(b, str)
             break
 
-    @expected_dialect_gap("sqlite", reason="date attribute access maps to Postgres date_part()")
     def test_date_attributes(self):
 
         for data in (
@@ -333,7 +329,6 @@ class TestDjaqQuery(TestCase):
         publishers = DQ("Publisher", "name, count(book) as num_books").go()
         assert publishers[0]["num_books"] > 0
 
-    @expected_dialect_gap("sqlite", reason="IN {list} param expansion is not implemented for SQLite")
     def test_in_list(self):
         """Test that IN (list) works."""
 
@@ -357,12 +352,10 @@ class TestDjaqQuery(TestCase):
 
     # test conditions()
 
-    @expected_dialect_gap("sqlite", reason="regex() maps to the Postgres '~' operator")
     def test_subquery_DQ(self):
         DQ(Book, "id", name="v_sub").where("regex(name, '.*b.*')").go()  # noqa: F841
         assert len(DQ(Book, "name, price").where("id in '@v_sub'").go())
 
-    @expected_dialect_gap("sqlite", reason="ilike() maps to the Postgres-only ILIKE keyword")
     def test_suquery_with_parameter(self):
         DQ("Book", "id", name="dq_sub").where("ilike(name, {spec})")
         DQ("Book", "name, price").where("id in '@dq_sub'").context({"spec": "B%"}).go()
