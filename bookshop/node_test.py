@@ -62,7 +62,7 @@ def render(node, ctx) -> str:
         expressions = [e for e in expressions if e]
         if not expressions:
             return ""
-        s = f" and ".join(expressions)
+        s = " and ".join(expressions)
         return f"({s})"
     elif isinstance(node.x, str):
         return node.x if has_context(node.x, ctx) else ""

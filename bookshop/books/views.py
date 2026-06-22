@@ -22,11 +22,6 @@ class PriceEngine:
 
 
 def books_average_price(request):
-    price_data = Book.objects.all().aggregate(Avg("price"))
-    return JsonResponse({"price": float(price_data["price__avg"])})
-
-
-def books_average_price(request):
     price_engine = PriceEngine()
     price = price_engine.get_average_price()
     return JsonResponse({"price": price})

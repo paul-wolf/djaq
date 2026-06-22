@@ -67,16 +67,40 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "bookshop.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql_psycopg2",
-        "NAME": "bookshop",
-        "PORT": "5432",
-        "HOST": "localhost",
-        "USER": "postgres",
-        "PASSWORD": "postgres",
+# Select the database backend for tests/dev via the DJAQ_DB env var.
+# Supported: "postgres" (default), "sqlite", "mysql". Individual connection
+# parameters can be overridden with the DJAQ_DB_* env vars below.
+DJAQ_DB = os.environ.get("DJAQ_DB", "postgres").lower()
+
+if DJAQ_DB in ("sqlite", "sqlite3"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": os.environ.get("DJAQ_DB_NAME", ":memory:"),
+        }
     }
-}
+elif DJAQ_DB == "mysql":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.environ.get("DJAQ_DB_NAME", "bookshop"),
+            "PORT": os.environ.get("DJAQ_DB_PORT", "3306"),
+            "HOST": os.environ.get("DJAQ_DB_HOST", "localhost"),
+            "USER": os.environ.get("DJAQ_DB_USER", "root"),
+            "PASSWORD": os.environ.get("DJAQ_DB_PASSWORD", "root"),
+        }
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql_psycopg2",
+            "NAME": os.environ.get("DJAQ_DB_NAME", "bookshop"),
+            "PORT": os.environ.get("DJAQ_DB_PORT", "5432"),
+            "HOST": os.environ.get("DJAQ_DB_HOST", "localhost"),
+            "USER": os.environ.get("DJAQ_DB_USER", "postgres"),
+            "PASSWORD": os.environ.get("DJAQ_DB_PASSWORD", "postgres"),
+        }
+    }
 
 
 AUTH_PASSWORD_VALIDATORS = [

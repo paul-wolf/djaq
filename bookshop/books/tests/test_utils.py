@@ -1,20 +1,13 @@
-import json
 import random
-from decimal import Decimal
 
-import unittest
 
 from django.test import TestCase
-from django.test import RequestFactory
-from django.test import Client
 from django.db import connections
 from django.contrib.auth.models import User
 
 import factory
 from faker import Faker
 
-from djaq import DjaqQuery as DQ
-from djaq.djaq_api.views import queries, updates, creates, deletes, djaq_request_view
 from djaq.app_utils import (
     model_path,
     get_db_type,
@@ -27,7 +20,6 @@ from djaq.app_utils import (
     get_schema,
     get_model_classes,
 )
-from djaq.exceptions import ModelNotFoundException
 
 from books.models import Author, Publisher, Book, Store, Profile
 
@@ -55,7 +47,7 @@ class XTestUtils(TestCase):
 
         Publisher.objects.create(name="Simon and Bloober")
         Publisher.objects.create(name="Alternative press")
-        title = factory.Faker("sentence", nb_words=4)
+        factory.Faker("sentence", nb_words=4)
         for i in range(10):
             book = Book.objects.create(
                 name=factory.Faker("sentence", nb_words=4),

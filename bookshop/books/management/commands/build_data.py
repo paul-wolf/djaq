@@ -1,7 +1,5 @@
-import sys
-import traceback
 
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 
 from books.data_factory import build_data
 

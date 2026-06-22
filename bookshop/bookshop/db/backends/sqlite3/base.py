@@ -4,7 +4,6 @@ import logging
 from django.db.backends.utils import CursorWrapper
 from django.db.backends.sqlite3.base import DatabaseWrapper as DjangoDatabaseWrapper
 
-from django.conf import settings
 
 logger = logging.getLogger(__name__)
 

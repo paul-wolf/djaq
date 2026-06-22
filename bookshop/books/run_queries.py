@@ -8,13 +8,12 @@ from django.db.models import (
     Count,
     Min,
     Max,
-    Sum,
     FloatField,
     Subquery,
     OuterRef,
 )
 from djaq.query import DjangoQuery as DQ
-from books.models import Author, Publisher, Book, Store
+from books.models import Publisher, Book
 
 
 def timeit(method):
