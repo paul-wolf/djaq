@@ -32,6 +32,9 @@ from .sql_functions import (
     build_case_statement_from_choices,
 )
 from .relations import JoinRelation
+from . import frontend
+from .resolver import Resolver
+from .generator import SQLGenerator, get_dialect
 
 
 class ExpressionParser(ast.NodeVisitor):
@@ -938,8 +941,32 @@ class ExpressionParser(ast.NodeVisitor):
         else:
             raise Exception("Expected str or list for order by source")
 
+    def _resolve_named(self, name):
+        """Resolve an ``@name`` reference to ``(sql, params)`` for a subquery.
+
+        Ported from the old ``visit_Str`` handling: a named DjaqQuery inherits
+        its context into ours; a QuerySet is compiled and mogrified to literal
+        SQL; a list becomes a literal value tuple (local queries only).
+        """
+        obj = self.resolve_name(name)
+        if isinstance(obj, ExpressionParser):
+            self.context(obj._context)
+            return obj.query()
+        if isinstance(obj, list):
+            if not self.local:
+                raise Exception("Non-local attempt to use literal SQL")
+            return str(tuple(obj)).strip("(").strip(")"), ()
+        if isinstance(obj, QuerySet):
+            sql, sql_params = self.queryset_source(obj)
+            return self.mogrify(sql, sql_params), ()
+        raise Exception(f"Name not found: {name}")
+
     def construct(self):
-        """Build the final SQL into parser.sql"""
+        """Build the final SQL into ``self.sql`` via the IR pipeline.
+
+        frontend (source -> IR) -> resolver (bind to schema) -> generator
+        (IR -> SQL for the connection's dialect).
+        """
         src = self.where_src
         if self.condition_node:
             if self.where_src:
@@ -947,15 +974,26 @@ class ExpressionParser(ast.NodeVisitor):
             else:
                 src = ""
             if self.drop_empty:
-                
                 src += render_conditions_drop_empty(self.condition_node, self._context)
             else:
                 src += render_conditions(self.condition_node, self._context)
-        # need to completely rebuild
-        self.relations = list()
-        self.add_relation(model=self.model)
-        self.parse_source(self.select_src, src, self.order_by_src)
-        self.build_sql_statement()
+
+        query = frontend.parse(
+            self.model,
+            self.select_src,
+            where_src=src or None,
+            order_by_src=self.order_by_src,
+            limit=self._limit,
+            offset=self._offset,
+            distinct=self.distinct,
+            local=self.local,
+        )
+        self.column_headers = [p.alias for p in query.projections]
+        resolved = Resolver(self.model, whitelist=self.whitelist).resolve(query)
+        generator = SQLGenerator(
+            get_dialect(self.vendor), named_resolver=self._resolve_named
+        )
+        self.sql, self.parameters = generator.generate(resolved)
 
     def dicts(self, data=None):
         if not self.sql:

@@ -367,11 +367,6 @@ class TestDjaqQuery(TestCase):
         DQ("Book", "id", name="dq_sub").where("ilike(name, {spec})")
         DQ("Book", "name, price").where("id in '@dq_sub'").context({"spec": "B%"}).go()
 
-    @expected_dialect_gap(
-        "sqlite",
-        reason="sumif() is registered as an aggregate only for Postgres, "
-        "so SQLite omits the GROUP BY and returns a single collapsed row",
-    )
     def test_queryset_vs_djaq_sumif(self):
         """Djaq sumif() grouping must match the equivalent QuerySet, per publisher."""
         d = DQ(
