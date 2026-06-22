@@ -1,20 +1,17 @@
 import copy
-import csv
-import io
-import json
 from typing import Dict, Optional, Union, List
 
 from django.db import connections, models
 from django.db.models.query import QuerySet
 from django.core.serializers.json import DjangoJSONEncoder
 
-from djaq.result import DQResult
 from djaq.conditions import B
 from .context import ContextValidator
 from .conditions import render_conditions, render_conditions_drop_empty
 from . import frontend
 from .resolver import Resolver
 from .generator import SQLGenerator, get_dialect
+from .executor import Executor
 
 
 class ExpressionParser:
@@ -81,6 +78,7 @@ class ExpressionParser:
         # a set of conditions defined by B nodes
         self.condition_node: Optional[B] = None
         self.column_headers = list()
+        self.executor = Executor(self)
 
     def clone(self):
         p = ExpressionParser(
@@ -172,33 +170,7 @@ class ExpressionParser:
         return self
 
     def execute(self, context=None, count=False):
-        """Create a cursor and execute the sql."""
-
-        self.context(context)
-
-        sql = self.sql
-        
-
-        self.cursor = self.connection.cursor()
-
-        if count:
-            sql = f"SELECT COUNT(*) FROM ({sql}) c"
-
-        if self._context or self._extra_named:
-            context = (
-                self.context_validator_class(self, self._context).context()
-                if self._context
-                else {}
-            )
-            # IN-list parameters were expanded into indexed named placeholders.
-            context.update(self._extra_named)
-            if self.verbosity:
-                print(f"sql={sql}, params={context}")
-            self.cursor.execute(sql, context)
-        else:
-            if self.verbosity:
-                print(f"sql={sql}")
-            self.cursor.execute(sql)
+        return self.executor.execute(context, count)
 
     def query(self, context=None):
         """Return source for djaqquery and parameters."""
@@ -289,85 +261,28 @@ class ExpressionParser:
         self._extra_named = generator.extra_named
 
     def dicts(self, data=None):
-        if not self.sql:
-            self.construct()
-        if not self.cursor:
-            self.execute(data)
-        while True:
-            row = self.cursor.fetchone()
-            if row is None:
-                break
-            row_dict = dict(zip(self.column_headers, row))
-            yield row_dict
-        self.cursor = None
+        return self.executor.dicts(data)
 
     def tuples(self, data=None, flat=False):
-        if not self.sql:
-            self.construct()
-        row = None
-        if not self.cursor:
-            self.execute(data)
-        while True:
-            row = self.cursor.fetchone()
-            if row is None:
-                break
-            if flat:
-                yield row[0]
-            else:
-                yield row
-        self.cursor = None
+        return self.executor.tuples(data, flat=flat)
 
     def json(self, data=None, encoder=DjangoJSONEncoder):
-        for d in self.dicts(data):
-            yield json.dumps(d, cls=encoder)
-        self.cursor = None
+        return self.executor.json(data, encoder)
 
     def objs(self, data=None):
-        if not self.sql:
-            self.construct()
-        if not self.cursor:
-            self.execute(data)
-        while True:
-            row = self.cursor.fetchone()
-            if row is None:
-                break
-            row_dict = dict(zip(self.column_headers, row))
-            yield DQResult(row_dict, dq=self)
-        self.cursor = None
+        return self.executor.objs(data)
 
     def next(self, data=None):
-        if not self.sql:
-            self.construct()
-        if not self.cursor:
-            self.execute(data)
-        row = self.cursor.fetchone()
-        row_dict = dict(zip(self.column_headers, row))
-        return DQResult(row_dict, dq=self)
+        return self.executor.next(data)
 
     def csv(self, data=None):
-        if not self.sql:
-            self.construct()
-        if not self.cursor:
-            self.execute(data)
-        while True:
-            output = io.StringIO()
-            row = self.cursor.fetchone()
-            if row is None:
-                break
-            writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC)
-            writer.writerow(row)
-            yield output.getvalue()
-        self.cursor = None
+        return self.executor.csv(data)
 
     def value(self, data=None):
-        for t in self.tuples(data=data):
-            return t[0]
+        return self.executor.value(data)
 
     def count(self, data=None):
-        if not self.sql:
-            self.construct()
-        self.execute(data, count=True)
-        return self.cursor.fetchone()[0]
+        return self.executor.count(data)
 
     def __repr__(self):
         return f"{self.__class__.__name__}"
