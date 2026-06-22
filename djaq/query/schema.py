@@ -14,8 +14,11 @@ needs a DB connection).
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field as _field
 from typing import Optional
+
+from ..exceptions import ModelNotFoundException
 
 
 @dataclass(frozen=True)
@@ -97,6 +100,18 @@ class Schema:
                 return e
         return None
 
+    def get_entity(self, label) -> Entity:
+        """Provider interface: return an entity or raise if it is out of scope.
+
+        A static Schema *is* a query provider. Because resolution can only reach
+        entities present here, the schema doubles as the access boundary -- a
+        caller-scoped schema is a caller-scoped data surface.
+        """
+        entity = self.get(label)
+        if entity is None:
+            raise ModelNotFoundException(f"Entity not in schema: {label}")
+        return entity
+
     def add(self, entity: Entity):
         self.entities[entity.key] = entity
         return entity
@@ -131,6 +146,13 @@ class Schema:
                 for key, e in self.entities.items()
             }
         }
+
+    def to_json(self, indent=None) -> str:
+        return json.dumps(self.to_dict(), indent=indent)
+
+    @classmethod
+    def from_json(cls, text: str) -> "Schema":
+        return cls.from_dict(json.loads(text))
 
     @classmethod
     def from_dict(cls, data: dict) -> "Schema":

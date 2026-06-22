@@ -172,3 +172,57 @@ class DjangoSchemaProvider:
         for model in models:
             s.add(self.entity(model))
         return s
+
+
+def check_drift(s: schema.Schema, connection) -> list:
+    """Compare a Schema against a live database via introspection.
+
+    Returns a list of human-readable drift messages (empty == no drift). This is
+    what makes a hand-written, cached or AI-generated schema trustworthy: before
+    Djaq generates SQL from it, you can confirm every table, column and join key
+    actually exists in the target database.
+    """
+    cursor = connection.cursor()
+    tables = set(connection.introspection.table_names(cursor))
+    _cols: dict = {}
+
+    def cols(table):
+        if table not in _cols:
+            if table in tables:
+                desc = connection.introspection.get_table_description(cursor, table)
+                _cols[table] = {c.name for c in desc}
+            else:
+                _cols[table] = set()
+        return _cols[table]
+
+    problems = []
+    for e in s.entities.values():
+        if e.table not in tables:
+            problems.append(f"missing table {e.table!r} for entity {e.key!r}")
+            continue
+        ecols = cols(e.table)
+        for f in e.fields.values():
+            if f.column not in ecols:
+                problems.append(
+                    f"missing column {e.table}.{f.column} for field {e.key}.{f.name}"
+                )
+        for r in e.relations.values():
+            if r.link_table and r.link_table not in tables:
+                problems.append(
+                    f"missing link table {r.link_table!r} for relation {e.key}.{r.name}"
+                )
+            for jk in tuple(r.keys) + tuple(r.link_keys):
+                for table, column in (
+                    (jk.left_table, jk.left_column),
+                    (jk.right_table, jk.right_column),
+                ):
+                    if table not in tables:
+                        problems.append(
+                            f"missing join table {table!r} for relation {e.key}.{r.name}"
+                        )
+                    elif column not in cols(table):
+                        problems.append(
+                            f"missing join column {table}.{column} for relation {e.key}.{r.name}"
+                        )
+
+    return list(dict.fromkeys(problems))  # dedupe, preserve order

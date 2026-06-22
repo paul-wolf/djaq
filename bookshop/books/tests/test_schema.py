@@ -2,13 +2,26 @@
 
 import json
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
+from django.db import connections
 
 from djaq.query import schema as s
-from djaq.query.schema_django import DjangoSchemaProvider, neutral_type
+from djaq.query import frontend
+from djaq.query.resolver import Resolver
+from djaq.query.generator import SQLGenerator, get_dialect
+from djaq.query.schema_django import DjangoSchemaProvider, neutral_type, check_drift
+from djaq.exceptions import ModelNotFoundException
 
-from books.models import Book, Publisher, Author, Store
+from books.models import Book, Publisher, Author, Store, Consortium
 from django.contrib.auth.models import User
+
+
+def generate_sql(provider, root_label, select, vendor="postgresql"):
+    """Run the IR pipeline against any provider and return the SQL."""
+    q = frontend.parse(None, f"({select})")
+    rq = Resolver(provider, root_label).resolve(q)
+    sql, _ = SQLGenerator(get_dialect(vendor)).generate(rq)
+    return sql
 
 
 class TestDjangoSchemaProvider(SimpleTestCase):
@@ -78,3 +91,42 @@ class TestDjangoSchemaProvider(SimpleTestCase):
         # full JSON round-trip is lossless
         restored = s.Schema.from_dict(json.loads(json.dumps(schema.to_dict())))
         self.assertEqual(restored.to_dict(), schema.to_dict())
+
+    def test_django_optional_generation(self):
+        """A JSON-reloaded schema drives the pipeline identically -- no Django."""
+        schema = self.provider.schema_from([Book, Publisher, Author])
+        reloaded = s.Schema.from_json(schema.to_json())
+        select = "name, publisher.name, authors.name"
+        sql_from_json = generate_sql(reloaded, "books.Book", select)
+        sql_from_django = generate_sql(DjangoSchemaProvider(), "books.Book", select)
+        self.assertEqual(sql_from_json, sql_from_django)
+        self.assertIn("books_publisher", sql_from_json)
+        self.assertIn("books_book_authors", sql_from_json)
+
+    def test_schema_is_access_boundary(self):
+        """Resolution can only reach entities in the schema -- the scope IS the whitelist."""
+        scoped = self.provider.schema_from([Book])  # Publisher deliberately excluded
+        # selecting a local column is fine
+        generate_sql(scoped, "books.Book", "name")
+        # but traversing to an out-of-scope entity is refused at resolution time
+        with self.assertRaises(ModelNotFoundException):
+            generate_sql(scoped, "books.Book", "publisher.name")
+
+
+class TestSchemaDrift(TestCase):
+    """Drift detection needs a real database, so this uses TestCase (test DB)."""
+
+    def test_extracted_schema_has_no_drift(self):
+        provider = DjangoSchemaProvider()
+        schema = provider.schema_from([Book, Publisher, Author, Consortium, Store])
+        self.assertEqual(check_drift(schema, connections["default"]), [])
+
+    def test_drift_is_reported(self):
+        provider = DjangoSchemaProvider()
+        schema = provider.schema_from([Book])
+        # a phantom column on a real table, and a phantom entity/table
+        schema.get("books.Book").fields["ghost"] = s.Field("ghost", "ghost_col", "string")
+        schema.add(s.Entity("x.Ghost", "Ghost", "ghost_table", "id"))
+        problems = check_drift(schema, connections["default"])
+        self.assertTrue(any("ghost_col" in p for p in problems))
+        self.assertTrue(any("ghost_table" in p for p in problems))
