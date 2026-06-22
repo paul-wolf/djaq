@@ -1,84 +1,58 @@
-"""Resolver: bind an unresolved :class:`~djaq.query.ir.Query` to the schema.
+"""Resolver: bind an unresolved :class:`~djaq.query.ir.Query` to a schema.
 
-This is the only part of the pipeline that touches Django model metadata. It
-walks the IR produced by the frontend and:
+Given a schema provider (something with ``get_entity(label) -> schema.Entity``)
+and a root entity label, the resolver walks the IR and:
 
 * replaces every :class:`~djaq.query.ir.Name` with a concrete
   :class:`~djaq.query.ir.FieldRef` (or a ``DateExtract``/``Case`` rewrite),
-  building the join graph (:class:`~djaq.query.ir.Relation`) as it goes;
-* classifies each :class:`~djaq.query.ir.Func` as aggregate or scalar
-  (validating it against the function catalogues / whitelist);
+  building the join graph (:class:`~djaq.query.ir.Relation` carrying precomputed
+  ``schema.JoinKey`` keys) as it goes;
+* classifies each :class:`~djaq.query.ir.Func` as aggregate or scalar;
 * computes the ``GROUP BY`` keys.
 
-The name-resolution logic is a faithful port of the old
-``ExpressionParser.push_attribute_relations`` / ``add_relation``, but it returns
-IR nodes and builds ``Relation`` graph nodes instead of emitting SQL strings.
+It imports no Django: it depends only on the schema contract and the provider
+interface. The provider (e.g. ``DjangoSchemaProvider``) is the only ORM-coupled
+piece, and its ``get_entity`` is also where the whitelist is enforced.
 """
 
-from django.db.models.fields.related import ManyToManyField, OneToOneRel
-
-from ..app_utils import (
-    find_model_class,
-    get_field_from_model,
-    get_model_from_table,
-    model_path,
-)
 from ..exceptions import UnknownFunctionException
 from .sql_functions import func_in_whitelist
 from . import ir
 
 
 class Resolver:
-    def __init__(self, model, whitelist=None):
-        self.model = model
-        self.whitelist = whitelist
-        self.relations: list[ir.Relation] = []
-        self._add_relation(model)
+    def __init__(self, provider, root_label):
+        self.provider = provider
+        root = provider.get_entity(root_label)
+        self.relations: list[ir.Relation] = [
+            ir.Relation(table=root.table, entity=root)
+        ]
 
     # ------------------------------------------------------------------ joins
-    def _add_relation(
-        self, model, parent=None, join_field=None, alias=None, field_name=None
-    ) -> ir.Relation:
-        """Add a relation to the graph, de-duplicating by model (and alias)."""
-        for relation in self.relations:
-            if model_path(relation.model) == model_path(model):
-                if alias and relation.alias:
-                    if alias == relation.alias:
-                        return relation
-                    # different aliases -> fall through and create a new one
-                else:
-                    if alias:
-                        relation.alias = alias
-                    return relation
+    def _add_relation(self, entity, join_keys=()) -> ir.Relation:
+        """Add (or reuse) a relation for an entity. De-dup by entity key."""
+        for r in self.relations:
+            if r.entity is not None and r.entity.key == entity.key:
+                return r
+        rel = ir.Relation(table=entity.table, entity=entity, join_keys=tuple(join_keys))
+        self.relations.append(rel)
+        return rel
 
-        relation = ir.Relation(
-            model=model, alias=alias, parent=parent, join_field=join_field
-        )
-        self.relations.append(relation)
-
-        if len(self.relations) > 1 and not relation.join_field:
-            # discover how this relation joins to an existing one
-            for rel in self.relations:
-                for f in rel.model._meta.get_fields():
-                    if f.related_model == relation.model:
-                        # there can be several fields to this model; pick the
-                        # one named by field_name if given
-                        if field_name and not f.name == field_name:
-                            continue
-                        relation.parent = rel
-                        relation.join_field = f
-                        break
-                if relation.parent:
-                    break
-        return relation
+    def _add_link(self, table, join_keys=()) -> ir.Relation:
+        """Add (or reuse) an m2m link-table relation (no entity)."""
+        for r in self.relations:
+            if r.entity is None and r.table == table:
+                return r
+        rel = ir.Relation(table=table, entity=None, join_keys=tuple(join_keys))
+        self.relations.append(rel)
+        return rel
 
     # --------------------------------------------------------------- names
     def _date_attribute(self, field, relation, remaining) -> ir.Expr:
         """Resolve a date/datetime part access, e.g. ``pubdate.year``."""
-        part = remaining.pop()
+        part = remaining.pop(0)
         source = ir.FieldRef(relation, field.column, field)
-        internal = field.get_internal_type()
-        if internal == "DateTimeField" and part.lower() == "date":
+        if field.type == "datetime" and part.lower() == "date":
             return ir.DateExtract("date", source)
         return ir.DateExtract(part, source)
 
@@ -91,82 +65,81 @@ class Resolver:
         )
         return ir.Case(whens=whens)
 
-    def resolve_path(self, path, relation=None) -> ir.Expr:
-        """Port of ``push_attribute_relations``; returns an IR expression.
+    def _terminal(self, relation, attr) -> ir.Expr:
+        entity = relation.entity
+        if attr.endswith("_display"):
+            base = entity.field(attr[:-8])
+            if base and base.choices:
+                return self._display_case(base, relation)
+        field = entity.field(attr)
+        if field:
+            return ir.FieldRef(relation, field.column, field)
+        if entity.relation(attr):
+            raise Exception("Specify a field name in the related model")
+        raise Exception(f"Unknown field: {entity.name}.{attr}")
 
-        ``path`` is in natural order and consumed front-to-back: the leading
-        element is the relation closest to the root, the trailing element is the
-        terminal attribute. ``publisher.owner.name`` -> ``("publisher","owner","name")``.
+    def _standalone(self, attr) -> ir.Expr:
+        root = self.relations[0]
+        entity = root.entity
+        base_name = attr[:-8] if attr.endswith("_display") else attr
+        field = entity.field(base_name)
+        if field:
+            if attr.endswith("_display") and field.choices:
+                return self._display_case(field, root)
+            return ir.FieldRef(root, field.column, field)
+        rel = entity.relation(attr)
+        if rel and rel.kind == "reverse":
+            # a reverse relation used as a value, e.g. count(book)
+            target = self._add_relation(
+                self.provider.get_entity(rel.target), rel.keys
+            )
+            return ir.FieldRef(target, rel.keys[0].right_column, None)
+        raise Exception(f"Unknown name: {entity.name}.{attr}")
+
+    def resolve_path(self, path, relation=None) -> ir.Expr:
+        """Resolve a dotted name to an IR expression (front-to-back).
+
+        ``publisher.owner.name`` -> ``("publisher","owner","name")``: leading
+        elements are relations to traverse, the trailing element is terminal.
         """
         path = list(path)
         try:
             attr = path.pop(0)
         except IndexError:
-            if not relation:
-                relation = self._add_relation(self.model)
-            return self.resolve_path(path, relation)
+            return self._terminal(relation or self.relations[0], attr)
 
-        # terminal attribute on a known relation
         if relation and not path:
-            if attr.endswith("_display"):
-                field = relation.model._meta.get_field(attr[:-8])
-                if field.choices:
-                    return self._display_case(field, relation)
-            field = relation.model._meta.get_field(attr)
-            if isinstance(field, OneToOneRel):
-                raise Exception("Specify a field name in the related model")
-            return ir.FieldRef(relation, field.column, field)
-
-        # stand-alone name on the root relation
+            return self._terminal(relation, attr)
         if not relation and not path:
-            if not self.relations:
-                self._add_relation(self.model)
-            model = self.relations[0].model
-            if attr.endswith("_display"):
-                field = model._meta.get_field(attr[:-8])
-            else:
-                field = model._meta.get_field(attr)
-            if field.auto_created and not field.concrete:
-                # reverse relation to an FK in another model (e.g. count(book))
-                rel = self._add_relation(field.related_model)
-                return ir.FieldRef(rel, field.get_joining_columns()[0][1], None)
-            if attr.endswith("_display") and field.choices:
-                return self._display_case(field, self.relations[0])
-            return ir.FieldRef(self.relations[0], field.column, field)
+            return self._standalone(attr)
 
-        # a relation step (FK / M2M / date-attr) with more path to follow
+        # a relation step with more path to follow
         relation = relation or self.relations[0]
-        field = relation.model._meta.get_field(attr)
+        entity = relation.entity
+        rel = entity.relation(attr)
 
-        if isinstance(field, ManyToManyField):
-            link_model = get_model_from_table(field.m2m_db_table())
-            link_fk = get_field_from_model(link_model, field.m2m_field_name())
-            self._add_relation(link_model, parent=relation, join_field=link_fk)
-            reverse_fk = get_field_from_model(
-                link_model, field.m2m_reverse_field_name()
-            )
+        if rel and rel.kind == "m2m":
+            self._add_link(rel.link_table, rel.link_keys)
+            target_entity = self.provider.get_entity(rel.target)
+            target = self._add_relation(target_entity, rel.keys)
             terminal = path.pop(0)
-            self._add_relation(field.related_model, join_field=reverse_fk)
-            related_field = get_field_from_model(field.related_model, terminal)
-            # find the relation we just added for the related model
-            target = self.relations[-1]
-            return ir.FieldRef(target, related_field.column, related_field)
+            field = target_entity.field(terminal)
+            return ir.FieldRef(target, field.column, field)
 
-        related_model = field.related_model
-        if related_model:
-            # FK / O2O: check whitelist, then add the join and recurse
-            find_model_class(related_model._meta.label, whitelist=self.whitelist)
-            new_relation = self._add_relation(related_model, field_name=attr)
+        if rel:
+            target_entity = self.provider.get_entity(rel.target)  # whitelist enforced
+            new_relation = self._add_relation(target_entity, rel.keys)
             return self.resolve_path(path, new_relation)
 
         # not a relation: a scalar field with a trailing attribute -> date part
+        field = entity.field(attr)
         return self._date_attribute(field, relation, path)
 
     # ----------------------------------------------------------- expressions
     def resolve_expr(self, node: ir.Expr) -> ir.Expr:
         if isinstance(node, ir.Name):
             return self.resolve_path(node.path)
-        if isinstance(node, (ir.Literal, ir.Param, ir.RawSQL)):
+        if isinstance(node, (ir.Literal, ir.Param, ir.RawSQL, ir.NamedRef)):
             return node
         if isinstance(node, ir.BinaryOp):
             return ir.BinaryOp(
@@ -184,8 +157,6 @@ class Resolver:
             return ir.TupleExpr(tuple(self.resolve_expr(e) for e in node.elements))
         if isinstance(node, ir.Func):
             return self.resolve_func(node)
-        if isinstance(node, ir.Subquery):
-            return node  # nested queries are resolved by the frontend
         # already-resolved nodes pass through
         return node
 

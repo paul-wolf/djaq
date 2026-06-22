@@ -7,14 +7,24 @@ from django.test import SimpleTestCase
 
 from djaq.query import ir
 from djaq.query.resolver import Resolver
+from djaq.query.schema import JoinKey
+from djaq.query.schema_django import DjangoSchemaProvider
 from djaq.exceptions import UnknownFunctionException
 
 from books.models import Book, Publisher
 
 
+def resolver_for(model):
+    return Resolver(DjangoSchemaProvider(), model._meta.label)
+
+
+def ir_jk(lt, lc, rt, rc):
+    return JoinKey(lt, lc, rt, rc)
+
+
 class TestResolver(SimpleTestCase):
     def resolve_path(self, model, path):
-        r = Resolver(model)
+        r = resolver_for(model)
         expr = r.resolve_path(path)
         return r, expr
 
@@ -22,19 +32,20 @@ class TestResolver(SimpleTestCase):
         r, expr = self.resolve_path(Book, ("name",))
         self.assertIsInstance(expr, ir.FieldRef)
         self.assertEqual(expr.column, "name")
-        self.assertEqual(expr.relation.model, Book)
+        self.assertEqual(expr.relation.entity.name, "Book")
         self.assertEqual(len(r.relations), 1)
 
     def test_fk_path_adds_join(self):
         r, expr = self.resolve_path(Book, ("publisher", "name"))
         self.assertIsInstance(expr, ir.FieldRef)
         self.assertEqual(expr.column, "name")
-        self.assertEqual(expr.relation.model, Publisher)
+        self.assertEqual(expr.relation.entity.name, "Publisher")
         # Book (root) + Publisher
-        self.assertEqual([rel.model for rel in r.relations], [Book, Publisher])
+        self.assertEqual([rel.entity.name for rel in r.relations], ["Book", "Publisher"])
         pub = r.relations[1]
-        self.assertEqual(pub.parent.model, Book)
-        self.assertIsNotNone(pub.join_field)
+        self.assertEqual(
+            pub.join_keys[0], ir_jk("books_book", "publisher_id", "books_publisher", "id")
+        )
 
     def test_nested_fk_path(self):
         r, expr = self.resolve_path(Book, ("publisher", "owner", "name"))
@@ -48,6 +59,7 @@ class TestResolver(SimpleTestCase):
         self.assertEqual(expr.column, "name")
         # Book + link table + Author
         self.assertEqual(len(r.relations), 3)
+        self.assertIsNone(r.relations[1].entity)  # the link table has no entity
 
     def test_date_attribute(self):
         r, expr = self.resolve_path(Book, ("pubdate", "year"))
@@ -67,10 +79,10 @@ class TestResolver(SimpleTestCase):
     def test_reverse_relation(self):
         r, expr = self.resolve_path(Publisher, ("book",))
         self.assertIsInstance(expr, ir.FieldRef)
-        self.assertEqual([rel.model for rel in r.relations], [Publisher, Book])
+        self.assertEqual([rel.entity.name for rel in r.relations], ["Publisher", "Book"])
 
     def test_resolve_func_classification(self):
-        r = Resolver(Book)
+        r = resolver_for(Book)
         avg = r.resolve_func(ir.Func("avg", (ir.Literal(1),)))
         self.assertEqual(avg.kind, ir.FuncKind.AGGREGATE)
         sumif = r.resolve_func(ir.Func("sumif", (ir.Literal(1),)))
@@ -91,7 +103,7 @@ class TestResolver(SimpleTestCase):
                 ir.Projection(ir.Func("avg", (ir.Name(("price",)),)), "avg"),
             ],
         )
-        rq = Resolver(Book).resolve(q)
+        rq = resolver_for(Book).resolve(q)
         self.assertEqual(len(rq.group_by), 1)
         self.assertIsInstance(rq.group_by[0], ir.FieldRef)
         self.assertEqual(rq.group_by[0].column, "name")
@@ -101,5 +113,5 @@ class TestResolver(SimpleTestCase):
             model=Book,
             projections=[ir.Projection(ir.Name(("name",)), "name")],
         )
-        rq = Resolver(Book).resolve(q)
+        rq = resolver_for(Book).resolve(q)
         self.assertEqual(rq.group_by, [])

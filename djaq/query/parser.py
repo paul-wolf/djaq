@@ -10,6 +10,7 @@ from .context import ContextValidator
 from .conditions import render_conditions, render_conditions_drop_empty
 from . import frontend
 from .resolver import Resolver
+from .schema_django import DjangoSchemaProvider
 from .generator import SQLGenerator, get_dialect
 from .executor import Executor
 
@@ -253,7 +254,8 @@ class ExpressionParser:
             local=self.local,
         )
         self.column_headers = [p.alias for p in query.projections]
-        resolved = Resolver(self.model, whitelist=self.whitelist).resolve(query)
+        provider = DjangoSchemaProvider(whitelist=self.whitelist)
+        resolved = Resolver(provider, self.model._meta.label).resolve(query)
         generator = SQLGenerator(
             get_dialect(self.vendor), named_resolver=self._resolve_named
         )

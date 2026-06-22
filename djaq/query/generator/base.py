@@ -6,8 +6,6 @@ decisions (identifier quoting, function rendering, LIMIT/OFFSET, date parts,
 casts). This keeps one generator and N small dialects.
 """
 
-from django.db.models.fields.related import ManyToOneRel
-
 from .. import ir
 
 
@@ -128,24 +126,12 @@ class SQLGenerator:
 
     # ------------------------------------------------------------------ joins
     def _join_on(self, rel: ir.Relation) -> str:
-        jf = rel.join_field
         qt, qi = self.d.quote_table, self.d.quote_ident
-        parts = []
-        if hasattr(jf, "related_fields"):
-            for fk, f in jf.related_fields:
-                parts.append(
-                    f"{qt(fk.model._meta.db_table)}.{qi(fk.column)} = "
-                    f"{qt(f.model._meta.db_table)}.{qi(f.column)}"
-                )
-        elif isinstance(jf, ManyToOneRel):
-            left = rel.alias or jf.model._meta.db_table
-            for f_from, f_to in jf.get_joining_columns():
-                parts.append(
-                    f"{qt(left)}.{qi(f_from)} = "
-                    f"{qt(jf.related_model._meta.db_table)}.{qi(f_to)}"
-                )
-        else:
-            raise Exception(f"Cannot derive join condition from {jf!r}")
+        parts = [
+            f"{qt(k.left_table)}.{qi(k.left_column)} = "
+            f"{qt(k.right_table)}.{qi(k.right_column)}"
+            for k in rel.join_keys
+        ]
         return "(" + " AND ".join(parts) + ")"
 
     def _expand_in_list(self, name):

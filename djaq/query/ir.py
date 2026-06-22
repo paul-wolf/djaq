@@ -243,22 +243,20 @@ Expr = Union[
 # --------------------------------------------------------------------------
 @dataclass
 class Relation:
-    """A node in the join graph. Pure structure -- no SQL strings.
+    """A node in the join graph. Pure structure -- no SQL strings, no ORM.
 
-    ``relations[0]`` of a query is the root (the FROM table); every other
-    relation carries the ``parent`` it joins from and the Django ``join_field``
-    linking them, from which the generator derives the ON clause.
+    ``relations[0]`` of a query is the root (the FROM table). Every other
+    relation carries ``join_keys`` (a tuple of ``schema.JoinKey``) expressing its
+    ON condition, precomputed by the resolver from the schema. ``entity`` is the
+    ``schema.Entity`` used by the resolver for field lookup (``None`` for an m2m
+    link table); the generator never needs it.
     """
 
-    model: object
+    table: str
+    entity: object = None
     alias: Optional[str] = None
-    parent: Optional["Relation"] = None
-    join_field: object = None
+    join_keys: tuple = ()
     join_type: str = "->"  # -> left, <- right, <> inner
-
-    @property
-    def table(self) -> str:
-        return self.model._meta.db_table
 
     @property
     def ref(self) -> str:

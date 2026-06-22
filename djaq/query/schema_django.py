@@ -15,6 +15,7 @@ from django.db.models.fields.related import (
 )
 
 from . import schema
+from ..app_utils import find_model_class
 
 
 #: Django internal field type -> Djaq's neutral type taxonomy.
@@ -64,6 +65,19 @@ def _choices(f) -> tuple:
 class DjangoSchemaProvider:
     def __init__(self, whitelist=None):
         self.whitelist = whitelist
+        self._cache: dict = {}
+
+    def get_entity(self, label) -> schema.Entity:
+        """Return the Entity for a model label, extracting (and caching) on demand.
+
+        ``find_model_class`` enforces the whitelist, so traversing to a model that
+        the caller may not access raises ``ModelNotFoundException`` here -- this is
+        where Djaq circumscribes the data a (possibly remote) query can reach.
+        """
+        if label not in self._cache:
+            model = find_model_class(label, whitelist=self.whitelist)
+            self._cache[label] = self.entity(model)
+        return self._cache[label]
 
     def entity(self, model) -> schema.Entity:
         meta = model._meta
