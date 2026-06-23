@@ -1,12 +1,11 @@
 """Frontend: Djaq source text -> unresolved :class:`~djaq.query.ir.Query`.
 
-This is structural only: it produces IR nodes and performs no model lookups and
-no SQL generation. It currently reuses Python's ``ast`` to parse expressions
-(the historical approach); Phase 3 replaces this with a hand-written parser that
-emits the same IR, leaving the resolver and generator untouched.
+Structural only: it produces IR nodes and performs no model lookups and no SQL
+generation. Expressions are parsed by a hand-written lexer + recursive-descent
+parser (``_tokenize`` / ``_Parser``) -- no Python ``ast`` -- so the Djaq grammar
+is owned here, and the resolver and generator are untouched.
 """
 
-import ast
 import re
 import unicodedata
 
@@ -26,29 +25,6 @@ def _slugify(value):
     )
     value = re.sub(r"[^\w\s-]", "", value).strip().lower()
     return re.sub(r"[-\s]+", "-", value)
-
-
-_JOIN_SPLIT = re.compile(r"->|<-|<>")
-
-# ast operator class -> IR Op
-_BINOP = {
-    ast.Add: ir.Op.ADD,
-    ast.Sub: ir.Op.SUB,
-    ast.Mult: ir.Op.MUL,
-    ast.Div: ir.Op.DIV,
-}
-_CMPOP = {
-    ast.Gt: ir.Op.GT,
-    ast.Lt: ir.Op.LT,
-    ast.Eq: ir.Op.EQ,
-    ast.NotEq: ir.Op.NE,
-    ast.LtE: ir.Op.LE,
-    ast.GtE: ir.Op.GE,
-    ast.Is: ir.Op.IS,
-    ast.IsNot: ir.Op.IS_NOT,
-    ast.In: ir.Op.IN,
-    ast.NotIn: ir.Op.NOT_IN,
-}
 
 
 # --------------------------------------------------------------------------
@@ -93,83 +69,254 @@ def parse_column_aliases(select_src):
 
 
 # --------------------------------------------------------------------------
-# Expression conversion: ast node -> IR Expr
+# Expression lexer
 # --------------------------------------------------------------------------
-def _convert(node):
-    if isinstance(node, ast.Expression):
-        return _convert(node.body)
+_TWO_CHAR_OPS = {"==", "!=", ">=", "<="}
+_COMPARE_OPS = {
+    "==": ir.Op.EQ,
+    "!=": ir.Op.NE,
+    ">": ir.Op.GT,
+    "<": ir.Op.LT,
+    ">=": ir.Op.GE,
+    "<=": ir.Op.LE,
+}
 
-    if isinstance(node, ast.Constant):
-        return _convert_constant(node.value)
 
-    if isinstance(node, ast.Name):
-        return ir.Name((node.id,))
+def _tokenize(src):
+    """Lex a Djaq expression into a list of ``(kind, value)`` tokens."""
+    tokens = []
+    i, n = 0, len(src)
+    while i < n:
+        c = src[i]
+        if c.isspace():
+            i += 1
+        elif c == "{":  # {name} parameter placeholder
+            j = src.find("}", i)
+            if j == -1:
+                raise SyntaxError(f"unterminated parameter in {src!r}")
+            tokens.append(("param", src[i + 1 : j].strip()))
+            i = j + 1
+        elif c in "'\"":  # string literal
+            quote, j, buf = c, i + 1, []
+            while j < n and src[j] != quote:
+                if src[j] == "\\" and j + 1 < n:
+                    buf.append(src[j + 1])
+                    j += 2
+                else:
+                    buf.append(src[j])
+                    j += 1
+            tokens.append(("str", "".join(buf)))
+            i = j + 1
+        elif c.isdigit():  # int or float
+            j = i
+            while j < n and src[j].isdigit():
+                j += 1
+            if j < n and src[j] == "." and j + 1 < n and src[j + 1].isdigit():
+                j += 1
+                while j < n and src[j].isdigit():
+                    j += 1
+                tokens.append(("num", float(src[i:j])))
+            else:
+                tokens.append(("num", int(src[i:j])))
+            i = j
+        elif c.isalpha() or c == "_":  # name or keyword
+            j = i
+            while j < n and (src[j].isalnum() or src[j] == "_"):
+                j += 1
+            tokens.append(("name", src[i:j]))
+            i = j
+        elif src[i : i + 2] in _TWO_CHAR_OPS:
+            tokens.append(("op", src[i : i + 2]))
+            i += 2
+        elif c in "><+-*/":
+            tokens.append(("op", c))
+            i += 1
+        elif c == "(":
+            tokens.append(("lparen", c))
+            i += 1
+        elif c == ")":
+            tokens.append(("rparen", c))
+            i += 1
+        elif c == ",":
+            tokens.append(("comma", c))
+            i += 1
+        elif c == ".":
+            tokens.append(("dot", c))
+            i += 1
+        else:
+            raise SyntaxError(f"unexpected character {c!r} in {src!r}")
+    return tokens
 
-    if isinstance(node, ast.Attribute):
-        parts = []
-        cur = node
-        while isinstance(cur, ast.Attribute):
-            parts.append(cur.attr)
-            cur = cur.value
-        parts.append(cur.id)  # the root ast.Name
-        return ir.Name(tuple(reversed(parts)))
 
-    if isinstance(node, ast.BinOp):
-        return ir.BinaryOp(_BINOP[type(node.op)], _convert(node.left), _convert(node.right))
+# --------------------------------------------------------------------------
+# Recursive-descent parser: tokens -> IR Expr
+# --------------------------------------------------------------------------
+class _Parser:
+    def __init__(self, tokens):
+        self.toks = tokens
+        self.pos = 0
 
-    if isinstance(node, ast.UnaryOp):
-        if isinstance(node.op, ast.USub):
-            return ir.Unary(ir.Op.SUB, _convert(node.operand))
-        if isinstance(node.op, ast.Not):
-            return ir.Not(_convert(node.operand))
-        if isinstance(node.op, ast.UAdd):
-            return _convert(node.operand)
-        raise NotImplementedError(f"Unary op: {ast.dump(node)}")
+    def _peek(self):
+        return self.toks[self.pos] if self.pos < len(self.toks) else (None, None)
 
-    if isinstance(node, ast.BoolOp):
-        kind = ir.BoolKind.AND if isinstance(node.op, ast.And) else ir.BoolKind.OR
-        return ir.BoolOp(kind, tuple(_convert(v) for v in node.values))
+    def _advance(self):
+        tok = self.toks[self.pos]
+        self.pos += 1
+        return tok
 
-    if isinstance(node, ast.Compare):
-        # a < b  (single)  or  a < b < c  (chained -> AND of pairs)
-        comparisons = []
-        left = _convert(node.left)
-        for op, comparator in zip(node.ops, node.comparators):
-            right = _convert(comparator)
-            comparisons.append(ir.BinaryOp(_CMPOP[type(op)], left, right))
+    def _keyword(self, *words):
+        kind, value = self._peek()
+        return kind == "name" and value in words
+
+    def _expect(self, kind):
+        if self._peek()[0] != kind:
+            raise SyntaxError(f"expected {kind}, got {self._peek()}")
+        return self._advance()
+
+    def parse(self):
+        expr = self._or()
+        if self.pos != len(self.toks):
+            raise SyntaxError(f"unexpected trailing tokens: {self.toks[self.pos:]}")
+        return expr
+
+    def _or(self):
+        operands = [self._and()]
+        while self._keyword("or"):
+            self._advance()
+            operands.append(self._and())
+        return operands[0] if len(operands) == 1 else ir.BoolOp(ir.BoolKind.OR, tuple(operands))
+
+    def _and(self):
+        operands = [self._not()]
+        while self._keyword("and"):
+            self._advance()
+            operands.append(self._not())
+        return operands[0] if len(operands) == 1 else ir.BoolOp(ir.BoolKind.AND, tuple(operands))
+
+    def _not(self):
+        if self._keyword("not"):
+            self._advance()
+            return ir.Not(self._not())
+        return self._comparison()
+
+    def _comparison(self):
+        left = self._additive()
+        comps = []
+        while True:
+            op = self._comparison_op()
+            if op is None:
+                break
+            right = self._additive()
+            comps.append(ir.BinaryOp(op, left, right))
             left = right
-        if len(comparisons) == 1:
-            return comparisons[0]
-        return ir.BoolOp(ir.BoolKind.AND, tuple(comparisons))
+        if not comps:
+            return left
+        return comps[0] if len(comps) == 1 else ir.BoolOp(ir.BoolKind.AND, tuple(comps))
 
-    if isinstance(node, ast.Call):
-        return ir.Func(node.func.id.lower(), tuple(_convert(a) for a in node.args))
+    def _comparison_op(self):
+        kind, value = self._peek()
+        if kind == "op" and value in _COMPARE_OPS:
+            self._advance()
+            return _COMPARE_OPS[value]
+        if self._keyword("is"):
+            self._advance()
+            if self._keyword("not"):
+                self._advance()
+                return ir.Op.IS_NOT
+            return ir.Op.IS
+        if self._keyword("in"):
+            self._advance()
+            return ir.Op.IN
+        if self._keyword("not"):  # only the infix 'not in'
+            nxt = self.toks[self.pos + 1] if self.pos + 1 < len(self.toks) else None
+            if nxt == ("name", "in"):
+                self._advance()
+                self._advance()
+                return ir.Op.NOT_IN
+        return None
 
-    if isinstance(node, ast.Tuple):
-        return ir.TupleExpr(tuple(_convert(e) for e in node.elts))
+    def _additive(self):
+        left = self._multiplicative()
+        while self._peek()[0] == "op" and self._peek()[1] in ("+", "-"):
+            op = ir.Op.ADD if self._advance()[1] == "+" else ir.Op.SUB
+            left = ir.BinaryOp(op, left, self._multiplicative())
+        return left
 
-    if isinstance(node, ast.Set):
-        # the {name} placeholder syntax parses as a one-element set literal
-        elt = node.elts[0]
-        return ir.Param(elt.id)
+    def _multiplicative(self):
+        left = self._unary()
+        while self._peek()[0] == "op" and self._peek()[1] in ("*", "/"):
+            op = ir.Op.MUL if self._advance()[1] == "*" else ir.Op.DIV
+            left = ir.BinaryOp(op, left, self._unary())
+        return left
 
-    raise NotImplementedError(f"Unsupported expression: {ast.dump(node)}")
+    def _unary(self):
+        if self._peek() == ("op", "-"):
+            self._advance()
+            return ir.Unary(ir.Op.SUB, self._unary())
+        if self._peek() == ("op", "+"):
+            self._advance()
+            return self._unary()
+        return self._primary()
+
+    def _primary(self):
+        kind, value = self._peek()
+        if kind == "num":
+            self._advance()
+            return ir.Literal(value)
+        if kind == "param":
+            self._advance()
+            return ir.Param(value)
+        if kind == "str":
+            self._advance()
+            return _string_literal(value)
+        if kind == "lparen":
+            return self._parenthesised()
+        if kind == "name":
+            self._advance()
+            if value in ("True", "False", "None"):
+                return ir.Literal({"True": True, "False": False, "None": None}[value])
+            if self._peek()[0] == "lparen":  # function call
+                return ir.Func(value.lower(), tuple(self._call_args()))
+            path = [value]  # dotted attribute reference
+            while self._peek()[0] == "dot":
+                self._advance()
+                path.append(self._expect("name")[1])
+            return ir.Name(tuple(path))
+        raise SyntaxError(f"unexpected token {self._peek()}")
+
+    def _parenthesised(self):
+        self._expect("lparen")
+        elements = [self._or()]
+        while self._peek()[0] == "comma":
+            self._advance()
+            elements.append(self._or())
+        self._expect("rparen")
+        return elements[0] if len(elements) == 1 else ir.TupleExpr(tuple(elements))
+
+    def _call_args(self):
+        self._expect("lparen")
+        args = []
+        if self._peek()[0] != "rparen":
+            args.append(self._or())
+            while self._peek()[0] == "comma":
+                self._advance()
+                args.append(self._or())
+        self._expect("rparen")
+        return args
 
 
-def _convert_constant(value):
-    if isinstance(value, str):
-        stripped = value.strip()
-        if stripped.startswith("@"):
-            return ir.NamedRef(stripped[1:])
-        if stripped.upper().startswith("SELECT "):
-            return ir.RawSQL(value)
-        return ir.Literal(value)
+def _string_literal(value):
+    stripped = value.strip()
+    if stripped.startswith("@"):
+        return ir.NamedRef(stripped[1:])
+    if stripped.upper().startswith("SELECT "):
+        return ir.RawSQL(value)
     return ir.Literal(value)
 
 
 def convert_expression(src):
     """Parse a single Djaq expression string into an IR expression."""
-    return _convert(ast.parse(src, mode="eval"))
+    return _Parser(_tokenize(src)).parse()
 
 
 # --------------------------------------------------------------------------
