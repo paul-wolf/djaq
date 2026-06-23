@@ -62,6 +62,18 @@ def _choices(f) -> tuple:
     return tuple(tuple(c) for c in (f.choices or ()))
 
 
+# Process-wide cache of extracted entities, keyed by canonical model label.
+# An Entity is derived purely from model._meta (table/columns/relations/join
+# keys), which is static for the process, so it is safe to share across queries
+# and providers. This is what amortises the per-query schema extraction.
+_ENTITY_CACHE: dict = {}
+
+
+def clear_schema_cache():
+    """Forget all cached entities (e.g. for tests or after a schema change)."""
+    _ENTITY_CACHE.clear()
+
+
 class DjangoSchemaProvider:
     def __init__(self, whitelist=None):
         self.whitelist = whitelist
@@ -74,10 +86,17 @@ class DjangoSchemaProvider:
         the caller may not access raises ``ModelNotFoundException`` here -- this is
         where Djaq circumscribes the data a (possibly remote) query can reach.
         """
-        if label not in self._cache:
-            model = find_model_class(label, whitelist=self.whitelist)
-            self._cache[label] = self.entity(model)
-        return self._cache[label]
+        if label in self._cache:
+            return self._cache[label]
+        # resolve + enforce the whitelist on every call (auth is never cached)
+        model = find_model_class(label, whitelist=self.whitelist)
+        key = model._meta.label
+        entity = _ENTITY_CACHE.get(key)
+        if entity is None:  # extraction is the expensive part -- cache it process-wide
+            entity = self.entity(model)
+            _ENTITY_CACHE[key] = entity
+        self._cache[label] = entity
+        return entity
 
     def entity(self, model) -> schema.Entity:
         meta = model._meta

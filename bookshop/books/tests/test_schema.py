@@ -9,7 +9,12 @@ from djaq.query import schema as s
 from djaq.query import frontend
 from djaq.query.resolver import Resolver
 from djaq.query.generator import SQLGenerator, get_dialect
-from djaq.query.schema_django import DjangoSchemaProvider, neutral_type, check_drift
+from djaq.query.schema_django import (
+    DjangoSchemaProvider,
+    neutral_type,
+    check_drift,
+    clear_schema_cache,
+)
 from djaq.exceptions import ModelNotFoundException
 
 from books.models import Book, Publisher, Author, Store, Consortium
@@ -152,6 +157,29 @@ class TestSchemaScoping(SimpleTestCase):
         default_sql = DQ("Book", provider=scoped).sql()
         self.assertIn("name", default_sql)
         self.assertNotIn("rating", default_sql)
+
+
+class TestSchemaCache(SimpleTestCase):
+    """The process-wide entity cache amortises extraction without bypassing auth."""
+
+    def test_extraction_is_cached_across_providers(self):
+        clear_schema_cache()
+        first = DjangoSchemaProvider().get_entity("books.Book")
+        # a fresh provider reuses the cached Entity object (no re-extraction)
+        second = DjangoSchemaProvider().get_entity("books.Book")
+        self.assertIs(first, second)
+        # clearing forces re-extraction
+        clear_schema_cache()
+        self.assertIsNot(first, DjangoSchemaProvider().get_entity("books.Book"))
+
+    def test_cache_does_not_bypass_whitelist(self):
+        # prime the cache with no whitelist
+        DjangoSchemaProvider().get_entity("books.Publisher")
+        # a whitelist excluding Publisher must still be enforced despite the cache
+        with self.assertRaises(ModelNotFoundException):
+            DjangoSchemaProvider(whitelist={"books": ["Book"]}).get_entity(
+                "books.Publisher"
+            )
 
 
 class TestSchemaDrift(TestCase):
