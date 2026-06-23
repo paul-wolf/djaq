@@ -23,27 +23,53 @@ from . import ir
 class Resolver:
     def __init__(self, provider, root_label):
         self.provider = provider
+        self._alias_n = 0
         root = provider.get_entity(root_label)
         self.relations: list[ir.Relation] = [
-            ir.Relation(table=root.table, entity=root)
+            ir.Relation(table=root.table, entity=root, path=())
         ]
 
     # ------------------------------------------------------------------ joins
-    def _add_relation(self, entity, join_keys=()) -> ir.Relation:
-        """Add (or reuse) a relation for an entity. De-dup by entity key."""
-        for r in self.relations:
-            if r.entity is not None and r.entity.key == entity.key:
-                return r
-        rel = ir.Relation(table=entity.table, entity=entity, join_keys=tuple(join_keys))
-        self.relations.append(rel)
-        return rel
+    def _alias_for(self, table) -> str:
+        """An alias if ``table`` is already in the graph (so a self/duplicate join
+        stays distinct), else None."""
+        if any(r.table == table for r in self.relations):
+            self._alias_n += 1
+            return f"t{self._alias_n}"
+        return None
 
-    def _add_link(self, table, join_keys=()) -> ir.Relation:
-        """Add (or reuse) an m2m link-table relation (no entity)."""
+    def _join_pairs(self, parent, new_table, keys):
+        """Orient each schema JoinKey into ``(parent_column, this_column)``.
+
+        When ``parent`` and the new relation share a table (self-referential
+        single hop), the provider puts the source (parent) on the left and the
+        target (new) on the right; otherwise we match each side by table name.
+        """
+        pairs = []
+        for k in keys:
+            if parent.table == new_table:
+                pairs.append((k.left_column, k.right_column))
+            elif k.left_table == new_table and k.right_table == parent.table:
+                pairs.append((k.right_column, k.left_column))
+            elif k.right_table == new_table and k.left_table == parent.table:
+                pairs.append((k.left_column, k.right_column))
+            else:
+                raise Exception(f"cannot orient join key {k} for {parent.table}->{new_table}")
+        return tuple(pairs)
+
+    def _traverse(self, parent, path, entity, table, keys) -> ir.Relation:
+        """Add (or reuse by ``path``) a relation joined to ``parent``."""
         for r in self.relations:
-            if r.entity is None and r.table == table:
+            if r.path == path:
                 return r
-        rel = ir.Relation(table=table, entity=None, join_keys=tuple(join_keys))
+        rel = ir.Relation(
+            table=table,
+            entity=entity,
+            alias=self._alias_for(table),
+            parent=parent,
+            join_pairs=self._join_pairs(parent, table, keys),
+            path=path,
+        )
         self.relations.append(rel)
         return rel
 
@@ -90,8 +116,9 @@ class Resolver:
         rel = entity.relation(attr)
         if rel and rel.kind == "reverse":
             # a reverse relation used as a value, e.g. count(book)
-            target = self._add_relation(
-                self.provider.get_entity(rel.target), rel.keys
+            target_entity = self.provider.get_entity(rel.target)
+            target = self._traverse(
+                root, (attr,), target_entity, target_entity.table, rel.keys
             )
             return ir.FieldRef(target, rel.keys[0].right_column, None)
         raise Exception(f"Unknown name: {entity.name}.{attr}")
@@ -119,16 +146,27 @@ class Resolver:
         rel = entity.relation(attr)
 
         if rel and rel.kind == "m2m":
-            self._add_link(rel.link_table, rel.link_keys)
+            base = relation.path + (attr,)
+            link = self._traverse(
+                relation, base + ("__link",), None, rel.link_table, rel.link_keys
+            )
             target_entity = self.provider.get_entity(rel.target)
-            target = self._add_relation(target_entity, rel.keys)
+            target = self._traverse(
+                link, base, target_entity, target_entity.table, rel.keys
+            )
             terminal = path.pop(0)
             field = target_entity.field(terminal)
             return ir.FieldRef(target, field.column, field)
 
         if rel:
             target_entity = self.provider.get_entity(rel.target)  # whitelist enforced
-            new_relation = self._add_relation(target_entity, rel.keys)
+            new_relation = self._traverse(
+                relation,
+                relation.path + (attr,),
+                target_entity,
+                target_entity.table,
+                rel.keys,
+            )
             return self.resolve_path(path, new_relation)
 
         # not a relation: a scalar field with a trailing attribute -> date part

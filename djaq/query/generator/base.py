@@ -127,10 +127,10 @@ class SQLGenerator:
     # ------------------------------------------------------------------ joins
     def _join_on(self, rel: ir.Relation) -> str:
         qt, qi = self.d.quote_table, self.d.quote_ident
+        parent, this = rel.parent.ref, rel.ref
         parts = [
-            f"{qt(k.left_table)}.{qi(k.left_column)} = "
-            f"{qt(k.right_table)}.{qi(k.right_column)}"
-            for k in rel.join_keys
+            f"{qt(parent)}.{qi(pcol)} = {qt(this)}.{qi(tcol)}"
+            for pcol, tcol in rel.join_pairs
         ]
         return "(" + " AND ".join(parts) + ")"
 

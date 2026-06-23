@@ -21,7 +21,7 @@ from books.models import GENRE_CHOICES
 from .support import expected_dialect_gap
 
 
-from books.models import Author, Publisher, Book, Store, Profile, Consortium
+from books.models import Author, Publisher, Book, Store, Profile, Consortium, Category
 
 
 fake = Faker()
@@ -260,6 +260,34 @@ class TestDjaqQuery(TestCase):
             break
         obj = Writer().get("Book", id)
         self.assertEqual(obj.id, id)
+
+    def test_dual_fk_relations(self):
+        """Two FKs to the same model must produce two distinct joins (aliasing)."""
+        c = Consortium.objects.create(name="C", marketcap=1)
+        p1 = Publisher.objects.create(name="Primary", owner=c)
+        p2 = Publisher.objects.create(name="Alternate", owner=c)
+        Book.objects.create(
+            name="DualFK", pages=1, price=1, rating=1,
+            publisher=p1, alt_publisher=p2, pubdate=datetime(2021, 1, 1),
+        )
+        rows = list(
+            DQ("Book", "publisher.name as pub, alt_publisher.name as alt")
+            .where("name == 'DualFK'")
+            .dicts()
+        )
+        self.assertEqual(rows[0]["pub"], "Primary")
+        self.assertEqual(rows[0]["alt"], "Alternate")
+
+    def test_self_referential_join(self):
+        """A self-referential FK must self-join with an alias."""
+        root = Category.objects.create(name="Root")
+        Category.objects.create(name="Child", parent=root)
+        rows = list(
+            DQ("Category", "name, parent.name as parent_name")
+            .where("name == 'Child'")
+            .dicts()
+        )
+        self.assertEqual(rows[0]["parent_name"], "Root")
 
     def test_attribute_nesting(self):
         for d in DQ("Book", "publisher.owner.name as owner").dicts():

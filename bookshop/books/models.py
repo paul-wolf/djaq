@@ -103,3 +103,19 @@ class Store(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Category(models.Model):
+    """Self-referential model: exercises self-joins / relation aliasing."""
+
+    name = models.CharField(max_length=100)
+    parent = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="children",
+    )
+
+    def __str__(self):
+        return self.name

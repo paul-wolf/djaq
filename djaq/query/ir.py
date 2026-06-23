@@ -246,17 +246,23 @@ class Relation:
     """A node in the join graph. Pure structure -- no SQL strings, no ORM.
 
     ``relations[0]`` of a query is the root (the FROM table). Every other
-    relation carries ``join_keys`` (a tuple of ``schema.JoinKey``) expressing its
-    ON condition, precomputed by the resolver from the schema. ``entity`` is the
-    ``schema.Entity`` used by the resolver for field lookup (``None`` for an m2m
-    link table); the generator never needs it.
+    relation references its ``parent`` relation and carries ``join_pairs`` --
+    ``(parent_column, this_column)`` tuples that express its ON condition
+    relative to the parent. Joining by *relation reference* (rather than table
+    name) is what makes aliasing honest: two relations on the same table, or a
+    self-join, stay distinct because each carries its own ``alias`` and the ON
+    clause uses ``parent.ref``/``self.ref``. ``path`` (the relation-name path
+    from the root) is the de-duplication key. ``entity`` is the schema entity
+    used by the resolver for field lookup (``None`` for an m2m link table).
     """
 
     table: str
     entity: object = None
     alias: Optional[str] = None
-    join_keys: tuple = ()
+    parent: Optional["Relation"] = None
+    join_pairs: tuple = ()  # ((parent_column, this_column), ...)
     join_type: str = "->"  # -> left, <- right, <> inner
+    path: tuple = ()
 
     @property
     def ref(self) -> str:

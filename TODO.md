@@ -6,13 +6,12 @@ guards everything; keep it green.
 
 ## Bugs / correctness
 
-- [ ] **Relation aliasing.** Two relations to the same target collapse into one
-      join — e.g. `DQ("Book", "publisher.name, alt_publisher.name")` silently
-      reads both from the `publisher` join (proven wrong). Self-referential FKs
-      (tree/hierarchy, e.g. `Category.parent`) are impossible for the same
-      reason. Fix: key relations by join *path* (not entity), assign aliases,
-      and emit them in FROM / JOIN / column refs (the `ir.Relation.alias` field
-      is currently dead). **High priority.**
+- [x] **Relation aliasing.** ~~Two relations to the same target collapse into one
+      join; self-referential FKs impossible.~~ FIXED: relations keyed by join
+      *path*, aliased on table collision, joins represented as `parent` +
+      `join_pairs` and emitted via `parent.ref`/`self.ref`. Added `Category`
+      self-referential model + tests (`test_dual_fk_relations`,
+      `test_self_referential_join`, resolver aliasing tests).
 - [ ] **Reverse m2m.** `DjangoSchemaProvider` skips `ManyToManyRel` (the provider
       `continue`s past it). Real apps query reverse m2m.
 
@@ -56,8 +55,8 @@ guards everything; keep it green.
 
 ## Test-app realism (decide scope)
 
-- [ ] Add a self-referential model (e.g. `Category.parent`) + tests for self-join
-      and the dual-FK query — these drive the aliasing fix above.
+- [x] ~~Add a self-referential model (`Category.parent`) + self-join / dual-FK
+      tests~~ — done as part of the aliasing fix.
 - [ ] Decide in/out of scope, then build the test app toward what's in:
       m2m `through` models with payload fields; multi-table inheritance;
       `GenericForeignKey`/contenttypes; `JSONField`/`ArrayField`; UUID / non-int

@@ -7,19 +7,14 @@ from django.test import SimpleTestCase
 
 from djaq.query import ir
 from djaq.query.resolver import Resolver
-from djaq.query.schema import JoinKey
 from djaq.query.schema_django import DjangoSchemaProvider
 from djaq.exceptions import UnknownFunctionException
 
-from books.models import Book, Publisher
+from books.models import Book, Publisher, Category
 
 
 def resolver_for(model):
     return Resolver(DjangoSchemaProvider(), model._meta.label)
-
-
-def ir_jk(lt, lc, rt, rc):
-    return JoinKey(lt, lc, rt, rc)
 
 
 class TestResolver(SimpleTestCase):
@@ -43,9 +38,28 @@ class TestResolver(SimpleTestCase):
         # Book (root) + Publisher
         self.assertEqual([rel.entity.name for rel in r.relations], ["Book", "Publisher"])
         pub = r.relations[1]
-        self.assertEqual(
-            pub.join_keys[0], ir_jk("books_book", "publisher_id", "books_publisher", "id")
-        )
+        self.assertIs(pub.parent, r.relations[0])
+        self.assertEqual(pub.join_pairs, (("publisher_id", "id"),))
+
+    def test_dual_fk_relations_are_distinct_and_aliased(self):
+        r = resolver_for(Book)
+        r.resolve_path(("publisher", "name"))
+        r.resolve_path(("alt_publisher", "name"))
+        pubs = [x for x in r.relations if x.entity and x.entity.name == "Publisher"]
+        self.assertEqual(len(pubs), 2)  # two distinct joins to Publisher
+        self.assertIsNone(pubs[0].alias)  # first keeps its table
+        self.assertTrue(pubs[1].alias)  # the duplicate is aliased
+        self.assertNotEqual(pubs[0].ref, pubs[1].ref)
+
+    def test_self_referential_join_is_aliased(self):
+        r = resolver_for(Category)
+        r.resolve_path(("parent", "name"))
+        self.assertEqual(len(r.relations), 2)  # root + aliased self-join
+        parent_rel = r.relations[1]
+        self.assertTrue(parent_rel.alias)
+        self.assertIs(parent_rel.parent, r.relations[0])
+        # root(child).parent_id = self(parent).id
+        self.assertEqual(parent_rel.join_pairs, (("parent_id", "id"),))
 
     def test_nested_fk_path(self):
         r, expr = self.resolve_path(Book, ("publisher", "owner", "name"))
