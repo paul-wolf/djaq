@@ -5,6 +5,7 @@ import random
 from django.test import TestCase
 from django.test import RequestFactory
 from django.test import Client
+from django.test import override_settings
 from django.db import connections
 from django.contrib.auth.models import User
 
@@ -17,6 +18,7 @@ from djaq.app_utils import (
     get_schema,
 )
 from djaq.exceptions import ModelNotFoundException
+from djaq.query.schema_django import DjangoSchemaProvider
 
 from books.models import Author, Publisher, Book, Store, Profile
 
@@ -28,6 +30,12 @@ PASSWORD = "blah"
 EMAIL = "artemis@blah.com"
 
 BOOK_COUNT = 10
+
+
+def name_price_scope(user):
+    """Test DJAQ_SCOPE hook: callers may see only Book.name and Book.price."""
+    schema = DjangoSchemaProvider().schema_from([Book])
+    return schema.scope({"books.Book": ["name", "price"]})
 
 
 class TestDjaqAPI(TestCase):
@@ -100,6 +108,33 @@ class TestDjaqAPI(TestCase):
             DQ("Book", "publisher.name", whitelist=wl).where(
                 "ilike(name, 'A%')"
             ).construct()
+
+    def test_queries_respect_scoped_provider(self):
+        scoped = name_price_scope(self.user)
+        rows = queries(
+            {"queries": [{"model": "Book", "output": "name, price"}]},
+            provider=scoped,
+        )
+        self.assertEqual(len(rows[0]), BOOK_COUNT)
+        # a field outside the scope cannot be queried
+        with self.assertRaises(Exception):
+            queries(
+                {"queries": [{"model": "Book", "output": "rating"}]},
+                provider=scoped,
+            )
+
+    @override_settings(DJAQ_SCOPE=name_price_scope)
+    def test_view_applies_djaq_scope(self):
+        data = {"queries": [{"model": "Book", "output": "name, price"}]}
+        request = RequestFactory().post(
+            REQUEST_ENDPOINT, data=json.dumps(data), content_type="application/json"
+        )
+        request.user = self.user
+        response = djaq_request_view(request)
+        result = json.loads(response.content.decode())["result"]
+        self.assertEqual(len(result["queries"][0]), BOOK_COUNT)
+        self.assertIn("name", result["queries"][0][0])
+        self.assertNotIn("rating", result["queries"][0][0])
 
     def test_updates(self):
         SPECIAL_PRICE = 12345.01

@@ -1,24 +1,20 @@
-import sys, traceback
+import sys
+import traceback
 import json
 import logging
 
 from django.conf import settings
-from django.contrib.auth import login as django_login
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 from django.http import (
     HttpResponse,
-    HttpResponseRedirect,
     JsonResponse,
     HttpResponseServerError,
 )
-from django.shortcuts import render
-from django.apps import apps
 
 from djaq import DjaqQuery as DQ
 from djaq import app_utils
 
-import pdb
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +70,18 @@ def get_whitelist():
     return list()
 
 
-def queries(request_data, whitelist=None, validator=None):
+def get_scope(user):
+    """Return a caller-scoped Schema (the read surface) or None.
+
+    Configure ``DJAQ_SCOPE = func(user) -> Schema`` in settings to give each
+    caller a different view; resolution is then confined to that schema (entity
+    and field level). When unset, queries fall back to the global whitelist.
+    """
+    scope_fn = getattr(settings, "DJAQ_SCOPE", None)
+    return scope_fn(user) if callable(scope_fn) else None
+
+
+def queries(request_data, whitelist=None, validator=None, provider=None):
 
     query_list = request_data.get("queries")
     if not query_list:
@@ -88,10 +95,14 @@ def queries(request_data, whitelist=None, validator=None):
         page = int(data.get("page", 0))
         page_size = int(data.get("page_size", 0))
 
+        if provider is not None:
+            dq = DQ(model_name, output, provider=provider)
+        else:
+            dq = DQ(model_name, output, whitelist=whitelist)
+
         responses.append(
             list(
-                DQ(model_name, output, whitelist=whitelist)
-                .where(where)
+                dq.where(where)
                 .order_by(order_by)
                 .offset(page * page_size)
                 .limit(page_size)
@@ -172,8 +183,12 @@ def djaq_request_view(request):
     # q = data.get("queries", dict()) or dict()
     # ctx = get_context_data(data)
 
+    scope = get_scope(request.user)
+
     try:
-        queries_result = queries(request_data, whitelist=whitelist, validator=validator)
+        queries_result = queries(
+            request_data, whitelist=whitelist, validator=validator, provider=scope
+        )
         creates_result = (
             creates(request_data.get("creates"), whitelist=whitelist)
             if has_permission("creates")
