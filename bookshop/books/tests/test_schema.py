@@ -1,8 +1,10 @@
 """Validate DjangoSchemaProvider extraction against the bookshop models."""
 
 import json
+from io import StringIO
 
 from django.test import SimpleTestCase, TestCase
+from django.core.management import call_command
 from django.db import connections
 
 from djaq.query import schema as s
@@ -157,6 +159,15 @@ class TestSchemaScoping(SimpleTestCase):
         default_sql = DQ("Book", provider=scoped).sql()
         self.assertIn("name", default_sql)
         self.assertNotIn("rating", default_sql)
+
+
+class TestDumpSchemaCommand(SimpleTestCase):
+    def test_dump_schema_outputs_loadable_json(self):
+        out = StringIO()
+        call_command("dump_schema", "books", stdout=out)
+        schema = s.Schema.from_json(out.getvalue())  # loads back losslessly
+        self.assertIn("books.Book", schema.entities)
+        self.assertEqual(schema.get("books.Book").field("price").type, "decimal")
 
 
 class TestSchemaCache(SimpleTestCase):
