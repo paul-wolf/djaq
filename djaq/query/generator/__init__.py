@@ -3,11 +3,13 @@
 from .base import Dialect, SQLGenerator
 from .postgres import PostgresDialect
 from .sqlite import SQLiteDialect
+from .mysql import MySQLDialect
 
 #: Django ``connection.vendor`` -> Dialect class.
 _DIALECTS = {
     "postgresql": PostgresDialect,
     "sqlite": SQLiteDialect,
+    "mysql": MySQLDialect,
 }
 
 
@@ -21,5 +23,6 @@ __all__ = [
     "SQLGenerator",
     "PostgresDialect",
     "SQLiteDialect",
+    "MySQLDialect",
     "get_dialect",
 ]

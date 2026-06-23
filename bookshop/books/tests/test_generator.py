@@ -2,7 +2,13 @@
 
 import unittest
 
-from djaq.query.generator import PostgresDialect, SQLiteDialect, SQLGenerator, get_dialect
+from djaq.query.generator import (
+    PostgresDialect,
+    SQLiteDialect,
+    MySQLDialect,
+    SQLGenerator,
+    get_dialect,
+)
 
 
 class TestDialects(unittest.TestCase):
@@ -47,6 +53,43 @@ class TestDialects(unittest.TestCase):
     def test_get_dialect(self):
         self.assertIsInstance(get_dialect("postgresql"), PostgresDialect)
         self.assertIsInstance(get_dialect("sqlite"), SQLiteDialect)
+        self.assertIsInstance(get_dialect("mysql"), MySQLDialect)
+
+
+class TestMySQLDialect(unittest.TestCase):
+    """String-level checks for the (server-unverified) MySQL dialect."""
+
+    def setUp(self):
+        self.d = MySQLDialect()
+
+    def test_backtick_quoting(self):
+        self.assertEqual(self.d.quote_ident("name"), "`name`")
+        self.assertEqual(self.d.quote_table("books_book"), "`books_book`")
+
+    def test_concat_uses_function(self):
+        # || is logical OR in MySQL, so concat must use CONCAT()
+        self.assertEqual(self.d.render_function("concat", ["a", "b"]), "CONCAT(a, b)")
+
+    def test_ilike_and_regex(self):
+        self.assertEqual(
+            self.d.render_function("ilike", ["a", "b"]), "LOWER(a) LIKE LOWER(b)"
+        )
+        self.assertEqual(self.d.render_function("regex", ["a", "b"]), "a REGEXP b")
+
+    def test_cast_remaps_type(self):
+        # MySQL CAST rejects "int"; it must be SIGNED
+        self.assertEqual(self.d.cast("price", "int"), "CAST(price AS SIGNED)")
+        self.assertEqual(self.d.cast("name", "string"), "CAST(name AS CHAR)")
+
+    def test_date_extract(self):
+        self.assertEqual(self.d.date_extract("year", "col"), "EXTRACT(YEAR FROM col)")
+        self.assertEqual(self.d.date_extract("date", "col"), "DATE(col)")
+
+    def test_offset_requires_limit(self):
+        self.assertEqual(
+            self.d.limit_offset(None, 7), " LIMIT 18446744073709551615 OFFSET 7"
+        )
+        self.assertEqual(self.d.limit_offset(10, 5), " LIMIT 10 OFFSET 5")
 
 
 class TestInListExpansion(unittest.TestCase):

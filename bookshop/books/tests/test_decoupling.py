@@ -16,7 +16,12 @@ import unittest
 from pathlib import Path
 
 from djaq.query import ir, schema, frontend, resolver, sql_functions
-from djaq.query.generator import base as gen_base, sqlite as gen_sqlite, postgres as gen_pg
+from djaq.query.generator import (
+    base as gen_base,
+    sqlite as gen_sqlite,
+    postgres as gen_pg,
+    mysql as gen_mysql,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -29,6 +34,7 @@ PURE_MODULES = [
     gen_base,
     gen_sqlite,
     gen_pg,
+    gen_mysql,
 ]
 
 
