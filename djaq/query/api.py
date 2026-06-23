@@ -23,6 +23,7 @@ class DjaqQuery:
         name: str = None,
         names: Union[Dict, None] = None,
         whitelist=None,
+        provider=None,
     ):
         if isinstance(model_source, models.base.ModelBase):
             model = model_source
@@ -33,12 +34,17 @@ class DjaqQuery:
                 f"Type not supported for model source: {type(model_source)}"
             )
         self.name = name
-        self.parser = ExpressionParser(model=model, whitelist=whitelist, name=name)
+        self.parser = ExpressionParser(
+            model=model, whitelist=whitelist, name=name, provider=provider
+        )
 
         if not select_source or select_source == "*":
-            select_source = ", ".join(
-                [f for f in get_model_details(model, self.parser.connection)["fields"]]
-            )
+            if provider is not None:
+                # default fields come from the scoped entity, not all of Django's
+                fields = provider.get_entity(model._meta.label).fields.keys()
+            else:
+                fields = get_model_details(model, self.parser.connection)["fields"]
+            select_source = ", ".join(fields)
         elif select_source == "pk":
             select_source = model._meta.pk.name
 

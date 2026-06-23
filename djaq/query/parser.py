@@ -44,6 +44,7 @@ class ExpressionParser:
         whitelist=None,
         local: bool = False,
         drop_empty: bool = False,
+        provider=None,
     ):
         # main relation, type is models.Model
         self.model = model
@@ -64,6 +65,9 @@ class ExpressionParser:
         self.connection = connections[using]
         self.vendor = self.connection.vendor
         self.whitelist = whitelist
+        # An explicit schema provider scopes resolution (entity + field level).
+        # When None we build a DjangoSchemaProvider from the whitelist in construct().
+        self.provider = provider
         self.verbosity = verbosity
         self._limit = limit
         self._offset = offset
@@ -95,6 +99,7 @@ class ExpressionParser:
             whitelist=self.whitelist,
             local=self.local,
             drop_empty=self.drop_empty,
+            provider=self.provider,
         )
         p.condition_node = copy.deepcopy(self.condition_node)
         p.sql = None
@@ -254,7 +259,7 @@ class ExpressionParser:
             local=self.local,
         )
         self.column_headers = [p.alias for p in query.projections]
-        provider = DjangoSchemaProvider(whitelist=self.whitelist)
+        provider = self.provider or DjangoSchemaProvider(whitelist=self.whitelist)
         resolved = Resolver(provider, self.model._meta.label).resolve(query)
         generator = SQLGenerator(
             get_dialect(self.vendor), named_resolver=self._resolve_named

@@ -8,10 +8,24 @@ emits the same IR, leaving the resolver and generator untouched.
 
 import ast
 import re
-
-from django.utils.text import slugify
+import unicodedata
 
 from . import ir
+
+
+def _slugify(value):
+    """Vendored equivalent of django.utils.text.slugify(allow_unicode=False).
+
+    Kept local so the frontend (and the whole parse->resolve->generate path)
+    has no Django dependency. Used only to derive default column aliases.
+    """
+    value = (
+        unicodedata.normalize("NFKD", str(value))
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    value = re.sub(r"[^\w\s-]", "", value).strip().lower()
+    return re.sub(r"[-\s]+", "-", value)
 
 
 _JOIN_SPLIT = re.compile(r"->|<-|<>")
@@ -67,7 +81,7 @@ def parse_column_aliases(select_src):
     for col in split_columns(s):
         parts = col.split(" as ")
         if len(parts) == 1:
-            slug = slugify(parts[0].replace(".", "_").replace(" ", "_")).replace(
+            slug = _slugify(parts[0].replace(".", "_").replace(" ", "_")).replace(
                 "-", "_"
             )
             aliases.append((parts[0].strip(), slug))

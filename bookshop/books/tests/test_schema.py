@@ -113,6 +113,47 @@ class TestDjangoSchemaProvider(SimpleTestCase):
             generate_sql(scoped, "books.Book", "publisher.name")
 
 
+class TestSchemaScoping(SimpleTestCase):
+    """A scoped schema is the authorization surface (entity + field level)."""
+
+    def setUp(self):
+        self.full = DjangoSchemaProvider().schema_from([Book, Publisher, Author])
+
+    def test_scope_limits_fields_and_entities(self):
+        scoped = self.full.scope({"books.Book": ["name", "price"]})
+        self.assertEqual(set(scoped.get("books.Book").fields), {"name", "price"})
+        self.assertIsNone(scoped.get("books.Publisher"))  # entity out of scope
+        # relations are retained; traversal just fails at get_entity later
+        self.assertIsNotNone(scoped.get("books.Book").relation("publisher"))
+
+    def test_field_level_authorization_via_resolver(self):
+        scoped = self.full.scope({"books.Book": ["name"]})
+        # an allowed field resolves
+        generate_sql(scoped, "books.Book", "name")
+        # a hidden field cannot be named
+        with self.assertRaises(Exception):
+            generate_sql(scoped, "books.Book", "price")
+
+    def test_entity_level_authorization_via_resolver(self):
+        scoped = self.full.scope({"books.Book": "*"})  # Publisher excluded
+        with self.assertRaises(ModelNotFoundException):
+            generate_sql(scoped, "books.Book", "publisher.name")
+
+    def test_djaqquery_accepts_scoped_provider(self):
+        from djaq import DjaqQuery as DQ
+
+        scoped = self.full.scope({"books.Book": ["name", "price"]})
+        # allowed field -> SQL builds
+        self.assertIn("name", DQ("Book", "name", provider=scoped).sql())
+        # hidden field -> refused at construction
+        with self.assertRaises(Exception):
+            DQ("Book", "rating", provider=scoped).sql()
+        # default fields come from the scope, not all of Django's
+        default_sql = DQ("Book", provider=scoped).sql()
+        self.assertIn("name", default_sql)
+        self.assertNotIn("rating", default_sql)
+
+
 class TestSchemaDrift(TestCase):
     """Drift detection needs a real database, so this uses TestCase (test DB)."""
 

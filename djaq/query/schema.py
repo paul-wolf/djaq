@@ -116,6 +116,34 @@ class Schema:
         self.entities[entity.key] = entity
         return entity
 
+    def scope(self, allow: dict) -> "Schema":
+        """Return a caller-scoped view of this schema.
+
+        ``allow`` maps an entity key to the fields that caller may name, e.g.::
+
+            {"books.Book": ["name", "price"], "books.Publisher": "*"}
+
+        Entities absent from ``allow`` do not exist for that caller, so resolving
+        a name that traverses to one raises ``ModelNotFoundException``; a field
+        not listed cannot be named. Relations are retained -- a traversal simply
+        fails at ``get_entity`` if its target is out of scope. This makes a
+        scoped schema the authorization surface for a (possibly remote) caller.
+        """
+        scoped = Schema()
+        for key, fieldspec in allow.items():
+            e = self.entities.get(key)
+            if e is None:
+                continue
+            if fieldspec == "*":
+                fields = dict(e.fields)
+            else:
+                allowed = set(fieldspec)
+                fields = {n: f for n, f in e.fields.items() if n in allowed}
+            scoped.add(
+                Entity(e.key, e.name, e.table, e.pk, fields, dict(e.relations))
+            )
+        return scoped
+
     # ---- serialisation: the contract is meant to be a portable artefact ----
     def to_dict(self) -> dict:
         return {
