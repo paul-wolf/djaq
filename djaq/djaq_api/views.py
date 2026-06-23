@@ -14,6 +14,7 @@ from django.http import (
 
 from djaq import DjaqQuery as DQ
 from djaq import app_utils
+from djaq import Writer, transaction
 
 
 logger = logging.getLogger(__name__)
@@ -117,12 +118,8 @@ def creates(creates_list, whitelist=None):
         return Exception("Creates not allowed")
     if not creates_list:
         return list()
-    responses = list()
-    for data in creates_list:
-        model = app_utils.find_model_class(data.pop("model"), whitelist=whitelist)
-        instance = model.objects.create(**data["fields"])
-        responses.append(instance.pk)
-    return responses
+    writer = Writer(whitelist=whitelist)
+    return [writer.create(d["model"], d["fields"]) for d in creates_list]
 
 
 def updates(updates_list, whitelist=None):
@@ -130,12 +127,9 @@ def updates(updates_list, whitelist=None):
         raise Exception("Updates not allowed")
     if not updates_list:
         return []
-    responses = []
-    for data in updates_list:
-        model = app_utils.find_model_class(data.pop("model"), whitelist=whitelist)
-        cnt = model.objects.filter(pk=data.pop("pk")).update(**data["fields"])
-        responses.append(cnt)
-    return responses
+    writer = Writer(whitelist=whitelist)
+    # instance.save() per row -> honours signals/defaults, unlike bulk update()
+    return [writer.update(d["model"], d["pk"], d["fields"]) for d in updates_list]
 
 
 def deletes(deletes_list, whitelist=None):
@@ -143,12 +137,8 @@ def deletes(deletes_list, whitelist=None):
         raise Exception("Deletes not allowed")
     if not deletes_list:
         return list()
-    responses = list()
-    for data in deletes_list:
-        model = app_utils.find_model_class(data.pop("model"), whitelist=whitelist)
-        cnt = model.objects.filter(pk=data.pop("pk")).delete()
-        responses.append(cnt)
-    return responses
+    writer = Writer(whitelist=whitelist)
+    return [writer.delete(d["model"], d["pk"]) for d in deletes_list]
 
 
 def get_context_data(data) -> dict:
@@ -186,26 +176,28 @@ def djaq_request_view(request):
     scope = get_scope(request.user)
 
     try:
-        queries_result = queries(
-            request_data, whitelist=whitelist, validator=validator, provider=scope
-        )
-        creates_result = (
-            creates(request_data.get("creates"), whitelist=whitelist)
-            if has_permission("creates")
-            else list()
-        )
+        # one atomic boundary: a failed create/update/delete rolls the batch back
+        with transaction():
+            queries_result = queries(
+                request_data, whitelist=whitelist, validator=validator, provider=scope
+            )
+            creates_result = (
+                creates(request_data.get("creates"), whitelist=whitelist)
+                if has_permission("creates")
+                else list()
+            )
 
-        updates_result = (
-            updates(request_data.get("updates"), whitelist=whitelist)
-            if has_permission("updates")
-            else list()
-        )
+            updates_result = (
+                updates(request_data.get("updates"), whitelist=whitelist)
+                if has_permission("updates")
+                else list()
+            )
 
-        deletes_result = (
-            deletes(request_data.get("deletes"), whitelist=whitelist)
-            if has_permission("deletes")
-            else list()
-        )
+            deletes_result = (
+                deletes(request_data.get("deletes"), whitelist=whitelist)
+                if has_permission("deletes")
+                else list()
+            )
 
         return JsonResponse(
             {

@@ -87,15 +87,7 @@ class DjaqQuery:
         c.parser.where(node)
         return c
 
-    def get(self, pk_value: any):
-        """Return a single model instance whose primary key is pk_value."""
-        return self.model.objects.get(pk=pk_value)
-
-    def update_object(
-        self, pk_value: any, update_function: callable, data: Dict, save=True
-    ):
-        obj = self.get(pk_value)
-        return update_function(obj, data, save)
+    # Reads only: mutation lives on djaq.Writer (command-query separation).
 
     def distinct(self):
         c = self.clone()

@@ -13,6 +13,7 @@ import factory
 from faker import Faker
 
 from djaq import DjaqQuery as DQ
+from djaq import Writer
 from django.db.models import Count, Q
 from django.db.models import DecimalField, Avg, Max
 from books.models import GENRE_CHOICES
@@ -253,11 +254,12 @@ class TestDjaqQuery(TestCase):
             assert len(book.keys())
             break
 
-    def test_get(self):
+    def test_writer_get(self):
         for book in DQ("Book").dicts():
             id = book["id"]
             break
-        DQ(Book).get(id)
+        obj = Writer().get("Book", id)
+        self.assertEqual(obj.id, id)
 
     def test_attribute_nesting(self):
         for d in DQ("Book", "publisher.owner.name as owner").dicts():
@@ -308,19 +310,13 @@ class TestDjaqQuery(TestCase):
         for data in DQ("Book", "pubdate").where("pubdate.day == 2").go():
             assert data["pubdate"].day == 2
 
-    def test_update_object(self):
+    def test_writer_update(self):
         # something likely to be unique
         NEW_TITLE = "my new title0854836274"
 
-        def my_update_function(book, data, save=True):
-            book.name = NEW_TITLE
-            if save:
-                book.save()
-            return book
-
-        for book in DQ("Book").objs():
-            DQ("Book").update_object(book.id, my_update_function, dict())
-            break
+        book_id = DQ("Book", "id").limit(1).value()
+        updated = Writer().update("Book", book_id, {"name": NEW_TITLE})
+        self.assertEqual(updated, 1)
 
         books = DQ("Book").where("name == {title}").context({"title": NEW_TITLE}).go()
         assert books[0]["name"] == NEW_TITLE
